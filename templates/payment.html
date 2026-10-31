@@ -21,12 +21,12 @@
 
   <div class="checkout-card max-w-lg w-full p-8 relative overflow-hidden">
     <!-- Ambient Accent Line -->
-    <div class="absolute inset-x-0 -top-px h-px bg-gradient-to-r from-transparent via-indigo-500/60 to-transparent"></div>
+    <div class="absolute inset-x-0 -top-px h-px bg-linear-to-r from-transparent via-indigo-500/60 to-transparent"></div>
 
     <!-- Header -->
     <div class="flex items-center justify-between pb-6 border-b border-zinc-800">
       <div class="flex items-center gap-3">
-        <div class="h-10 w-10 rounded-xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-violet-500 flex items-center justify-center font-bold text-white shadow-lg shadow-indigo-500/20">
+        <div class="h-10 w-10 rounded-xl bg-linear-to-tr from-indigo-600 via-indigo-500 to-violet-500 flex items-center justify-center font-bold text-white shadow-lg shadow-indigo-500/20">
           AO
         </div>
         <div>
@@ -41,9 +41,9 @@
     </div>
 
     <!-- Error Alert Box -->
-    <div id="paymentErrorBox" class="hidden mt-4 p-3.5 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-300 text-xs flex items-center justify-between">
+    <div id="paymentErrorBox" class="hidden mt-4 p-3.5 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-300 text-xs items-center justify-between">
       <span id="paymentErrorMsg">Payment could not be processed.</span>
-      <button type="button" onclick="this.parentElement.classList.add('hidden')" class="text-zinc-400 hover:text-white text-sm">×</button>
+      <button type="button" onclick="this.parentElement.classList.add('hidden'); this.parentElement.classList.remove('flex')" class="text-zinc-400 hover:text-white text-sm">×</button>
     </div>
 
     <!-- Milestone Context & Financial Breakdown -->
@@ -111,6 +111,7 @@
       const box = document.getElementById('paymentErrorBox');
       const text = document.getElementById('paymentErrorMsg');
       text.textContent = msg;
+      box.classList.add('flex');
       box.classList.remove('hidden');
     }
 
