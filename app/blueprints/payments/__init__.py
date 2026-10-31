@@ -1,12 +1,14 @@
 import logging
 import os
+import hmac
+import hashlib
 
 import requests
 import razorpay
 
-from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, current_app
 from flask_login import login_required, current_user
-from app.extensions import db, get_razorpay_client, limiter
+from app.extensions import db, get_razorpay_client, limiter, csrf
 from app.models import Project, Payment, PACKAGE_PRICES, get_ist_now
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
@@ -655,6 +657,48 @@ def verify_payment():
         "message": "Payment verified successfully.",
         "project_id": project.id
     })
+
+
+# =========================================================
+# RAZORPAY WEBHOOK (HMAC Signature Verification)
+# =========================================================
+
+@payments_bp.route("/webhook", methods=["POST"])
+@csrf.exempt
+def razorpay_webhook():
+    """Verify Razorpay webhook signature and acknowledge payment events.
+
+    Only requests signed with RAZORPAY_WEBHOOK_SECRET are accepted,
+    preventing fake callbacks from marking invoices as paid.
+    """
+    webhook_secret = os.environ.get("RAZORPAY_WEBHOOK_SECRET")
+    received_sig = request.headers.get("X-Razorpay-Signature")
+
+    if not webhook_secret:
+        current_app.logger.error("RAZORPAY_WEBHOOK_SECRET is not configured.")
+        return jsonify({"error": "Server configuration missing"}), 500
+
+    if not received_sig:
+        return jsonify({"error": "Missing signature header"}), 400
+
+    raw_body = request.get_data()
+    expected_sig = hmac.new(
+        webhook_secret.encode("utf-8"),
+        raw_body,
+        hashlib.sha256,
+    ).hexdigest()
+
+    if not hmac.compare_digest(expected_sig, received_sig):
+        current_app.logger.warning(
+            "Unauthorized webhook attempt detected - signature mismatch."
+        )
+        return jsonify({"error": "Invalid signature"}), 403
+
+    event_payload = request.get_json(silent=True) or {}
+    event_name = event_payload.get("event")
+
+    # Acknowledge receipt securely
+    return jsonify({"status": "verified", "event": event_name}), 200
 
 
 # =========================================================
