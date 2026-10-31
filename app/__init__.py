@@ -230,6 +230,10 @@ def create_app(config_name="default", config_overrides=None):
 
     app.url_build_error_handlers.append(resolve_bare_endpoint)
 
+    # Register CLI commands
+    from app.cli import create_admin_command
+    app.cli.add_command(create_admin_command)
+
     # ------------------------------------------------------------
     # Frontend serving (Vite build output)
     # ------------------------------------------------------------
