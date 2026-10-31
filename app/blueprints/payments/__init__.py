@@ -9,7 +9,7 @@ import razorpay
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, current_app
 from flask_login import login_required, current_user
 from app.extensions import db, get_razorpay_client, limiter, csrf
-from app.models import Project, Payment, PACKAGE_PRICES, get_ist_now
+from app.models import Project, Payment, Invoice, Milestone, PACKAGE_PRICES, get_ist_now
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 logger = logging.getLogger(__name__)
@@ -697,8 +697,75 @@ def razorpay_webhook():
     event_payload = request.get_json(silent=True) or {}
     event_name = event_payload.get("event")
 
+    # Handle payment capture with atomic idempotency
+    if event_name == "payment.captured":
+        payment_entity = (
+            event_payload.get("payload", {}).get("payment", {}).get("entity", {})
+        )
+        razorpay_payment_id = payment_entity.get("id")
+        order_id = payment_entity.get("order_id")
+        amount_paid = int(float(payment_entity.get("amount", 0)) / 100.0)
+        currency = payment_entity.get("currency", "INR")
+        payment_method = payment_entity.get("method", "unknown")
+
+        # 1. Idempotency Check: prevent duplicate processing
+        existing_payment = Payment.query.filter_by(
+            razorpay_payment_id=razorpay_payment_id
+        ).first()
+        if existing_payment:
+            return jsonify(
+                {"status": "ignored", "message": "Payment already recorded"}
+            ), 200
+
+        # 2. Atomic Database Transaction
+        try:
+            new_payment = Payment(
+                project_id=None,
+                customer_id=None,
+                razorpay_order_id=order_id,
+                razorpay_payment_id=razorpay_payment_id,
+                amount=amount_paid,
+                currency=currency,
+                status="Paid",
+                paid_at=get_ist_now(),
+            )
+            db.session.add(new_payment)
+
+            # Update matching invoice if linked
+            if order_id:
+                invoice = Invoice.query.filter_by(
+                    razorpay_order_id=order_id
+                ).first()
+                if invoice:
+                    invoice.status = "paid"
+                    invoice.paid_at = get_ist_now()
+
+                    # Mark linked project milestones as funded
+                    if invoice.project_id:
+                        milestones = Milestone.query.filter_by(
+                            project_id=invoice.project_id,
+                            status="pending",
+                        ).all()
+                        for m in milestones:
+                            m.status = "funded"
+
+            db.session.commit()
+            return jsonify(
+                {
+                    "status": "success",
+                    "message": "Payment captured and invoice updated",
+                }
+            ), 200
+
+        except Exception as exc:
+            db.session.rollback()
+            current_app.logger.error(
+                "Failed to process payment capture: %s", str(exc)
+            )
+            return jsonify({"error": "Database transaction failed"}), 500
+
     # Acknowledge receipt securely
-    return jsonify({"status": "verified", "event": event_name}), 200
+    return jsonify({"status": "ignored", "message": "Unhandled event type"}), 200
 
 
 # =========================================================
