@@ -1,0 +1,35 @@
+<!-- Save this into: templates/500.html -->
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>500 — System Recovery — AgencyOS</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>body { background-color: #09090b; font-family: 'Plus Jakarta Sans', sans-serif; }</style>
+</head>
+<body class="bg-zinc-950 text-zinc-100 min-h-screen flex items-center justify-center p-6 text-center">
+  <div class="max-w-md w-full p-8 rounded-2xl bg-[#121215] border border-zinc-800 shadow-2xl space-y-4">
+    <div class="h-12 w-12 mx-auto rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center font-bold text-lg font-mono">
+      500
+    </div>
+    <h1 class="text-2xl font-extrabold text-white">Temporary System Interruption</h1>
+    <p class="text-xs text-zinc-400 leading-relaxed">
+      Our team has been automatically alerted and is already investigating. If this occurred during a milestone payment, your transaction is safe and pending automatic reconciliation.
+    </p>
+    <div class="pt-4 flex flex-col sm:flex-row gap-2 justify-center">
+      <a href="https://wa.me/919876543210?text=Hi%20AgencyOS,%20I%20encountered%20a%20500%20error" target="_blank" class="px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-zinc-950 font-bold text-xs shadow transition flex items-center justify-center gap-1.5">
+        <i data-lucide="message-square" class="w-3.5 h-3.5"></i>
+        <span>Chat on WhatsApp</span>
+      </a>
+      <a href="{{ url_for('customer.dashboard') }}" class="px-4 py-2.5 rounded-xl bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-zinc-300 font-bold text-xs transition">
+        Reload Workspace
+      </a>
+    </div>
+  </div>
+  <script>if (window.lucide) lucide.createIcons();</script>
+</body>
+</html>

@@ -1,0 +1,35 @@
+<!-- Save this into: templates/404.html -->
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>404 — Page Not Found — AgencyOS</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>body { background-color: #09090b; font-family: 'Plus Jakarta Sans', sans-serif; }</style>
+</head>
+<body class="bg-zinc-950 text-zinc-100 min-h-screen flex items-center justify-center p-6 text-center">
+  <div class="max-w-md w-full p-8 rounded-2xl bg-[#121215] border border-zinc-800 shadow-2xl space-y-4">
+    <div class="h-12 w-12 mx-auto rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center font-bold text-lg font-mono">
+      404
+    </div>
+    <h1 class="text-2xl font-extrabold text-white">Page Not Found</h1>
+    <p class="text-xs text-zinc-400 leading-relaxed">
+      The page or deliverable link you requested does not exist or has been relocated within your workspace.
+    </p>
+    <div class="pt-4 flex flex-col sm:flex-row gap-2 justify-center">
+      <a href="{{ url_for('customer.dashboard') }}" class="px-5 py-2.5 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-bold text-xs shadow transition flex items-center justify-center gap-1.5">
+        <i data-lucide="layout-dashboard" class="w-3.5 h-3.5"></i>
+        <span>Return to Workspace</span>
+      </a>
+      <a href="{{ url_for('public.index') }}" class="px-4 py-2.5 rounded-xl bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-zinc-300 font-bold text-xs transition">
+        Homepage
+      </a>
+    </div>
+  </div>
+  <script>if (window.lucide) lucide.createIcons();</script>
+</body>
+</html>
