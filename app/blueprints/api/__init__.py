@@ -3,7 +3,7 @@ import os
 import razorpay
 
 from flask import Blueprint, jsonify, session, request
-from app.models import User, Project, Invoice, CustomerProfile, services
+from app.models import User, Project, Invoice, CustomerProfile, Milestone, get_ist_now, services
 from app.extensions import db
 from app.utils.auth import roles_required
 
@@ -126,4 +126,35 @@ def initiate_invoice_payment(invoice_id):
         "currency": order["currency"],
         "razorpay_key": key_id,
         "invoice_number": invoice.invoice_number,
+    }), 200
+
+
+@api_bp.route("/milestones/<int:milestone_id>/approve", methods=["POST"])
+@roles_required("client", "admin")
+def approve_milestone(milestone_id):
+    user_id = session.get("user_id")
+    user = User.query.get(user_id)
+    milestone = Milestone.query.get_or_404(milestone_id)
+
+    # Ensure client only approves milestones for their own projects
+    if user.role == "client":
+        if not user.customer_profile or milestone.project.customer_id != user.id:
+            return jsonify(
+                {"error": "Unauthorized to approve this milestone"}
+            ), 403
+
+    if milestone.status == "released":
+        return jsonify(
+            {"error": "Milestone already approved and released"}
+        ), 400
+
+    milestone.status = "released"
+    milestone.released_at = get_ist_now()
+    db.session.commit()
+
+    return jsonify({
+        "message": "Milestone signed off and released successfully",
+        "milestone_id": milestone.id,
+        "status": milestone.status,
+        "released_at": milestone.released_at.isoformat(),
     }), 200
