@@ -1,5 +1,5 @@
 import os
-from flask import Flask, url_for, request, jsonify, flash, session, redirect
+from flask import Flask, url_for, request, jsonify, flash, session, redirect, send_from_directory
 from werkzeug.routing import BuildError
 from app.config import (
     config_by_name,
@@ -229,5 +229,18 @@ def create_app(config_name="default", config_overrides=None):
             return None
 
     app.url_build_error_handlers.append(resolve_bare_endpoint)
+
+    # ------------------------------------------------------------
+    # Frontend serving (Vite build output)
+    # ------------------------------------------------------------
+    @app.route('/', defaults={'path': ''})
+    @app.route('/<path:path>')
+    def serve_frontend(path):
+        dist_dir = os.path.join(app.root_path, '..', 'static', 'dist')
+        if path != "" and os.path.exists(os.path.join(dist_dir, path)):
+            return send_from_directory(dist_dir, path)
+        if os.path.exists(os.path.join(dist_dir, 'index.html')):
+            return send_from_directory(dist_dir, 'index.html')
+        return jsonify({'message': 'AgencyOS API Running. Build frontend with npm run build'}), 200
 
     return app
