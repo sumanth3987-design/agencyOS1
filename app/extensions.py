@@ -6,6 +6,7 @@ import razorpay
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager
 from flask_wtf import CSRFProtect
+from flask_migrate import Migrate
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 
@@ -17,6 +18,7 @@ login_manager.login_view = "auth.login"
 login_manager.login_message_category = "warning"
 
 csrf = CSRFProtect()
+migrate = Migrate()
 
 # Shared rate limiter. Storage is configured through RATELIMIT_STORAGE_URL.
 # memory:// is suitable for local development and tests only; production

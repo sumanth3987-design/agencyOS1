@@ -10,7 +10,7 @@ from app.config import (
     validate_production_razorpay_credentials,
     validate_secret_key,
 )
-from app.extensions import db, login_manager, csrf, limiter
+from app.extensions import db, login_manager, csrf, limiter, migrate
 
 
 def _build_bare_endpoint_map(view_functions):
@@ -125,6 +125,7 @@ def create_app(config_name="default", config_overrides=None):
 
     # Initialize extensions
     db.init_app(app)
+    migrate.init_app(app, db)
     login_manager.init_app(app)
     csrf.init_app(app)
     limiter.init_app(app)
