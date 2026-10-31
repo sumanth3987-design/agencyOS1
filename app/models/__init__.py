@@ -1,5 +1,6 @@
 from app.extensions import db, login_manager
 from flask_login import UserMixin, current_user
+from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime
 from urllib.parse import urlparse
 from zoneinfo import ZoneInfo
@@ -68,6 +69,11 @@ class User(UserMixin, db.Model):
         nullable=False
     )
 
+    full_name = db.Column(
+        db.String(120),
+        nullable=True
+    )
+
     email = db.Column(
         db.String(120),
         nullable=False
@@ -81,6 +87,12 @@ class User(UserMixin, db.Model):
     role = db.Column(
         db.String(30),
         default="customer"
+    )
+
+    is_active = db.Column(
+        db.Boolean,
+        default=True,
+        nullable=False
     )
 
     created_at = db.Column(
@@ -98,6 +110,15 @@ class User(UserMixin, db.Model):
         nullable=False,
         default=0
     )
+
+
+    def set_password(self, password):
+        """Hash and store the given plain-text password."""
+        self.password = generate_password_hash(password)
+
+    def check_password(self, password):
+        """Return True if the given plain-text password matches the stored hash."""
+        return check_password_hash(self.password, password)
 
 
     projects = db.relationship(
@@ -564,6 +585,13 @@ class Project(db.Model):
         nullable=False
     )
 
+    milestones = db.relationship(
+        "Milestone",
+        backref="project",
+        cascade="all, delete-orphan",
+        lazy=True
+    )
+
 
 # =========================================================
 # PAYMENT MODEL
@@ -619,6 +647,13 @@ class Payment(db.Model):
         nullable=True
     )
 
+    gateway_payment_id = db.Column(
+        db.String(100),
+        unique=True,
+        nullable=True,
+        index=True
+    )
+
     amount = db.Column(
         db.Integer,
         nullable=False
@@ -655,6 +690,40 @@ class Payment(db.Model):
     customer = db.relationship(
         "User",
         backref="payments"
+    )
+
+
+# =========================================================
+# MILESTONE MODEL (Fund Flow)
+# =========================================================
+
+class Milestone(db.Model):
+    __tablename__ = "milestones"
+
+    id = db.Column(db.Integer, primary_key=True)
+    project_id = db.Column(
+        db.Integer,
+        db.ForeignKey("project.id", ondelete="CASCADE"),
+        nullable=False
+    )
+    title = db.Column(db.String(200), nullable=False)
+    amount = db.Column(db.Numeric(12, 2), nullable=False)
+    status = db.Column(
+        db.String(30),
+        default="pending",
+        nullable=False
+    )  # 'pending', 'funded', 'released'
+    fund_flow_type = db.Column(
+        db.String(50),
+        default="escrow_milestone",
+        nullable=False
+    )
+    due_date = db.Column(db.DateTime, nullable=True)
+    released_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(
+        db.DateTime,
+        server_default=db.func.now(),
+        nullable=False
     )
 
 
@@ -1039,6 +1108,7 @@ class Invoice(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     invoice_number = db.Column(db.String(100), unique=True, nullable=False)
+    razorpay_order_id = db.Column(db.String(100), unique=True, nullable=True, index=True)
     project_id = db.Column(db.Integer, db.ForeignKey("project.id"), nullable=False, index=True)
     customer_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
     gross_amount = db.Column(db.Integer, nullable=False)
