@@ -1,3 +1,5 @@
+# Save this directly into your file: app/__init__.py
+
 import os
 import logging
 from logging.handlers import RotatingFileHandler
@@ -16,21 +18,11 @@ from app.extensions import db, login_manager, csrf, limiter, migrate
 
 
 def _build_bare_endpoint_map(view_functions):
-    """Map bare endpoint names to qualified blueprint endpoints.
-
-    Templates and blueprint code call url_for("dashboard") in the style
-    of the legacy monolithic app.py, while blueprint endpoints are
-    qualified (e.g. "customer.dashboard"). A bare name that resolves to
-    more than one blueprint function would be ambiguous and is rejected
-    at startup. App-level endpoints such as "static" are already bare
-    and are skipped.
-    """
-
+    """Map bare endpoint names to qualified blueprint endpoints."""
     bare_map = {}
     ambiguous = set()
 
     for endpoint in view_functions:
-
         if "." not in endpoint:
             continue
 
@@ -70,8 +62,7 @@ def configure_logging(app):
 def create_app(config_name="default", config_overrides=None):
     if config_name not in config_by_name:
         raise ValueError(
-            "Unknown configuration name: %r. "
-            "Expected one of: %s."
+            "Unknown configuration name: %r. Expected one of: %s."
             % (config_name, ", ".join(sorted(config_by_name)))
         )
 
@@ -80,27 +71,16 @@ def create_app(config_name="default", config_overrides=None):
     if config_overrides is not None:
         app.config.update(config_overrides)
 
-    # Production is always non-debug, even if an override tries to enable it.
     if config_name == "production":
         app.config["DEBUG"] = False
-        # Fail safely in production when the secret is missing or insecure.
-        # Validated after overrides are applied.
         validate_production_secret_key(app.config.get("SECRET_KEY"))
-    else:
-        # Development and default configurations require a usable SECRET_KEY
-        # after overrides are applied, without production-strength checks.
-        validate_secret_key(app.config.get("SECRET_KEY"), production=False)
-
-    # Fail safely in production when Razorpay credentials are missing
-    # or still set to development placeholders.
-    if config_name == "production":
         validate_production_razorpay_credentials(
             app.config.get("RAZORPAY_KEY_ID"),
             app.config.get("RAZORPAY_KEY_SECRET"),
         )
+    else:
+        validate_secret_key(app.config.get("SECRET_KEY"), production=False)
 
-    # Validate and normalize rate-limit storage. Production uses Redis by
-    # default; in-memory storage requires an explicit opt-in.
     storage_url = resolve_rate_limit_storage_url(
         app.config.get("RATELIMIT_STORAGE_URI")
     )
@@ -117,16 +97,12 @@ def create_app(config_name="default", config_overrides=None):
                 "production unless RATELIMIT_ALLOW_IN_MEMORY_STORAGE=true."
             )
         import warnings
-
         warnings.warn(
-            "Rate limiting is using in-memory storage in production. "
-            "This is only safe for a single worker.",
+            "Rate limiting is using in-memory storage in production.",
             RuntimeWarning,
             stacklevel=2,
         )
-    elif config_name == "production" and storage_url.startswith(
-        ("redis://", "rediss://")
-    ):
+    elif config_name == "production" and storage_url.startswith(("redis://", "rediss://")):
         try:
             import redis
         except ImportError as exc:
@@ -134,9 +110,6 @@ def create_app(config_name="default", config_overrides=None):
                 "Redis client is required for production rate-limit storage."
             ) from exc
 
-    # Validate and normalize the trusted public origin used for externally
-    # visible links. Production requires a valid HTTPS origin and must not
-    # fall back to request-derived URLs.
     app.config["APP_BASE_URL"] = resolve_app_base_url(
         app.config.get("APP_BASE_URL"),
         production=(config_name == "production"),
@@ -158,42 +131,32 @@ def create_app(config_name="default", config_overrides=None):
 
     @app.before_request
     def enforce_session_version():
-        from flask import session
         from flask_login import current_user, logout_user
-
         if current_user.is_authenticated:
-            expected_version = getattr(
-                current_user, "session_version", 0
-            )
+            expected_version = getattr(current_user, "session_version", 0)
             if session.get("session_version") != expected_version:
                 logout_user()
                 session.clear()
-                flash(
-                    "Your session has expired. Please log in again.",
-                    "warning",
-                )
+                flash("Your session has expired. Please log in again.", "warning")
                 return redirect(url_for("login"))
 
     @app.errorhandler(429)
     def handle_rate_limit_exceeded(error):
-        if request.path.startswith("/payment"):
+        if request.path.startswith("/payment") or request.path.startswith("/api/"):
             return jsonify({
                 "success": False,
                 "message": "Too many requests. Please try again later.",
             }), 429
         return "Too many requests. Please try again later.", 429
 
-    @app.errorhandler(404)
-    def not_found_error(error):
-        return jsonify({"error": "Resource not found", "code": "NOT_FOUND"}), 404
-
     @app.errorhandler(500)
     def internal_error(error):
         db.session.rollback()
         app.logger.error(f"Server Error: {error}")
-        return jsonify(
-            {"error": "An internal server error occurred", "code": "SERVER_ERROR"}
-        ), 500
+        return jsonify({
+            "error": "An internal server error occurred",
+            "code": "SERVER_ERROR"
+        }), 500
 
     from app.models import User
     @login_manager.user_loader
@@ -212,31 +175,20 @@ def create_app(config_name="default", config_overrides=None):
     app.register_blueprint(auth_bp)
     app.register_blueprint(customer_bp)
     app.register_blueprint(professional_bp)
-    # Route rules in these blueprints already carry their full paths
-    # (/admin/..., /payment/..., /api/...), so no url_prefix here.
     app.register_blueprint(admin_bp)
     app.register_blueprint(payments_bp)
     app.register_blueprint(api_bp)
     app.register_blueprint(public_bp)
 
-    # ------------------------------------------------------------
-    # Legacy bare-endpoint resolver
-    # ------------------------------------------------------------
-    # url_for("dashboard")-style calls must resolve to the single
-    # qualified blueprint endpoint. Unknown endpoints re-raise the
-    # original BuildError unchanged.
+    # Legacy bare-endpoint resolver for url_for("dashboard")-style calls
     bare_map = _build_bare_endpoint_map(app.view_functions)
 
     def resolve_bare_endpoint(error, endpoint, values):
-
         if "." in endpoint:
             return None
-
         qualified = bare_map.get(endpoint)
-
         if not qualified:
             return None
-
         try:
             return url_for(qualified, **values)
         except BuildError:
@@ -249,16 +201,25 @@ def create_app(config_name="default", config_overrides=None):
     app.cli.add_command(create_admin_command)
 
     # ------------------------------------------------------------
-    # Frontend serving (Vite build output)
+    # Vite Frontend Build Assets & Single Page Fallback
     # ------------------------------------------------------------
-    @app.route('/', defaults={'path': ''})
-    @app.route('/<path:path>')
-    def serve_frontend(path):
-        dist_dir = os.path.join(app.root_path, '..', 'static', 'dist')
-        if path != "" and os.path.exists(os.path.join(dist_dir, path)):
-            return send_from_directory(dist_dir, path)
-        if os.path.exists(os.path.join(dist_dir, 'index.html')):
-            return send_from_directory(dist_dir, 'index.html')
-        return jsonify({'message': 'AgencyOS API Running. Build frontend with npm run build'}), 200
+    dist_dir = os.path.abspath(os.path.join(app.root_path, "..", "static", "dist"))
+    assets_dir = os.path.join(dist_dir, "assets")
+
+    @app.route("/assets/<path:filename>")
+    def serve_vite_assets(filename):
+        if os.path.exists(os.path.join(assets_dir, filename)):
+            return send_from_directory(assets_dir, filename)
+        return jsonify({"error": "Asset not found"}), 404
+
+    @app.errorhandler(404)
+    def not_found_error(error):
+        if request.path.startswith("/api/") or request.is_json:
+            return jsonify({"error": "Resource not found", "code": "NOT_FOUND"}), 404
+        # SPA client-side route fallback if dist exists
+        index_file = os.path.join(dist_dir, "index.html")
+        if os.path.exists(index_file):
+            return send_from_directory(dist_dir, "index.html")
+        return jsonify({"error": "Page not found", "code": "NOT_FOUND"}), 404
 
     return app

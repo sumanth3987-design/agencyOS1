@@ -56,3 +56,4 @@ Thumbs.db
 .andromity/
 # Local database rollback copies
 instance/*.rollback_*
+_vers/

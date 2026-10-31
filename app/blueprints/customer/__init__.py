@@ -1,3 +1,6 @@
+# Save this directly into your file: app/blueprints/customer/__init__.py
+
+import os
 from datetime import datetime
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from flask_login import login_required, current_user
@@ -6,7 +9,7 @@ from app.extensions import db
 # 1. IMPORT MODELS & REPOSITORY HELPERS
 from app.models import (
     User, CustomerProfile, Business, Project, Payment,
-    ProfessionalProjectApplication, ProjectDelivery, ChatMessage, Invoice,
+    ProfessionalProjectApplication, ProjectDelivery, ChatMessage, Invoice, Milestone,
     get_ist_now, PACKAGE_PRICES, calculate_customer_profile_completion, get_latest_project_delivery
 )
 
@@ -63,14 +66,14 @@ def dashboard_quick_message():
 
     if not text or not project_id_str:
         flash("Please enter a message and select a project.", "warning")
-        return redirect("/dashboard")
+        return redirect(url_for("customer.dashboard"))
 
     try:
         pid = int(project_id_str)
         project = Project.query.get(pid)
         if not project:
             flash(f"Project #{pid} not found.", "warning")
-            return redirect("/dashboard")
+            return redirect(url_for("customer.dashboard"))
 
         msg = ChatMessage(
             project_id=pid,
@@ -85,7 +88,7 @@ def dashboard_quick_message():
         db.session.rollback()
         flash(f"Could not post message: {str(e)}", "danger")
 
-    return redirect("/dashboard")
+    return redirect(url_for("customer.dashboard"))
 
 # =========================================================
 # PROJECT DETAILS (HANDLES /project/5 AND /project/5-)
@@ -100,12 +103,17 @@ def project_details(project_id):
         pid = int(clean_id)
     except (ValueError, TypeError):
         flash(f"Invalid project reference: {project_id}", "warning")
-        return redirect("/dashboard")
+        return redirect(url_for("customer.dashboard"))
 
     project = Project.query.get(pid)
     if not project:
         flash(f"Project #{pid} not found in database.", "warning")
-        return redirect("/dashboard")
+        return redirect(url_for("customer.dashboard"))
+
+    # Security check: Ensure customers only view their own projects
+    if current_user.role == "customer" and project.customer_id != current_user.id:
+        flash("Unauthorized access to project.", "danger")
+        return redirect(url_for("customer.dashboard"))
 
     try:
         latest_delivery = get_latest_project_delivery(project.id)
@@ -145,10 +153,15 @@ def send_project_message(project_id):
     clean_id = str(project_id).strip().rstrip("-/")
     pid = int(clean_id)
 
+    project = Project.query.get_or_404(pid)
+    if current_user.role == "customer" and project.customer_id != current_user.id:
+        flash("Unauthorized action.", "danger")
+        return redirect(url_for("customer.dashboard"))
+
     text = request.form.get("message", "").strip()
     if not text:
         flash("Message cannot be empty.", "warning")
-        return redirect(f"/project/{pid}")
+        return redirect(url_for("customer.project_details", project_id=pid))
 
     try:
         msg = ChatMessage(
@@ -164,7 +177,7 @@ def send_project_message(project_id):
         db.session.rollback()
         flash(f"Could not post message: {str(e)}", "danger")
 
-    return redirect(f"/project/{pid}")
+    return redirect(url_for("customer.project_details", project_id=pid))
 
 
 # =========================================================
@@ -178,6 +191,10 @@ def confirm_payment(project_id):
     clean_id = str(project_id).strip().rstrip("-/")
     pid = int(clean_id)
     project = Project.query.get_or_404(pid)
+
+    if current_user.role == "customer" and project.customer_id != current_user.id:
+        flash("Unauthorized access.", "danger")
+        return redirect(url_for("customer.dashboard"))
 
     # 1. Update Project Status to Active/In Progress
     project.status = "In Progress"
@@ -221,9 +238,15 @@ def confirm_payment(project_id):
     else:
         invoice.status = "Paid"
 
+    # 4. Fund linked milestones
+    try:
+        Milestone.query.filter_by(project_id=project.id, status="pending").update({"status": "funded"}, synchronize_session=False)
+    except Exception:
+        pass
+
     db.session.commit()
     flash("Advance payment authorized! Milestone 1 unlocked and active.", "success")
-    return redirect(f"/project/{pid}")
+    return redirect(url_for("customer.project_details", project_id=pid))
 
 
 # =========================================================
@@ -237,6 +260,10 @@ def view_invoice(project_id):
     clean_id = str(project_id).strip().rstrip("-/")
     pid = int(clean_id)
     project = Project.query.get_or_404(pid)
+
+    if current_user.role == "customer" and project.customer_id != current_user.id:
+        flash("Unauthorized access to invoice.", "danger")
+        return redirect(url_for("customer.dashboard"))
 
     customer = project.customer
     profile = customer.customer_profile if customer else None
@@ -258,7 +285,7 @@ def view_invoice(project_id):
         cgst_amount=cgst_amount,
         sgst_amount=sgst_amount,
         invoice_number=f"INV-2026-{project.id:04d}",
-        invoice_date=project.created_at.strftime("%d %b %Y") if project.created_at else "31 Oct 2026"
+        invoice_date=project.created_at.strftime("%d %b %Y") if getattr(project, "created_at", None) else "31 Oct 2026"
     )
 
 
@@ -274,6 +301,10 @@ def customer_approve_project(project_id):
     pid = int(clean_id)
     project = Project.query.get_or_404(pid)
 
+    if current_user.role == "customer" and project.customer_id != current_user.id:
+        flash("Unauthorized action.", "danger")
+        return redirect(url_for("customer.dashboard"))
+
     latest_delivery = get_latest_project_delivery(project.id)
     if latest_delivery:
         latest_delivery.status = "Approved"
@@ -281,10 +312,20 @@ def customer_approve_project(project_id):
 
     project.status = "Completed"
     project.revision_comment = None
+
+    # Release milestones
+    try:
+        Milestone.query.filter_by(project_id=project.id).update({
+            "status": "released",
+            "released_at": get_ist_now()
+        }, synchronize_session=False)
+    except Exception:
+        pass
+
     db.session.commit()
 
     flash("Milestone deliverable approved! Project marked as Completed.", "success")
-    return redirect(f"/project/{pid}")
+    return redirect(url_for("customer.project_details", project_id=pid))
 
 
 @customer_bp.route("/project/<project_id>/revision", methods=["POST"])
@@ -295,10 +336,14 @@ def customer_request_revision(project_id):
     pid = int(clean_id)
     project = Project.query.get_or_404(pid)
 
+    if current_user.role == "customer" and project.customer_id != current_user.id:
+        flash("Unauthorized action.", "danger")
+        return redirect(url_for("customer.dashboard"))
+
     revision_count = ProjectDelivery.query.filter_by(project_id=project.id, status="Revision").count()
     if revision_count >= 2:
         flash("Maximum 2 complimentary revisions reached. Please order a Paid Scope Add-on.", "warning")
-        return redirect(f"/project/{pid}")
+        return redirect(url_for("customer.project_details", project_id=pid))
 
     comment = request.form.get("revision_comment", "").strip()
     latest_delivery = get_latest_project_delivery(project.id)
@@ -312,7 +357,7 @@ def customer_request_revision(project_id):
     db.session.commit()
 
     flash("Revision feedback submitted. The specialist will update the work.", "success")
-    return redirect(f"/project/{pid}")
+    return redirect(url_for("customer.project_details", project_id=pid))
 
 
 # =========================================================
@@ -340,7 +385,7 @@ def add_business():
             db.session.add(b)
             db.session.commit()
             flash("Business profile added successfully!", "success")
-            return redirect("/businesses")
+            return redirect(url_for("customer.businesses"))
 
     return render_template("add_business.html")
 
@@ -363,12 +408,13 @@ def customer_profile():
         profile.website = request.form.get("website", "").strip()
         db.session.commit()
         flash("Profile updated successfully!", "success")
-        return redirect("/customer/profile")
+        return redirect(url_for("customer.customer_profile"))
 
     return render_template("customer_profile.html", profile=profile)
 
 
 @customer_bp.route("/start-project/<service_slug>", methods=["GET", "POST"])
+@customer_bp.route("/start-project", methods=["GET", "POST"])
 @login_required
 def start_project(service_slug="website-development"):
     businesses = Business.query.filter_by(customer_id=current_user.id).all()
@@ -390,6 +436,6 @@ def start_project(service_slug="website-development"):
         db.session.commit()
 
         flash("Milestone project created! Please authorize advance deposit.", "success")
-        return redirect(f"/payment/{project.id}")
+        return redirect(url_for("payments.payment_page", project_id=project.id))
 
     return render_template("start_project.html", service_slug=service_slug, businesses=businesses)

@@ -1,3 +1,5 @@
+# Save this directly into your file: app/blueprints/professional/__init__.py
+
 from datetime import datetime
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from flask_login import login_required, current_user
@@ -6,7 +8,7 @@ from app.extensions import db
 # 1. IMPORT MODELS & REPOSITORY HELPERS
 from app.models import (
     User, ProfessionalProfile, Project, Payment,
-    ProfessionalProjectApplication, ProjectDelivery, ChatMessage, Invoice,
+    ProfessionalProjectApplication, ProjectDelivery, ChatMessage, Invoice, Milestone,
     get_ist_now, PACKAGE_PRICES, calculate_professional_profile_completion, get_latest_project_delivery
 )
 
@@ -81,7 +83,7 @@ def professional_dashboard():
 def apply_for_project(project_id):
     if current_user.role != "professional":
         flash("Specialist access required.", "danger")
-        return redirect("/dashboard")
+        return redirect(url_for("customer.dashboard"))
 
     project = Project.query.get_or_404(project_id)
 
@@ -91,7 +93,7 @@ def apply_for_project(project_id):
 
     if existing:
         flash(f"You have already applied for Sprint #{project.id}.", "warning")
-        return redirect("/professional/dashboard")
+        return redirect(url_for("professional.professional_dashboard"))
 
     app = ProfessionalProjectApplication(
         project_id=project.id,
@@ -103,7 +105,7 @@ def apply_for_project(project_id):
     db.session.commit()
 
     flash(f"Application submitted for Project #{project.id}! The Agency Admin will review your profile.", "success")
-    return redirect("/professional/dashboard")
+    return redirect(url_for("professional.professional_dashboard"))
 
 
 # =========================================================
@@ -121,7 +123,7 @@ def professional_project_workspace(project_id):
     ).first())
     if not is_assigned and current_user.role != "admin":
         flash("You are not assigned to this project workspace.", "danger")
-        return redirect("/professional/dashboard")
+        return redirect(url_for("professional.professional_dashboard"))
 
     deliveries = ProjectDelivery.query.filter_by(project_id=project.id).order_by(ProjectDelivery.submission_number.desc()).all()
     messages = ChatMessage.query.filter_by(project_id=project.id).order_by(ChatMessage.created_at.asc()).all()
@@ -148,7 +150,7 @@ def professional_project_workspace(project_id):
 def submit_deliverable(project_id):
     if current_user.role != "professional" and current_user.role != "admin":
         flash("Specialist authorization required.", "danger")
-        return redirect("/professional/dashboard")
+        return redirect(url_for("professional.professional_dashboard"))
 
     project = Project.query.get_or_404(project_id)
     
@@ -159,7 +161,7 @@ def submit_deliverable(project_id):
 
     if not notes:
         flash("Please provide completion notes explaining what was built.", "warning")
-        return redirect(f"/professional/project/{project.id}/workspace")
+        return redirect(url_for("professional.professional_project_workspace", project_id=project.id))
 
     last_delivery = ProjectDelivery.query.filter_by(project_id=project.id).order_by(ProjectDelivery.submission_number.desc()).first()
     next_num = (last_delivery.submission_number + 1) if last_delivery else 1
@@ -182,7 +184,7 @@ def submit_deliverable(project_id):
     db.session.commit()
 
     flash(f"Milestone deliverable #{next_num} submitted! Advanced to Quality Review Gate.", "success")
-    return redirect("/professional/dashboard")
+    return redirect(url_for("professional.professional_dashboard"))
 
 
 # =========================================================
@@ -195,7 +197,7 @@ def send_workspace_message(project_id):
     text = request.form.get("message", "").strip()
     if not text:
         flash("Note cannot be empty.", "warning")
-        return redirect(f"/professional/project/{project_id}/workspace")
+        return redirect(url_for("professional.professional_project_workspace", project_id=project_id))
 
     msg = ChatMessage(
         project_id=project_id,
@@ -207,7 +209,7 @@ def send_workspace_message(project_id):
     db.session.commit()
 
     flash("Note posted to project discussion thread!", "success")
-    return redirect(f"/professional/project/{project_id}/workspace")
+    return redirect(url_for("professional.professional_project_workspace", project_id=project_id))
 
 
 # =========================================================
@@ -219,7 +221,7 @@ def send_workspace_message(project_id):
 def professional_profile():
     if current_user.role != "professional":
         flash("Specialist access required.", "danger")
-        return redirect("/dashboard")
+        return redirect(url_for("customer.dashboard"))
 
     profile = ProfessionalProfile.query.filter_by(user_id=current_user.id).first()
     if not profile:
@@ -243,6 +245,6 @@ def professional_profile():
         
         db.session.commit()
         flash("UPI banking details & specialist credentials saved successfully!", "success")
-        return redirect("/professional/profile")
+        return redirect(url_for("professional.professional_profile"))
 
     return render_template("professional_profile.html", profile=profile)

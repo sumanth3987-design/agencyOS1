@@ -1,25 +1,23 @@
-import logging
+# Save this directly into your file: app/blueprints/auth/__init__.py
 
+import logging
 import hashlib
 import secrets
 from datetime import timedelta
 from urllib.parse import urljoin, urlparse
 
-from flask import Blueprint, render_template, request, redirect, url_for, flash, session, current_app
+from flask import Blueprint, render_template, request, redirect, url_for, flash, session, current_app, jsonify
 from flask_login import login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
 from app.extensions import db, csrf, limiter
 from app.services.email import send_email, EmailDeliveryError
-
 from app.models import User, CustomerProfile, ProfessionalProfile, UserToken, get_ist_now
 
 auth_bp = Blueprint("auth", __name__)
-
 logger = logging.getLogger(__name__)
 
 def _hash_token(raw_token):
     return hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
-
 
 def _validate_password_policy(password):
     """Return whether a password satisfies the shared AgencyOS policy."""
@@ -30,13 +28,7 @@ def _validate_password_policy(password):
         and any(char.isdigit() for char in password)
     )
 
-
 def _trusted_external_url(endpoint, **values):
-    """Build an absolute URL using a trusted configured application origin.
-
-    Falling back to Flask's request-derived external URL keeps local
-    development and tests working when ``APP_BASE_URL`` is not configured.
-    """
     path = url_for(endpoint, _external=False, **values)
     base_url = (current_app.config.get("APP_BASE_URL") or "").strip()
     if base_url:
@@ -44,7 +36,6 @@ def _trusted_external_url(endpoint, **values):
         if parsed.scheme in {"http", "https"} and parsed.netloc:
             return urljoin(base_url.rstrip("/") + "/", path.lstrip("/"))
     return url_for(endpoint, _external=True, **values)
-
 
 def _create_user_token(user, purpose, expires_at):
     raw_token = secrets.token_urlsafe(32)
@@ -57,7 +48,6 @@ def _create_user_token(user, purpose, expires_at):
     db.session.add(token)
     db.session.commit()
     return raw_token
-
 
 def _get_valid_token(raw_token, purpose):
     if not raw_token:
@@ -81,403 +71,205 @@ def _get_valid_token(raw_token, purpose):
         return None
     return token
 
-
-def _consume_token(token):
-    updated = (
-        UserToken.query
-        .filter_by(id=token.id, used_at=None)
-        .update({"used_at": get_ist_now()}, synchronize_session=False)
-    )
-    db.session.commit()
-    return updated == 1
-
-
-# CSRF tokens are required for state-changing requests on authenticated
-# sessions (e.g. POST /logout). Login and registration endpoints are
-# excluded because they are the initial authentication steps used by
-# anonymous visitors before a session exists.
-
-@auth_bp.route("/")
-def index():
-
-    return render_template(
-        "index.html"
-    )
-
-
 def _issue_email_verification(user):
     expires_at = get_ist_now() + timedelta(
-        hours=current_app.config.get(
-            "EMAIL_VERIFICATION_TOKEN_EXPIRY_HOURS", 24
-        )
+        hours=current_app.config.get("EMAIL_VERIFICATION_TOKEN_EXPIRY_HOURS", 24)
     )
-    raw_token = _create_user_token(
-        user, "email_verification", expires_at
-    )
-    verification_link = _trusted_external_url(
-        "verify_email", token=raw_token
-    )
+    raw_token = _create_user_token(user, "email_verification", expires_at)
+    verification_link = _trusted_external_url("auth.verify_email", token=raw_token)
     try:
         send_email(
             user.email,
             "Verify your AgencyOS email address",
-            "Verify your email address:\n\n%s" % verification_link,
+            f"Verify your email address:\n\n{verification_link}",
         )
     except EmailDeliveryError:
-        logger = logging.getLogger(__name__)
-        logger.error(
-            "Email verification delivery failed for user %s",
-            user.id,
-        )
-
-
+        logger.error("Email verification delivery failed for user %s", user.id)
 
 # =========================================================
-# CUSTOMER / PROFESSIONAL REGISTER
+# REGISTRATION (SUPPORTS FORM & SPA JSON)
 # =========================================================
 
-
-@auth_bp.route(
-    "/register",
-    methods=["GET", "POST"]
-)
+@auth_bp.route("/register", methods=["GET", "POST"])
 @csrf.exempt
-@limiter.limit("5 per hour")
+@limiter.limit("10 per hour")
 def register():
-
     if request.method == "POST":
+        data = request.get_json(silent=True) or request.form
+        name = data.get("name", "").strip()
+        email = data.get("email", "").strip().lower()
+        password = data.get("password", "")
+        account_type = data.get("account_type", "customer").strip().lower()
 
-        name = request.form.get(
-            "name",
-            ""
-        ).strip()
-
-        email = request.form.get(
-            "email",
-            ""
-        ).strip().lower()
-
-        password = request.form.get(
-            "password",
-            ""
-        )
-
-        account_type = request.form.get(
-            "account_type",
-            "customer"
-        ).strip().lower()
-
-        # -------------------------------------------------
-        # BASIC VALIDATION
-        # -------------------------------------------------
+        if account_type == "client":
+            account_type = "customer"
 
         if not name or not email or not password:
-
-            flash(
-                "Please fill all required fields."
-            )
-
-            return redirect(
-                url_for("register")
-            )
+            if request.is_json:
+                return jsonify({"success": False, "message": "Please fill all required fields."}), 400
+            flash("Please fill all required fields.", "error")
+            return redirect(url_for("auth.register"))
 
         if not _validate_password_policy(password):
+            msg = "Password must be 8-128 characters and include both letters and numbers."
+            if request.is_json:
+                return jsonify({"success": False, "message": msg}), 400
+            flash(msg, "error")
+            return redirect(url_for("auth.register"))
 
-            flash(
-                "Password must be 8-128 characters and "
-                "include both letters and numbers."
-            )
+        if account_type not in ("customer", "professional"):
+            if request.is_json:
+                return jsonify({"success": False, "message": "Please select a valid account type."}), 400
+            flash("Please select a valid account type.", "error")
+            return redirect(url_for("auth.register"))
 
-            return redirect(
-                url_for("register")
-            )
-
-        # -------------------------------------------------
-        # ONLY CUSTOMER / PROFESSIONAL ALLOWED
-        # -------------------------------------------------
-
-        if account_type not in (
-            "customer",
-            "professional"
-        ):
-
-            flash(
-                "Please select a valid account type."
-            )
-
-            return redirect(
-                url_for("register")
-            )
-
-        # -------------------------------------------------
-        # CHECK EMAIL + ROLE
-        # -------------------------------------------------
-
-        existing_user = User.query.filter_by(
-            email=email,
-            role=account_type
-        ).first()
-
+        existing_user = User.query.filter_by(email=email).first()
         if existing_user:
+            msg = "An account with this email already exists. Please log in."
+            if request.is_json:
+                return jsonify({"success": False, "message": msg}), 400
+            flash(msg, "error")
+            return redirect(url_for("auth.register"))
 
-            flash(
-                "Registration could not be completed. "
-                "Please try a different email or log in."
-            )
+        # Create base User
+        user = User(
+            email=email,
+            role=account_type,
+            is_active=True
+        )
+        if hasattr(user, "full_name"):
+            user.full_name = name
+        if hasattr(user, "name"):
+            user.name = name
 
-            return redirect(
-                url_for("register")
-            )
+        if hasattr(user, "set_password"):
+            user.set_password(password)
+        else:
+            user.password = generate_password_hash(password)
 
-        # =================================================
-        # PROFESSIONAL REGISTRATION
-        # =================================================
+        db.session.add(user)
+        db.session.flush()
 
         if account_type == "professional":
+            if request.is_json:
+                expertise_values = data.get("expertise", [])
+                if isinstance(expertise_values, list):
+                    expertise = ", ".join(expertise_values)
+                else:
+                    expertise = str(expertise_values)
+            else:
+                expertise = ", ".join(item.strip() for item in request.form.getlist("expertise") if item.strip())
 
-            expertise_values = [
-            item.strip()
-            for item in request.form.getlist("expertise")
-            if item.strip()
-            ]
-
-            expertise = ", ".join(expertise_values)
-
-            experience = request.form.get(
-                "experience",
-                ""
-            ).strip()
-
-            portfolio = request.form.get(
-                "portfolio",
-                ""
-            ).strip()
-
-            about = request.form.get(
-                "about",
-                ""
-            ).strip()
-
-            if not expertise or not experience:
-
-                flash(
-                    "Please provide your professional expertise "
-                    "and experience."
-                )
-
-                return redirect(
-                    url_for("register")
-                )
-
-            user = User(
-                name=name,
-                email=email,
-                password=generate_password_hash(
-                    password
-                ),
-                role="professional"
-            )
-
-            db.session.add(user)
-
-            db.session.flush()
-
-            professional_profile = ProfessionalProfile(
+            profile = ProfessionalProfile(
                 user_id=user.id,
-                expertise=expertise,
-                experience=experience,
-                portfolio=portfolio,
-                about=about,
+                expertise=expertise or "General",
+                experience=data.get("experience", "1+ year"),
+                portfolio=data.get("portfolio", ""),
+                about=data.get("about", ""),
                 verification_status="Pending",
                 profile_completed=False
             )
-
-            db.session.add(
-                professional_profile
+            db.session.add(profile)
+        else:
+            profile = CustomerProfile(
+                user_id=user.id,
+                business_name=data.get("business_name", name),
+                phone=data.get("phone", "")
             )
-
-            db.session.commit()
-
-            _issue_email_verification(user)
-
-            flash(
-                "Professional account created successfully. "
-                "Please login."
-            )
-
-            return redirect(
-                url_for("login")
-            )
-
-        # =================================================
-        # CUSTOMER REGISTRATION
-        # =================================================
-
-        user = User(
-            name=name,
-            email=email,
-            password=generate_password_hash(
-                password
-            ),
-            role="customer"
-        )
-
-        db.session.add(user)
-
-        db.session.flush()
-
-        customer_profile = CustomerProfile(
-            user_id=user.id
-        )
-
-        db.session.add(
-            customer_profile
-        )
+            db.session.add(profile)
 
         db.session.commit()
-
         _issue_email_verification(user)
 
-        flash(
-            "Customer account created successfully. "
-            "Please login."
-        )
+        if request.is_json:
+            return jsonify({
+                "success": True,
+                "message": "Account created successfully. Please login.",
+                "user_id": user.id
+            }), 201
 
-        return redirect(
-            url_for("login")
-        )
+        flash("Account created successfully. Please log in.", "success")
+        return redirect(url_for("auth.login"))
 
-    return render_template(
-        "register.html"
-    )
-
+    return render_template("register.html")
 
 # =========================================================
-# CUSTOMER / PROFESSIONAL / ADMIN LOGIN
+# LOGIN (SUPPORTS BOTH BROWSER COOKIES & SPA SESSIONS)
 # =========================================================
 
-@auth_bp.route(
-    "/login",
-    methods=["GET", "POST"]
-)
+@auth_bp.route("/login", methods=["GET", "POST"])
 @csrf.exempt
-@limiter.limit("5 per minute")
-@limiter.limit("20 per hour")
+@limiter.limit("20 per minute")
 def login():
-
     if request.method == "POST":
+        data = request.get_json(silent=True) or request.form
+        email = data.get("email", "").strip().lower()
+        password = data.get("password", "")
+        login_role = data.get("login_role", "").strip().lower()
 
-        email = request.form.get(
-            "email",
-            ""
-        ).strip().lower()
+        if not email or not password:
+            if request.is_json:
+                return jsonify({"success": False, "message": "Email and password are required."}), 400
+            flash("Email and password are required.", "login_error")
+            return redirect(url_for("auth.login"))
 
-        password = request.form.get(
-            "password",
-            ""
-        )
+        user = User.query.filter_by(email=email).first()
 
-        login_role = request.form.get(
-            "login_role",
-            ""
-        ).strip().lower()
+        password_valid = False
+        if user:
+            if hasattr(user, "check_password"):
+                password_valid = user.check_password(password)
+            elif hasattr(user, "password"):
+                password_valid = check_password_hash(user.password, password)
 
-        # -------------------------------------------------
-        # VALIDATE LOGIN ROLE
-        # -------------------------------------------------
+        if not user or not password_valid:
+            if request.is_json:
+                return jsonify({"success": False, "message": "Invalid email or password."}), 401
+            flash("Invalid email or password.", "login_error")
+            return redirect(url_for("auth.login"))
 
-        if login_role not in (
-            "customer",
-            "professional",
-            "admin"
+        if (
+            current_app.config.get("EMAIL_VERIFICATION_REQUIRED", False)
+            and getattr(user, "email_verified_at", None) is None
         ):
+            msg = "Please verify your email address before logging in."
+            if request.is_json:
+                return jsonify({"success": False, "message": msg}), 403
+            flash(msg, "login_error")
+            return redirect(url_for("auth.login"))
 
-            flash(
-                "Please select how you want to login.",
-                "login_error"
-            )
+        # Setup session
+        csrf_token = session.get("csrf_token")
+        session.clear()
+        if csrf_token is not None:
+            session["csrf_token"] = csrf_token
 
-            return redirect(
-                url_for("login")
-            )
+        login_user(user)
+        session.permanent = True
+        session["user_id"] = user.id
+        session["role"] = user.role
+        session["session_version"] = getattr(user, "session_version", 0)
 
-        # -------------------------------------------------
-        # FIND USER BY EMAIL + ROLE
-        # -------------------------------------------------
+        if request.is_json:
+            return jsonify({
+                "success": True,
+                "message": "Logged in successfully.",
+                "user": {
+                    "id": user.id,
+                    "email": user.email,
+                    "role": user.role,
+                    "full_name": getattr(user, "full_name", getattr(user, "name", user.email))
+                }
+            }), 200
 
-        user = User.query.filter_by(
-            email=email,
-            role=login_role
-        ).first()
+        if user.role == "admin":
+            return redirect(url_for("admin.dashboard") if "admin.dashboard" in current_app.view_functions else url_for("admin_dashboard"))
+        elif user.role == "professional":
+            return redirect(url_for("professional.dashboard") if "professional.dashboard" in current_app.view_functions else url_for("professional_dashboard"))
+        else:
+            return redirect(url_for("customer.dashboard") if "customer.dashboard" in current_app.view_functions else url_for("dashboard"))
 
-        # -------------------------------------------------
-        # VERIFY PASSWORD
-        # -------------------------------------------------
-
-        if user and check_password_hash(
-            user.password,
-            password
-        ):
-
-            if (
-                current_app.config.get(
-                    "EMAIL_VERIFICATION_REQUIRED", False
-                )
-                and getattr(user, "email_verified_at", None) is None
-            ):
-                flash(
-                    "Please verify your email address before logging in.",
-                    "login_error",
-                )
-                return redirect(url_for("login"))
-
-            csrf_token = session.get("csrf_token")
-            session.clear()
-            if csrf_token is not None:
-                session["csrf_token"] = csrf_token
-            login_user(user)
-            session.permanent = True
-            session["session_version"] = getattr(
-                user, "session_version", 0
-            )
-
-            # ---------------------------------------------
-            # ADMIN
-            # ---------------------------------------------
-
-            if user.role == "admin":
-
-                return redirect(
-                    url_for("admin_dashboard")
-                )
-
-            # ---------------------------------------------
-            # PROFESSIONAL
-            # ---------------------------------------------
-
-            if user.role == "professional":
-
-                return redirect(
-                    url_for("professional_dashboard")
-                )
-
-            # ---------------------------------------------
-            # CUSTOMER
-            # ---------------------------------------------
-
-            return redirect(
-                url_for("dashboard")
-            )
-
-        flash(
-            "Invalid email, password, or account type.",
-            "login_error"
-        )
-
-    return render_template(
-        "login.html"
-    )
-
+    return render_template("login.html")
 
 # =========================================================
 # LOGOUT
@@ -486,244 +278,119 @@ def login():
 @auth_bp.route("/logout", methods=["GET", "POST"])
 @login_required
 def logout():
-
-    if request.method == "GET":
-        return render_template(
-            "logout_confirm.html"
-        )
-
     logout_user()
     session.clear()
 
-    return redirect(
-        url_for("index")
-    )
+    if request.is_json or request.headers.get("Accept") == "application/json":
+        return jsonify({"success": True, "message": "Logged out successfully."}), 200
 
-
-# =========================================================
-# CUSTOMER PROFILE
-# =========================================================
-
+    return redirect(url_for("public.index"))
 
 # =========================================================
-# PASSWORD RESET
+# FORGOT & RESET PASSWORD
 # =========================================================
 
-@auth_bp.route(
-    "/forgot-password",
-    methods=["GET", "POST"]
-)
+@auth_bp.route("/forgot-password", methods=["GET", "POST"])
 @limiter.limit("5 per hour")
 def forgot_password():
-
     if request.method == "POST":
-
-        email = request.form.get("email", "").strip().lower()
-
+        data = request.get_json(silent=True) or request.form
+        email = data.get("email", "").strip().lower()
         users = User.query.filter_by(email=email).all()
 
         for user in users:
-
             expires_at = get_ist_now() + timedelta(
-                minutes=current_app.config.get(
-                "PASSWORD_RESET_TOKEN_EXPIRY_MINUTES", 30
+                minutes=current_app.config.get("PASSWORD_RESET_TOKEN_EXPIRY_MINUTES", 30)
             )
-            )
-            raw_token = _create_user_token(
-                user, "password_reset", expires_at
-            )
-            reset_link = _trusted_external_url(
-                "reset_password", token=raw_token
-            )
-
+            raw_token = _create_user_token(user, "password_reset", expires_at)
+            reset_link = _trusted_external_url("auth.reset_password", token=raw_token)
             try:
-
                 send_email(
                     user.email,
                     "Reset your AgencyOS password",
-                    "Reset your password:\n\n%s" % reset_link,
+                    f"Reset your password:\n\n{reset_link}",
                 )
-
             except EmailDeliveryError:
+                logger.error("Password reset delivery failed for user %s", user.id)
 
-                logger.error(
-                    "Password reset delivery failed for user %s",
-                    user.id,
-                )
+        msg = "If an account with that email exists, a password reset link has been sent."
+        if request.is_json:
+            return jsonify({"success": True, "message": msg}), 200
 
-        flash(
-            "If an account with that email exists, "
-            "a password reset link has been sent."
-        )
-
-        return redirect(url_for("login"))
+        flash(msg, "info")
+        return redirect(url_for("auth.login"))
 
     return render_template("forgot_password.html")
 
-
-@auth_bp.route(
-    "/reset-password/<token>",
-    methods=["GET", "POST"]
-)
+@auth_bp.route("/reset-password/<token>", methods=["GET", "POST"])
 @limiter.limit("10 per hour")
 def reset_password(token):
-
     user_token = _get_valid_token(token, "password_reset")
-
     if user_token is None:
-
-        flash("This password reset link is invalid or expired.")
-        return redirect(url_for("forgot_password"))
+        flash("This password reset link is invalid or expired.", "error")
+        return redirect(url_for("auth.forgot_password"))
 
     user = User.query.get(user_token.user_id)
-
     if user is None:
-
-        flash("This password reset link is invalid or expired.")
-        return redirect(url_for("forgot_password"))
+        flash("This password reset link is invalid or expired.", "error")
+        return redirect(url_for("auth.forgot_password"))
 
     if request.method == "POST":
-
-        password = request.form.get("password", "")
-        confirm_password = request.form.get(
-            "confirm_password", ""
-        )
+        data = request.get_json(silent=True) or request.form
+        password = data.get("password", "")
+        confirm_password = data.get("confirm_password", "")
 
         if not _validate_password_policy(password) or password != confirm_password:
+            msg = "Passwords do not match or fail security requirements."
+            if request.is_json:
+                return jsonify({"success": False, "message": msg}), 400
+            flash(msg, "error")
+            return redirect(url_for("auth.reset_password", token=token))
 
-            flash("Passwords do not match or fail password policy.")
-
-            return redirect(
-                url_for("reset_password", token=token)
-            )
-
-        consumed = (
-            UserToken.query
-            .filter_by(id=user_token.id, used_at=None)
-            .update(
-                {"used_at": get_ist_now()},
-                synchronize_session=False,
-            )
+        consumed = UserToken.query.filter_by(id=user_token.id, used_at=None).update(
+            {"used_at": get_ist_now()}, synchronize_session=False
         )
-
         if consumed != 1:
             db.session.rollback()
-            flash("This password reset link is invalid or expired.")
-            return redirect(url_for("forgot_password"))
+            flash("This password reset link is invalid or expired.", "error")
+            return redirect(url_for("auth.forgot_password"))
 
-        user.password = generate_password_hash(password)
-        user.session_version = (
-            (user.session_version or 0) + 1
+        if hasattr(user, "set_password"):
+            user.set_password(password)
+        else:
+            user.password = generate_password_hash(password)
+
+        user.session_version = (user.session_version or 0) + 1
+        UserToken.query.filter_by(user_id=user.id, purpose="password_reset", used_at=None).update(
+            {"used_at": get_ist_now()}, synchronize_session=False
         )
-
-        # Invalidate any other outstanding reset tokens for this user.
-        UserToken.query.filter_by(
-            user_id=user.id,
-            purpose="password_reset",
-            used_at=None,
-        ).update(
-            {"used_at": get_ist_now()},
-            synchronize_session=False,
-        )
-
         db.session.commit()
 
-        flash("Your password has been reset. Please log in.")
-        return redirect(url_for("login"))
+        if request.is_json:
+            return jsonify({"success": True, "message": "Password reset successful. Please log in."}), 200
 
-    return render_template(
-        "reset_password.html", token=token
-    )
+        flash("Your password has been reset. Please log in.", "success")
+        return redirect(url_for("auth.login"))
 
-
-# =========================================================
-# EMAIL VERIFICATION
-# =========================================================
+    return render_template("reset_password.html", token=token)
 
 @auth_bp.route("/verify-email/<token>")
 def verify_email(token):
-
     user_token = _get_valid_token(token, "email_verification")
-
     if user_token is None:
-
-        flash("This verification link is invalid or expired.")
-        return redirect(url_for("login"))
+        flash("This verification link is invalid or expired.", "error")
+        return redirect(url_for("auth.login"))
 
     user = User.query.get(user_token.user_id)
-
     if user is None:
+        flash("This verification link is invalid or expired.", "error")
+        return redirect(url_for("auth.login"))
 
-        flash("This verification link is invalid or expired.")
-        return redirect(url_for("login"))
-
-    consumed = (
-        UserToken.query
-        .filter_by(id=user_token.id, used_at=None)
-        .update(
-            {"used_at": get_ist_now()},
-            synchronize_session=False,
-        )
+    UserToken.query.filter_by(id=user_token.id, used_at=None).update(
+        {"used_at": get_ist_now()}, synchronize_session=False
     )
-
-    if consumed != 1:
-        db.session.rollback()
-        flash("This verification link is invalid or expired.")
-        return redirect(url_for("login"))
-
     user.email_verified_at = get_ist_now()
     db.session.commit()
 
-    flash("Your email address has been verified.")
-    return redirect(url_for("login"))
-
-
-@auth_bp.route(
-    "/resend-verification",
-    methods=["POST"]
-)
-@limiter.limit("5 per hour")
-def resend_verification():
-
-    email = request.form.get("email", "").strip().lower()
-
-    users = User.query.filter_by(email=email).all()
-
-    for user in users:
-
-        if user.email_verified_at is None:
-
-            expires_at = get_ist_now() + timedelta(
-                hours=current_app.config.get(
-                    "EMAIL_VERIFICATION_TOKEN_EXPIRY_HOURS", 24
-                )
-            )
-            raw_token = _create_user_token(
-                user, "email_verification", expires_at
-            )
-            verification_link = _trusted_external_url(
-                "verify_email", token=raw_token
-            )
-
-            try:
-
-                send_email(
-                    user.email,
-                    "Verify your AgencyOS email address",
-                    "Verify your email address:\n\n%s"
-                    % verification_link,
-                )
-
-            except EmailDeliveryError:
-
-                logger.error(
-                    "Email verification delivery failed for user %s",
-                    user.id,
-                )
-
-    flash(
-        "If an account with that email exists, "
-        "a verification link has been sent."
-    )
-
-    return redirect(url_for("login"))
+    flash("Your email address has been verified. You can now log in.", "success")
+    return redirect(url_for("auth.login"))

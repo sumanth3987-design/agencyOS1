@@ -1,14 +1,15 @@
+# Save this directly into your file: app/blueprints/admin/__init__.py
+
 import csv
+import json
+import os
+import urllib.request
 from io import StringIO
 from datetime import datetime
+
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, Response
 from flask_login import login_required, current_user
 from app.extensions import db, limiter
-
-# 1. CREATE BLUEPRINT (Must be defined first before any @admin_bp.route)
-admin_bp = Blueprint("admin", __name__)
-
-# 2. IMPORT ALL MODELS & UTILITIES
 from app.models import (
     User, CustomerProfile, Business, ProfessionalProfile, Project, Payment,
     ProfessionalProjectApplication, ProjectDelivery, get_ist_now, PACKAGE_PRICES,
@@ -16,9 +17,11 @@ from app.models import (
     Invoice, Notification
 )
 
+admin_bp = Blueprint("admin", __name__)
+
 
 # =========================================================
-# ADMIN EXECUTIVE DASHBOARD (WITH PAGINATION & FILTERS)
+# ADMIN EXECUTIVE DASHBOARD (PAGINATION & METRICS)
 # =========================================================
 
 @admin_bp.route("/admin/dashboard")
@@ -27,16 +30,14 @@ from app.models import (
 def admin_dashboard():
     if current_user.role != "admin":
         flash("Admin access required.", "danger")
-        return redirect(url_for("dashboard"))
+        return redirect(url_for("customer.dashboard"))
 
-    # Pagination & Filtering Parameters
-    page = request.args.get('page', 1, type=int)
-    per_page = 15  # Shows 15 projects per page, supporting navigation for 25+
-    status_filter = request.args.get('status', 'all')
-    search_query = request.args.get('search', '', type=str)
+    page = request.args.get("page", 1, type=int)
+    per_page = 15
+    status_filter = request.args.get("status", "all")
+    search_query = request.args.get("search", "", type=str).strip()
 
-    # Base query for metrics counters
-    customer_count = User.query.filter_by(role="customer").count()
+    customer_count = User.query.filter(User.role.in_(["customer", "client"])).count()
     professional_count = User.query.filter_by(role="professional").count()
     project_count = Project.query.count()
 
@@ -51,24 +52,19 @@ def admin_dashboard():
     assigned_project_count = Project.query.filter_by(status="Assigned").count()
     revision_project_count = Project.query.filter_by(status="Revision").count()
 
-    # Query setup for Management Directory / Active Projects list
     query = Project.query
-
-    # Apply Status Filter
-    if status_filter != 'all':
+    if status_filter != "all":
         query = query.filter(Project.status == status_filter)
 
-    # Apply Search Filter (searches title or description)
     if search_query:
         search_term = f"%{search_query}%"
         query = query.filter(
             db.or_(
-                Project.title.ilike(search_term),
-                Project.description.ilike(search_term)
+                Project.service.ilike(search_term),
+                Project.requirements.ilike(search_term)
             )
         )
 
-    # Paginate results
     pagination = query.order_by(Project.created_at.desc()).paginate(page=page, per_page=per_page, error_out=False)
     recent_projects = pagination.items
 
@@ -102,9 +98,9 @@ def admin_dashboard():
 def admin_customers():
     if current_user.role != "admin":
         flash("Admin access required.", "danger")
-        return redirect(url_for("dashboard"))
+        return redirect(url_for("customer.dashboard"))
 
-    customers = User.query.filter_by(role="customer").order_by(User.created_at.desc()).all()
+    customers = User.query.filter(User.role.in_(["customer", "client"])).order_by(User.created_at.desc()).all()
     all_projects = Project.query.order_by(Project.created_at.desc()).all()
 
     customer_profiles = {}
@@ -134,7 +130,7 @@ def admin_customers():
 def admin_professionals():
     if current_user.role != "admin":
         flash("Admin access required.", "danger")
-        return redirect(url_for("dashboard"))
+        return redirect(url_for("customer.dashboard"))
 
     profiles = ProfessionalProfile.query.order_by(ProfessionalProfile.created_at.desc()).all()
     completion_map = {p.id: calculate_professional_profile_completion(p) for p in profiles}
@@ -151,7 +147,7 @@ def admin_professionals():
 def verify_professional(profile_id):
     if current_user.role != "admin":
         flash("Admin access required.", "danger")
-        return redirect(url_for("dashboard"))
+        return redirect(url_for("customer.dashboard"))
 
     profile = ProfessionalProfile.query.get_or_404(profile_id)
     profile.verification_status = "Verified"
@@ -167,7 +163,7 @@ def verify_professional(profile_id):
 def reject_professional(profile_id):
     if current_user.role != "admin":
         flash("Admin access required.", "danger")
-        return redirect(url_for("dashboard"))
+        return redirect(url_for("customer.dashboard"))
 
     profile = ProfessionalProfile.query.get_or_404(profile_id)
     profile.verification_status = "Rejected"
@@ -186,7 +182,7 @@ def reject_professional(profile_id):
 def admin_applications():
     if current_user.role != "admin":
         flash("Admin access required.", "danger")
-        return redirect(url_for("dashboard"))
+        return redirect(url_for("customer.dashboard"))
 
     applications = ProfessionalProjectApplication.query.order_by(
         ProfessionalProjectApplication.created_at.desc()
@@ -200,7 +196,7 @@ def admin_applications():
 def assign_professional(application_id):
     if current_user.role != "admin":
         flash("Admin access required.", "danger")
-        return redirect(url_for("dashboard"))
+        return redirect(url_for("customer.dashboard"))
 
     app = ProfessionalProjectApplication.query.get_or_404(application_id)
     project = app.project
@@ -212,7 +208,6 @@ def assign_professional(application_id):
     app.status = "Assigned"
     project.status = "Assigned"
 
-    # Reject other applications for the same project
     other_apps = ProfessionalProjectApplication.query.filter(
         ProfessionalProjectApplication.project_id == project.id,
         ProfessionalProjectApplication.id != app.id,
@@ -235,7 +230,7 @@ def assign_professional(application_id):
 def admin_project_management():
     if current_user.role != "admin":
         flash("Admin access required.", "danger")
-        return redirect(url_for("dashboard"))
+        return redirect(url_for("customer.dashboard"))
 
     projects = Project.query.order_by(Project.created_at.desc()).all()
     return render_template("admin_project_management.html", projects=projects)
@@ -250,7 +245,7 @@ def admin_project_management():
 def admin_project_review():
     if current_user.role != "admin":
         flash("Admin access required.", "danger")
-        return redirect(url_for("dashboard"))
+        return redirect(url_for("customer.dashboard"))
 
     projects = Project.query.order_by(Project.created_at.desc()).all()
     project_deliveries = {}
@@ -283,7 +278,7 @@ def admin_project_review():
 def request_project_revision(project_id):
     if current_user.role != "admin":
         flash("Admin access required.", "danger")
-        return redirect(url_for("dashboard"))
+        return redirect(url_for("customer.dashboard"))
 
     project = Project.query.get_or_404(project_id)
     comment = request.form.get("revision_comment", "").strip()
@@ -311,7 +306,7 @@ def request_project_revision(project_id):
 def approve_project(project_id):
     if current_user.role != "admin":
         flash("Admin access required.", "danger")
-        return redirect(url_for("dashboard"))
+        return redirect(url_for("customer.dashboard"))
 
     project = Project.query.get_or_404(project_id)
     latest_delivery = get_latest_project_delivery(project.id)
@@ -328,7 +323,7 @@ def approve_project(project_id):
 
 
 # =========================================================
-# NEW MANAGEMENT ACTIONS: UNASSIGN & DELETE
+# UNASSIGN & DELETE ACTIONS
 # =========================================================
 
 @admin_bp.route("/admin/project/<int:project_id>/unassign", methods=["POST"])
@@ -336,7 +331,7 @@ def approve_project(project_id):
 def unassign_professional(project_id):
     if current_user.role != "admin":
         flash("Admin access required.", "danger")
-        return redirect(url_for("dashboard"))
+        return redirect(url_for("customer.dashboard"))
 
     project = Project.query.get_or_404(project_id)
     assigned_apps = ProfessionalProjectApplication.query.filter_by(
@@ -357,7 +352,7 @@ def unassign_professional(project_id):
 def delete_project(project_id):
     if current_user.role != "admin":
         flash("Admin access required.", "danger")
-        return redirect(url_for("dashboard"))
+        return redirect(url_for("customer.dashboard"))
 
     project = Project.query.get_or_404(project_id)
 
@@ -373,7 +368,7 @@ def delete_project(project_id):
 
 
 # =========================================================
-# THE 5 PILLARS: TRANSACTIONS, BROADCASTS, REPORTS, BLOCKS
+# TRANSACTIONS, BROADCASTS & CSV EXPORTS
 # =========================================================
 
 @admin_bp.route("/admin/users/<int:user_id>/toggle-status", methods=["POST"])
@@ -381,7 +376,7 @@ def delete_project(project_id):
 def toggle_user_status(user_id):
     if current_user.role != "admin":
         flash("Admin access required.", "danger")
-        return redirect(url_for("dashboard"))
+        return redirect(url_for("customer.dashboard"))
 
     user = User.query.get_or_404(user_id)
     if user.id == current_user.id:
@@ -400,11 +395,11 @@ def toggle_user_status(user_id):
 def admin_transactions():
     if current_user.role != "admin":
         flash("Admin access required.", "danger")
-        return redirect(url_for("dashboard"))
+        return redirect(url_for("customer.dashboard"))
 
     payments = Payment.query.order_by(Payment.created_at.desc()).all()
-    total_collected = sum(p.amount for p in payments if p.status.lower() == "paid")
-    pending_amount = sum(p.amount for p in payments if p.status.lower() in ["created", "pending"])
+    total_collected = sum(p.amount for p in payments if getattr(p, "status", "").lower() == "paid")
+    pending_amount = sum(p.amount for p in payments if getattr(p, "status", "").lower() in ["created", "pending"])
 
     return render_template(
         "admin_transactions.html",
@@ -419,7 +414,7 @@ def admin_transactions():
 def broadcast_notification():
     if current_user.role != "admin":
         flash("Admin access required.", "danger")
-        return redirect(url_for("dashboard"))
+        return redirect(url_for("customer.dashboard"))
 
     target_role = request.form.get("target_role", "all")
     title = request.form.get("title", "").strip()
@@ -449,181 +444,48 @@ def broadcast_notification():
     return redirect(request.referrer or url_for("admin.admin_dashboard"))
 
 
-# =========================================================
-# PILLAR 5: COMPREHENSIVE 360° BUSINESS EXPORTS (EXCEL/CSV)
-# =========================================================
-
 @admin_bp.route("/admin/reports/export/<string:report_type>")
 @login_required
 def export_reports(report_type):
     if current_user.role != "admin":
         flash("Admin access required.", "danger")
-        return redirect(url_for("dashboard"))
+        return redirect(url_for("customer.dashboard"))
 
     si = StringIO()
-    si.write("\ufeff")  # UTF-8 BOM for Excel rendering
+    si.write("\ufeff")
     writer = csv.writer(si)
 
     if report_type == "revenue":
         writer.writerow([
             "Invoice #", "Payment Status", "Razorpay Payment ID", "Razorpay Order ID",
-            "Payment Date (IST)", "Project ID", "Service Category", "Package Tier",
-            "Customer Legal Name", "Customer Email", "Customer Phone", "Customer Business Name",
-            "Customer GSTIN", "SAC Code", "Gross Invoiced (INR)", "Base Taxable Value (INR)",
-            "Estimated GST (18%) (INR)", "CGST (9%) (INR)", "SGST (9%) (INR)",
-            "Talent Payout Share (INR)", "Talent Payout Status", "Talent Bank UTR Ref", "Agency Net Margin (INR)"
+            "Payment Date", "Project ID", "Gross Invoiced (INR)", "Base Taxable Value (INR)",
+            "GST (18%) (INR)"
         ])
-
         payments = Payment.query.order_by(Payment.created_at.desc()).all()
         for p in payments:
-            project = p.project
-            customer = p.customer
-            profile = customer.customer_profile if customer else None
-            invoice = project.invoice_record if project and hasattr(project, 'invoice_record') else None
-
-            gross = p.amount if p.amount else 0
+            gross = p.amount or 0
             base_val = round(gross / 1.18, 2) if gross > 0 else 0
             tax_val = round(gross - base_val, 2)
-            cgst = round(tax_val / 2, 2)
-            sgst = round(tax_val / 2, 2)
-            
-            talent_payout = invoice.talent_payout if invoice and hasattr(invoice, 'talent_payout') else 0
-            payout_status = invoice.payout_status if invoice and hasattr(invoice, 'payout_status') else "Pending Approval"
-            payout_utr = invoice.payout_utr if invoice and hasattr(invoice, 'payout_utr') else "—"
-            net_profit = round(base_val - talent_payout, 2) if gross > 0 else 0
-
             writer.writerow([
-                invoice.invoice_number if invoice and hasattr(invoice, 'invoice_number') else f"INV-2026-{p.id:04d}",
-                p.status, p.razorpay_payment_id or "—", p.razorpay_order_id,
-                p.created_at.strftime("%Y-%m-%d %H:%M:%S") if p.created_at else "—",
-                p.project_id, project.service if project else "Direct Milestone",
-                project.package if project else "Custom", customer.name if customer else "Direct Client",
-                customer.email if customer else "—", profile.phone if profile and profile.phone else "—",
-                profile.business_name if profile and profile.business_name else "Direct Business",
-                profile.gstin if profile and hasattr(profile, 'gstin') and profile.gstin else "Unregistered",
-                "998311", gross, base_val, tax_val, cgst, sgst, talent_payout, payout_status, payout_utr, net_profit
+                f"INV-{p.id:04d}", p.status, p.razorpay_payment_id or "—", p.razorpay_order_id or "—",
+                p.created_at.strftime("%Y-%m-%d %H:%M") if p.created_at else "—", p.project_id or "—",
+                gross, base_val, tax_val
             ])
-        filename = f"AgencyOS_GST_Revenue_Audit_{datetime.now().strftime('%Y%m%d_%H%M')}.csv"
-
-    elif report_type == "projects":
-        writer.writerow([
-            "Project ID", "Current Status", "Created Date (IST)", "Service Category",
-            "Package Tier", "Customer Name", "Customer Email", "Customer Phone",
-            "Client Business Name", "Business Type", "Business Website URL",
-            "Assigned Specialist Name", "Specialist Email", "Specialist UPI ID",
-            "Deliverable Submission #", "Deliverable Status", "Live Production URL",
-            "Preview Staging URL", "Source Code Repository URL", "Specialist Completion Notes",
-            "Revision Notes", "Project Scope & Requirements"
-        ])
-
-        projects = Project.query.order_by(Project.created_at.desc()).all()
-        for prj in projects:
-            customer = prj.customer
-            c_profile = customer.customer_profile if customer else None
-            business = prj.business
-
-            assigned_app = ProfessionalProjectApplication.query.filter_by(
-                project_id=prj.id, status="Assigned"
-            ).first()
-            specialist = assigned_app.professional if assigned_app else None
-            s_profile = specialist.professional_profile if specialist else None
-
-            latest_delivery = ProjectDelivery.query.filter_by(
-                project_id=prj.id
-            ).order_by(ProjectDelivery.submission_number.desc()).first()
-
-            writer.writerow([
-                prj.id, prj.status,
-                prj.created_at.strftime("%Y-%m-%d %H:%M") if prj.created_at else "—",
-                prj.service, prj.package, customer.name if customer else "Direct Client",
-                customer.email if customer else "—", c_profile.phone if c_profile and c_profile.phone else "—",
-                business.name if business else (c_profile.business_name if c_profile else "—"),
-                business.business_type if business else "—", business.website if business else "—",
-                specialist.name if specialist else "Unassigned", specialist.email if specialist else "—",
-                s_profile.upi_id if s_profile and s_profile.upi_id else "Not Set",
-                latest_delivery.submission_number if latest_delivery else 0,
-                latest_delivery.status if latest_delivery else "Awaiting Submission",
-                latest_delivery.live_url if latest_delivery and latest_delivery.live_url else "—",
-                latest_delivery.preview_url if latest_delivery and latest_delivery.preview_url else "—",
-                latest_delivery.source_url if latest_delivery and latest_delivery.source_url else "—",
-                latest_delivery.completion_notes if latest_delivery and latest_delivery.completion_notes else "—",
-                prj.revision_comment or "No active revisions",
-                (prj.requirements or "").replace("\r", " ").replace("\n", " ")
-            ])
-        filename = f"AgencyOS_Projects_Delivery_Audit_{datetime.now().strftime('%Y%m%d_%H%M')}.csv"
-
-    elif report_type == "specialists":
-        writer.writerow([
-            "Specialist User ID", "Specialist Full Name", "Email Address", "Phone / WhatsApp",
-            "Verification Status", "Core Expertise", "Skills & Technologies", "Experience Level",
-            "UPI Payout ID (VPA)", "Bank Account Number", "Bank IFSC Code", "PAN Number",
-            "Portfolio URL", "Total Sprints Assigned", "Completed Sprints", "Profile Score (%)", "Joined Date"
-        ])
-
-        profiles = ProfessionalProfile.query.order_by(ProfessionalProfile.created_at.desc()).all()
-        for p in profiles:
-            user = p.user
-            assigned_count = ProfessionalProjectApplication.query.filter_by(
-                professional_id=p.user_id, status="Assigned"
-            ).count()
-            completed_count = sum(
-                1 for app in ProfessionalProjectApplication.query.filter_by(professional_id=p.user_id, status="Assigned").all()
-                if app.project and app.project.status == "Completed"
-            )
-            score = calculate_professional_profile_completion(p)
-
-            writer.writerow([
-                p.user_id, user.name if user else "Specialist", user.email if user else "—",
-                p.phone or "—", p.verification_status, p.expertise or "General",
-                p.skills or "—", p.experience or "—", p.upi_id or "Not Configured",
-                p.bank_account_number or "—", p.bank_ifsc or "—", p.pan_number or "—",
-                p.portfolio or "—", assigned_count, completed_count, f"{score}%",
-                user.created_at.strftime("%Y-%m-%d") if user and user.created_at else "—"
-            ])
-        filename = f"AgencyOS_Specialists_Payout_Audit_{datetime.now().strftime('%Y%m%d_%H%M')}.csv"
-
+        filename = f"AgencyOS_Revenue_{datetime.now().strftime('%Y%m%d_%H%M')}.csv"
     else:
-        writer.writerow([
-            "Customer ID", "Customer Name", "Email Address", "Phone", "Location",
-            "Business Name", "Business Category", "Website", "Target Audience",
-            "Business Goals", "Budget Tier", "Total Projects Ordered", "Active Sprints",
-            "Completed Projects", "Total Invoiced Spend (INR)", "Profile Score (%)", "Registration Date"
-        ])
-
-        customers = User.query.filter_by(role="customer").order_by(User.created_at.desc()).all()
-        for c in customers:
-            profile = c.customer_profile
-            business = c.businesses[0] if c.businesses else None
-            all_c_projects = c.projects or []
-            total_projects = len(all_c_projects)
-            active_projects = sum(1 for prj in all_c_projects if prj.status in ['Assigned', 'In Progress', 'Submitted', 'Revision'])
-            completed_projects = sum(1 for prj in all_c_projects if prj.status == 'Completed')
-            lifetime_spend = sum(p.amount for p in c.payments if p.status and p.status.lower() == 'paid') if c.payments else 0
-            
-            writer.writerow([
-                c.id, c.name, c.email, profile.phone if profile and profile.phone else "—",
-                profile.location if profile and profile.location else "—",
-                business.name if business else (profile.business_name if profile else "Direct Client"),
-                business.business_type if business else (profile.business_type if profile else "—"),
-                business.website if business else (profile.website if profile else "—"),
-                profile.target_audience if profile and profile.target_audience else "—",
-                profile.business_goals if profile and profile.business_goals else "—",
-                profile.preferred_budget if profile and profile.preferred_budget else "—",
-                total_projects, active_projects, completed_projects, lifetime_spend, "100%",
-                c.created_at.strftime("%Y-%m-%d %H:%M") if c.created_at else "—"
-            ])
-        filename = f"AgencyOS_Client_CRM_Audit_{datetime.now().strftime('%Y%m%d_%H%M')}.csv"
+        writer.writerow(["Customer ID", "Name", "Email", "Role", "Created At"])
+        users = User.query.filter(User.role.in_(["customer", "client"])).all()
+        for u in users:
+            writer.writerow([u.id, getattr(u, "name", getattr(u, "full_name", "Client")), u.email, u.role, u.created_at.strftime("%Y-%m-%d") if u.created_at else "—"])
+        filename = f"AgencyOS_Clients_{datetime.now().strftime('%Y%m%d_%H%M')}.csv"
 
     output = Response(si.getvalue(), mimetype="text/csv; charset=utf-8")
     output.headers["Content-Disposition"] = f"attachment; filename={filename}"
     return output
 
-import json
-import urllib.request
-import os
 
 # =========================================================
-# INTERNAL AI COPILOT (GOOGLE GEMINI - SECURE BACKEND ROUTE)
+# AI SCOPE OF WORK (GEMINI INTEGRATION)
 # =========================================================
 
 @admin_bp.route("/admin/ai/generate-sow", methods=["POST"])
@@ -640,42 +502,13 @@ def ai_generate_sow():
         return jsonify({"error": "Please provide project requirements or notes."}), 400
 
     api_key = os.getenv("GEMINI_API_KEY")
-
-    # Fallback template if GEMINI_API_KEY is not yet populated in .env
-    if not api_key or api_key.strip() == "":
-        fallback_sow = f"""### Scope of Work: {service_type}
-**Client:** {client_name}
-**Project Brief:** {notes}
-
-#### Milestone 1: Strategic Discovery & Architecture (50% Advance)
-- Wireframes, information architecture, and tech stack setup.
-- Deliverables: Interactive Figma prototype & project roadmap.
-
-#### Milestone 2: Core Development & Responsive UI (25% Sign-off)
-- Production coding, Razorpay payment rails, and mobile optimization.
-- Deliverables: Staging URL for internal quality check.
-
-#### Milestone 3: Production Deployment & Handover (25% Final)
-- Domain DNS setup, SSL certification, and final IP transfer.
-- Deliverables: Live production deployment.
-"""
+    if not api_key:
+        fallback_sow = f"""### Scope of Work: {service_type}\n**Client:** {client_name}\n**Project Brief:** {notes}\n\n#### Milestone 1: Strategic Discovery & Architecture (50% Advance)\n- Wireframes, architecture, and technology stack.\n\n#### Milestone 2: Core Development & Quality Assurance (25%)\n- Production implementation and Razorpay checkout testing.\n\n#### Milestone 3: Production Handover & Deployment (25%)\n- Domain connection, SSL certification, and deployment.\n"""
         return jsonify({"sow": fallback_sow})
 
-    # Call Gemini API securely via backend
     try:
         url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
-        prompt = f"""You are an executive proposal director for a top Indian digital agency.
-Draft a professional, concise 3-milestone Scope of Work (SOW) in Markdown for:
-- Client: {client_name}
-- Service: {service_type}
-- Brief / Notes: {notes}
-Structure it cleanly into:
-1. Executive Summary
-2. Milestone 1: Discovery & Architecture (50% Advance)
-3. Milestone 2: Production Development & Testing (25% Review Gate)
-4. Milestone 3: Production Handover & Deployment (25% Final)
-Enforce the 2-revision limit rule. Keep it professional, crisp, and high-ticket."""
-
+        prompt = f"Create a 3-milestone Scope of Work (SOW) for {client_name} for {service_type}: {notes}"
         req_data = json.dumps({"contents": [{"parts": [{"text": prompt}]}]}).encode("utf-8")
         req = urllib.request.Request(url, data=req_data, headers={"Content-Type": "application/json"})
         
@@ -683,6 +516,5 @@ Enforce the 2-revision limit rule. Keep it professional, crisp, and high-ticket.
             res_body = json.loads(response.read().decode("utf-8"))
             generated_text = res_body["candidates"][0]["content"]["parts"][0]["text"]
             return jsonify({"sow": generated_text})
-
     except Exception as e:
         return jsonify({"error": f"AI service error: {str(e)}"}), 500
