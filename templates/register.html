@@ -1,19 +1,155 @@
+<!-- Save this directly into: templates/register.html -->
 <!DOCTYPE html>
-<html lang="en" class="dark"><head><meta charset="UTF-8"><title>Create Account — AgencyOS</title><script src="https://cdn.tailwindcss.com"></script></head>
-<body class="bg-[#09090b] text-zinc-100 font-sans min-h-screen flex items-center justify-center p-6">
-  <div class="max-w-sm w-full p-8 rounded-2xl bg-[#121215] border border-zinc-800">
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Create Account — AgencyOS</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    body { background-color: #09090b; font-family: 'Plus Jakarta Sans', sans-serif; color: #f4f4f5; }
+    .auth-card { background-color: #121215; border: 1px solid rgba(255, 255, 255, 0.08); box-shadow: 0 20px 40px rgba(0,0,0,0.6); }
+    .input-field { background-color: #09090b; border: 1px solid #27272a; color: #ffffff; }
+    .input-field:focus { border-color: #6366f1; outline: none; }
+    .tab-active { background-color: #ffffff !important; color: #09090b !important; font-weight: 700 !important; }
+    .tab-inactive { background-color: transparent; color: #a1a1aa; }
+  </style>
+</head>
+<body class="bg-zinc-950 text-zinc-100 min-h-screen flex items-center justify-center p-6 selection:bg-indigo-500 selection:text-white">
+
+  <div class="auth-card max-w-lg w-full p-8 rounded-2xl relative overflow-hidden">
+    <div class="absolute inset-x-0 -top-px h-px bg-gradient-to-r from-transparent via-indigo-500/60 to-transparent"></div>
+
     <div class="text-center mb-6">
-      <div class="h-10 w-10 mx-auto rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center font-bold text-white shadow-lg shadow-indigo-500/20 mb-3">AO</div>
-      <h1 class="text-xl font-bold text-white">Create Account</h1>
-      <p class="text-xs text-zinc-400 mt-1">Join AgencyOS Client Portal</p>
+      <a href="{{ url_for('public.index') }}" class="inline-flex items-center gap-2 mb-3">
+        <div class="h-10 w-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center font-bold text-white shadow-lg shadow-indigo-500/20">
+          AO
+        </div>
+      </a>
+      <h1 class="text-2xl font-extrabold text-white tracking-tight">Create AgencyOS Account</h1>
+      <p class="text-xs text-zinc-400 mt-1">Get started with milestone delivery and live sprint tracking</p>
     </div>
-    <form method="POST" action="{{ url_for('register') }}" class="space-y-4 text-xs">
+
+    <!-- Role Selection Tabs -->
+    <div class="bg-zinc-900 border border-zinc-800 p-1 rounded-xl grid grid-cols-2 gap-1 mb-6 text-xs font-semibold">
+      <button type="button" id="tab-reg-customer" onclick="setRegRole('customer')" class="tab-active py-2 rounded-lg flex items-center justify-center gap-2 transition cursor-pointer">
+        <i data-lucide="building" class="w-3.5 h-3.5"></i>
+        <span>Client / Business</span>
+      </button>
+      <button type="button" id="tab-reg-specialist" onclick="setRegRole('professional')" class="tab-inactive py-2 rounded-lg flex items-center justify-center gap-2 transition cursor-pointer">
+        <i data-lucide="briefcase" class="w-3.5 h-3.5"></i>
+        <span>Specialist Partner</span>
+      </button>
+    </div>
+
+    <!-- Flash Messages -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="mb-4 space-y-2">
+          {% for category, message in messages %}
+            <div class="p-3 rounded-xl border text-xs flex items-center justify-between {% if category == 'success' %}bg-emerald-500/10 border-emerald-500/20 text-emerald-300{% else %}bg-rose-500/10 border-rose-500/20 text-rose-300{% endif %}">
+              <span>{{ message }}</span>
+              <button type="button" onclick="this.parentElement.remove()" class="text-zinc-400 hover:text-white text-sm">×</button>
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    <form method="POST" action="{{ url_for('auth.register') }}" class="space-y-4 text-xs">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <div><label class="block text-zinc-400 mb-1">Full Name</label><input type="text" name="name" required class="w-full p-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-white"></div>
-      <div><label class="block text-zinc-400 mb-1">Email Address</label><input type="email" name="email" required class="w-full p-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-white"></div>
-      <div><label class="block text-zinc-400 mb-1">Password</label><input type="password" name="password" required class="w-full p-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-white"></div>
-      <button type="submit" class="w-full py-2.5 rounded-xl bg-white text-zinc-950 font-bold">Register Account</button>
+      <input type="hidden" name="account_type" id="accountTypeInput" value="customer">
+
+      <div>
+        <label class="block text-zinc-400 font-semibold mb-1">Full Legal Name *</label>
+        <input type="text" name="name" required placeholder="John Doe" class="input-field w-full px-3.5 py-2.5 rounded-xl">
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label class="block text-zinc-400 font-semibold mb-1">Work Email Address *</label>
+          <input type="email" name="email" required placeholder="you@company.com" class="input-field w-full px-3.5 py-2.5 rounded-xl">
+        </div>
+        <div>
+          <label class="block text-zinc-400 font-semibold mb-1">Password (8+ chars, letters & numbers) *</label>
+          <input type="password" name="password" required placeholder="••••••••" class="input-field w-full px-3.5 py-2.5 rounded-xl">
+        </div>
+      </div>
+
+      <!-- Client Fields -->
+      <div id="clientFields" class="space-y-3">
+        <div>
+          <label class="block text-zinc-400 font-semibold mb-1">Company / Business Name</label>
+          <input type="text" name="business_name" placeholder="e.g. Bombay Spice Retail Pvt Ltd" class="input-field w-full px-3.5 py-2.5 rounded-xl">
+        </div>
+        <div>
+          <label class="block text-zinc-400 font-semibold mb-1">Phone / WhatsApp Number</label>
+          <input type="tel" name="phone" placeholder="+91 98765 43210" class="input-field w-full px-3.5 py-2.5 rounded-xl">
+        </div>
+      </div>
+
+      <!-- Specialist Fields -->
+      <div id="specialistFields" class="space-y-3 hidden">
+        <div>
+          <label class="block text-zinc-400 font-semibold mb-1">Core Expertise *</label>
+          <select name="expertise" class="input-field w-full px-3.5 py-2.5 rounded-xl">
+            <option value="Website Design & Development">Website Design & Development</option>
+            <option value="SEO & Technical Optimization">SEO & Technical Optimization</option>
+            <option value="UI/UX Prototyping (Figma)">UI/UX Prototyping (Figma)</option>
+            <option value="Full-Stack Engineering">Full-Stack Engineering</option>
+          </select>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-zinc-400 font-semibold mb-1">Experience Level</label>
+            <input type="text" name="experience" placeholder="e.g. 3+ Years" class="input-field w-full px-3.5 py-2.5 rounded-xl">
+          </div>
+          <div>
+            <label class="block text-zinc-400 font-semibold mb-1">Portfolio or GitHub URL *</label>
+            <input type="url" name="portfolio" placeholder="https://github.com/..." class="input-field w-full px-3.5 py-2.5 rounded-xl">
+          </div>
+        </div>
+      </div>
+
+      <button type="submit" id="regSubmitBtn" class="w-full py-3 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-bold text-xs shadow-lg transition mt-2 cursor-pointer">
+        Create Client Account →
+      </button>
     </form>
-    <div class="mt-4 text-center text-xs text-zinc-500">Already registered? <a href="{{ url_for('login') }}" class="text-indigo-400 hover:underline">Sign In</a></div>
+
+    <div class="mt-6 pt-6 border-t border-zinc-800/80 text-center text-xs text-zinc-500">
+      Already have an account? <a href="{{ url_for('auth.login') }}" class="text-indigo-400 hover:underline font-bold">Sign In</a>
+    </div>
   </div>
-</body></html>
+
+  <script>
+    if (window.lucide) lucide.createIcons();
+
+    function setRegRole(role) {
+      document.getElementById('accountTypeInput').value = role;
+      const tabClient = document.getElementById('tab-reg-customer');
+      const tabSpecialist = document.getElementById('tab-reg-specialist');
+      const clientFields = document.getElementById('clientFields');
+      const specialistFields = document.getElementById('specialistFields');
+      const submitBtn = document.getElementById('regSubmitBtn');
+
+      if (role === 'customer') {
+        tabClient.className = 'tab-active py-2 rounded-lg flex items-center justify-center gap-2 transition cursor-pointer';
+        tabSpecialist.className = 'tab-inactive py-2 rounded-lg flex items-center justify-center gap-2 transition cursor-pointer';
+        clientFields.classList.remove('hidden');
+        specialistFields.classList.add('hidden');
+        submitBtn.textContent = 'Create Client Account →';
+      } else {
+        tabSpecialist.className = 'tab-active py-2 rounded-lg flex items-center justify-center gap-2 transition cursor-pointer';
+        tabClient.className = 'tab-inactive py-2 rounded-lg flex items-center justify-center gap-2 transition cursor-pointer';
+        specialistFields.classList.remove('hidden');
+        clientFields.classList.add('hidden');
+        submitBtn.textContent = 'Apply as Specialist Partner →';
+      }
+      if (window.lucide) lucide.createIcons();
+    }
+  </script>
+</body>
+</html>

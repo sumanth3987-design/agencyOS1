@@ -1,3 +1,4 @@
+<!-- Save this directly into: templates/payment.html -->
 <!DOCTYPE html>
 <html lang="en" class="dark scroll-smooth">
 <head>
@@ -19,13 +20,13 @@
 <body class="bg-zinc-950 text-zinc-100 min-h-screen flex items-center justify-center p-6 selection:bg-indigo-500 selection:text-white">
 
   <div class="checkout-card max-w-lg w-full p-8 relative overflow-hidden">
-    <!-- Ambient Top Accent Line -->
-    <div class="absolute inset-x-0 -top-px h-px bg-linear-to-r from-transparent via-indigo-500/60 to-transparent"></div>
+    <!-- Ambient Accent Line -->
+    <div class="absolute inset-x-0 -top-px h-px bg-gradient-to-r from-transparent via-indigo-500/60 to-transparent"></div>
 
     <!-- Header -->
     <div class="flex items-center justify-between pb-6 border-b border-zinc-800">
       <div class="flex items-center gap-3">
-        <div class="h-10 w-10 rounded-xl bg-linear-to-tr from-indigo-600 via-indigo-500 to-violet-500 flex items-center justify-center font-bold text-white shadow-lg shadow-indigo-500/20">
+        <div class="h-10 w-10 rounded-xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-violet-500 flex items-center justify-center font-bold text-white shadow-lg shadow-indigo-500/20">
           AO
         </div>
         <div>
@@ -37,6 +38,12 @@
       <span class="px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-mono font-bold">
         SAC 998311
       </span>
+    </div>
+
+    <!-- Error Alert Box -->
+    <div id="paymentErrorBox" class="hidden mt-4 p-3.5 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-300 text-xs flex items-center justify-between">
+      <span id="paymentErrorMsg">Payment could not be processed.</span>
+      <button type="button" onclick="this.parentElement.classList.add('hidden')" class="text-zinc-400 hover:text-white text-sm">×</button>
     </div>
 
     <!-- Milestone Context & Financial Breakdown -->
@@ -67,26 +74,22 @@
         </div>
       </div>
 
-      <!-- Supported Payment Rails -->
+      <!-- Supported Rails -->
       <div class="p-3.5 rounded-xl bg-zinc-900/60 border border-zinc-800/80 text-[11px] text-zinc-400 flex items-center gap-2">
         <i data-lucide="zap" class="w-4 h-4 text-emerald-400 shrink-0"></i>
-        <span>Supports Instant UPI (GPay, PhonePe, Paytm, BHIM), RuPay, Cards & Netbanking</span>
+        <span>Supports Instant UPI (GPay, PhonePe, Paytm, BHIM), Netbanking, Cards & RuPay</span>
       </div>
     </div>
 
-    <!-- Primary Action: Authorize & Confirm Payment Form -->
-    <form method="POST" action="/payment/{{ project.id }}/confirm">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      
-      <button type="submit" class="w-full py-3.5 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-bold text-sm shadow-xl transition flex items-center justify-center gap-2 cursor-pointer">
-        <i data-lucide="shield-check" class="w-4 h-4 text-emerald-600"></i>
-        <span>Authorize & Confirm Payment (₹{{ gross_val }})</span>
-      </button>
-    </form>
+    <!-- Primary Action: Real Razorpay Checkout Launcher -->
+    <button type="button" id="payBtn" onclick="launchRazorpayCheckout()" class="w-full py-3.5 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-bold text-sm shadow-xl transition flex items-center justify-center gap-2 cursor-pointer">
+      <i data-lucide="shield-check" class="w-4 h-4 text-emerald-600"></i>
+      <span id="btnText">Pay Deposit with Razorpay / UPI (₹{{ gross_val }})</span>
+    </button>
 
-    <!-- Cancellation Return Link -->
+    <!-- Return Link -->
     <div class="mt-4 text-center">
-      <a href="/project/{{ project.id }}" class="text-xs text-zinc-500 hover:text-zinc-300 font-mono hover:underline">
+      <a href="{{ url_for('customer.project_details', project_id=project.id) }}" class="text-xs text-zinc-500 hover:text-zinc-300 font-mono hover:underline">
         ← Cancel and return to project workspace
       </a>
     </div>
@@ -102,8 +105,90 @@
   </div>
 
   <script>
-    if (window.lucide) {
-      lucide.createIcons();
+    if (window.lucide) { lucide.createIcons(); }
+
+    function showError(msg) {
+      const box = document.getElementById('paymentErrorBox');
+      const text = document.getElementById('paymentErrorMsg');
+      text.textContent = msg;
+      box.classList.remove('hidden');
+    }
+
+    async function launchRazorpayCheckout() {
+      const btn = document.getElementById('payBtn');
+      const btnText = document.getElementById('btnText');
+      btn.disabled = true;
+      btnText.textContent = "Connecting to Razorpay...";
+
+      try {
+        // 1. Create order on backend
+        const orderRes = await fetch("/payment/create-order/{{ project.id }}", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-CSRFToken": "{{ csrf_token() }}"
+          }
+        });
+
+        const orderData = await orderRes.json();
+        if (!orderRes.ok || !orderData.success) {
+          throw new Error(orderData.message || "Failed to initiate payment order.");
+        }
+
+        // 2. Configure Razorpay modal options
+        const options = {
+          key: orderData.key_id,
+          amount: orderData.amount,
+          currency: orderData.currency || "INR",
+          name: "AgencyOS",
+          description: "Advance Deposit for Project #{{ project.id }}",
+          order_id: orderData.order_id,
+          handler: async function (response) {
+            btnText.textContent = "Verifying payment with bank...";
+            try {
+              // 3. Verify payment signature with backend
+              const verifyRes = await fetch("/payment/verify", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  "X-CSRFToken": "{{ csrf_token() }}"
+                },
+                body: JSON.stringify({
+                  razorpay_order_id: response.razorpay_order_id,
+                  razorpay_payment_id: response.razorpay_payment_id,
+                  razorpay_signature: response.razorpay_signature
+                })
+              });
+
+              const verifyData = await verifyRes.json();
+              if (verifyRes.ok && verifyData.success) {
+                // Success: Redirect directly into project details
+                window.location.href = "{{ url_for('customer.project_details', project_id=project.id) }}";
+              } else {
+                throw new Error(verifyData.message || "Payment verification failed.");
+              }
+            } catch (err) {
+              btn.disabled = false;
+              btnText.textContent = "Retry Payment";
+              showError(err.message);
+            }
+          },
+          modal: {
+            ondismiss: function () {
+              btn.disabled = false;
+              btnText.textContent = "Pay Deposit with Razorpay / UPI (₹{{ gross_val }})";
+            }
+          },
+          theme: { color: "#4f46e5" }
+        };
+
+        const rzp = new Razorpay(options);
+        rzp.open();
+      } catch (err) {
+        btn.disabled = false;
+        btnText.textContent = "Pay Deposit with Razorpay / UPI (₹{{ gross_val }})";
+        showError(err.message);
+      }
     }
   </script>
 </body>

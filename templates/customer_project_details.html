@@ -1,3 +1,4 @@
+<!-- Save this directly into: templates/customer_project_details.html -->
 <!DOCTYPE html>
 <html lang="en" class="dark scroll-smooth">
 <head>
@@ -16,18 +17,18 @@
     .portal-card:hover { border-color: rgba(255, 255, 255, 0.16); }
   </style>
 </head>
-<body class="bg-zinc-950 text-zinc-100 min-h-screen p-6 sm:p-10 max-w-5xl mx-auto selection:bg-indigo-500 selection:text-white">
+<body class="bg-zinc-950 text-zinc-100 min-h-screen p-6 sm:p-10 max-w-5xl mx-auto selection:bg-indigo-500 selection:text-white space-y-6">
 
   <!-- Top Action Toolbar -->
   <div class="flex items-center justify-between pb-6 border-b border-zinc-800/80">
-    <a href="/dashboard" class="text-xs font-mono text-indigo-400 hover:text-indigo-300 transition flex items-center gap-1.5">
+    <a href="{{ url_for('customer.dashboard') }}" class="text-xs font-mono text-indigo-400 hover:text-indigo-300 transition flex items-center gap-1.5">
       <i data-lucide="arrow-left" class="w-3.5 h-3.5"></i>
       <span>Return to Workspace</span>
     </a>
 
     <div class="flex items-center gap-3">
-      <!-- 1-Click Printable GST Invoice (Direct Safe Path) -->
-      <a href="/project/{{ project.id }}/invoice" target="_blank" class="px-3.5 py-1.5 rounded-xl bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-zinc-300 text-xs font-bold transition flex items-center gap-1.5">
+      <!-- 1-Click Printable GST Invoice -->
+      <a href="{{ url_for('customer.view_invoice', project_id=project.id) }}" target="_blank" class="px-3.5 py-1.5 rounded-xl bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-zinc-300 text-xs font-bold transition flex items-center gap-1.5">
         <i data-lucide="receipt" class="w-3.5 h-3.5 text-indigo-400"></i>
         <span>GST Invoice (PDF)</span>
       </a>
@@ -43,7 +44,7 @@
   <!-- Flash Messages -->
   {% with messages = get_flashed_messages(with_categories=true) %}
     {% if messages %}
-      <div class="mt-6 space-y-2">
+      <div class="space-y-2">
         {% for category, message in messages %}
           <div class="p-3.5 rounded-xl border text-xs flex items-center justify-between {% if category == 'success' %}bg-emerald-500/10 border-emerald-500/20 text-emerald-300{% elif 'warning' in category %}bg-amber-500/10 border-amber-500/20 text-amber-300{% else %}bg-rose-500/10 border-rose-500/20 text-rose-300{% endif %}">
             <span>{{ message }}</span>
@@ -55,7 +56,7 @@
   {% endwith %}
 
   <!-- Project Header Title -->
-  <div class="mt-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
     <div>
       <div class="flex items-center gap-3">
         <span class="font-mono text-xs font-bold text-indigo-400 bg-indigo-500/10 px-2.5 py-1 rounded-md border border-indigo-500/20">#{{ project.id }}</span>
@@ -73,7 +74,7 @@
   </div>
 
   <!-- Milestone Progression Tracker (50/25/25 Architecture) -->
-  <div class="portal-card p-6 mt-8">
+  <div class="portal-card p-6">
     <div class="flex items-center justify-between pb-4 border-b border-zinc-800 mb-6">
       <h3 class="text-xs font-bold uppercase tracking-wider text-zinc-400 font-mono">Sequential Milestone Gates</h3>
       <span class="text-xs font-mono text-zinc-500">Fixed Milestone Delivery</span>
@@ -86,7 +87,9 @@
           <span class="text-emerald-400 font-mono font-bold">50% Advance</span>
         </div>
         <p class="text-[11px] text-zinc-400">Brief, specifications, and kickoff.</p>
-        <span class="mt-3 block font-mono text-[10px] text-emerald-400">Settled & Approved ✅</span>
+        <span class="mt-3 block font-mono text-[10px] {% if project.status != 'Payment Pending' %}text-emerald-400{% else %}text-amber-400{% endif %}">
+          {% if project.status != 'Payment Pending' %}Settled & Approved ✅{% else %}Payment Pending ⚡{% endif %}
+        </span>
       </div>
 
       <div class="p-4 rounded-xl bg-zinc-900 border {% if project.status in ['Assigned', 'In Progress', 'Submitted', 'Revision'] %}border-indigo-500/40 bg-indigo-950/20{% else %}border-zinc-800{% endif %}">
@@ -95,87 +98,184 @@
           <span class="text-indigo-400 font-mono font-bold">25% Sign-Off</span>
         </div>
         <p class="text-[11px] text-zinc-400">Interactive prototype, code implementation, and mobile polish.</p>
-        <span class="mt-3 block font-mono text-[10px] text-indigo-400">Active Gate ⚡</span>
+        <span class="mt-3 block font-mono text-[10px] {% if project.status in ['Assigned', 'In Progress', 'Submitted', 'Revision'] %}text-indigo-400{% elif project.status == 'Completed' %}text-emerald-400{% else %}text-zinc-500{% endif %}">
+          {% if project.status == 'Completed' %}Completed ✅{% elif project.status in ['Assigned', 'In Progress', 'Submitted', 'Revision'] %}Active Gate ⚡{% else %}Locked{% endif %}
+        </span>
       </div>
 
-      <div class="p-4 rounded-xl bg-zinc-900 border border-zinc-800 opacity-60">
+      <div class="p-4 rounded-xl bg-zinc-900 border border-zinc-800 {% if project.status != 'Completed' %}opacity-60{% endif %}">
         <div class="flex items-center justify-between mb-2">
           <span class="font-bold text-white">Milestone 3: Deployment</span>
           <span class="text-zinc-400 font-mono font-bold">25% Final</span>
         </div>
         <p class="text-[11px] text-zinc-400">DNS launch, SSL deployment, and final IP transfer.</p>
-        <span class="mt-3 block font-mono text-[10px] text-zinc-500">Pending Prior Approval</span>
+        <span class="mt-3 block font-mono text-[10px] {% if project.status == 'Completed' %}text-emerald-400{% else %}text-zinc-500{% endif %}">
+          {% if project.status == 'Completed' %}Live & Delivered ✅{% else %}Pending Prior Approval{% endif %}
+        </span>
       </div>
     </div>
   </div>
 
-<!-- DYNAMIC MILESTONE PAYMENT GATES (50% / 25% / 25%) -->
-{% set total_pkg = (payment.amount if payment and payment.amount else 10000) %}
-{% set m2_val = (total_pkg * 0.25)|round|int %}
-{% set m3_val = (total_pkg * 0.25)|round|int %}
-
-<!-- When Milestone 2 (Design) is Approved, prompt for Milestone 2 (25%) payment -->
-{% if project.status == 'Assigned' or project.status == 'In Progress' %}
-<div class="portal-card p-6 mt-6 border-indigo-500/30 bg-indigo-950/20 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-  <div>
-    <div class="flex items-center gap-2 mb-1">
-      <span class="h-2 w-2 rounded-full bg-indigo-400 animate-pulse"></span>
-      <span class="text-xs font-mono uppercase text-indigo-300 font-bold">Milestone 2 Progress Invoice (25%)</span>
-    </div>
-    <h4 class="text-sm font-bold text-white">Production UI & Prototype Sign-Off Payment</h4>
-    <p class="text-xs text-zinc-400 mt-1">Due upon UI/UX approval to unlock final production coding and deployment.</p>
-  </div>
-  
-  <div class="flex items-center gap-3">
-    <span class="font-mono text-xl font-bold text-white">₹{{ m2_val }}</span>
-    <a href="/payment/{{ project.id }}?milestone=2&amount={{ m2_val * 100 }}" class="px-5 py-2.5 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-bold text-xs shadow-lg transition whitespace-nowrap">
-      Pay Milestone 2 (25%) →
-    </a>
-  </div>
-</div>
-{% endif %}
-
-<!-- When Final Staging is ready, prompt for Milestone 3 (Final 25%) before Live Launch -->
-{% if project.status == 'Submitted' %}
-<div class="portal-card p-6 mt-6 border-emerald-500/30 bg-emerald-950/20 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-  <div>
-    <div class="flex items-center gap-2 mb-1">
-      <span class="h-2 w-2 rounded-full bg-emerald-400"></span>
-      <span class="text-xs font-mono uppercase text-emerald-300 font-bold">Milestone 3 Final Balance (25%)</span>
-    </div>
-    <h4 class="text-sm font-bold text-white">Production Launch & Final IP Transfer</h4>
-    <p class="text-xs text-zinc-400 mt-1">Final balance payment required to point live domain DNS and transfer source code.</p>
-  </div>
-  
-  <div class="flex items-center gap-3">
-    <span class="font-mono text-xl font-bold text-white">₹{{ m3_val }}</span>
-    <a href="/payment/{{ project.id }}?milestone=3&amount={{ m3_val * 100 }}" class="px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-bold text-xs shadow-lg transition whitespace-nowrap">
-      Authorize Final 25% & Deploy Live 🚀
-    </a>
-  </div>
-</div>
-{% endif %}
-
-<!-- Advance Deposit Status Card (Shows Paid or Pending) -->
+  <!-- Advance Deposit Alert Card if Payment Pending -->
   {% if project.status == 'Payment Pending' %}
-  <div class="portal-card p-6 mt-6 border-rose-500/30 bg-rose-500/5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+  <div class="portal-card p-6 border-rose-500/30 bg-rose-500/5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
     <div>
       <h4 class="text-sm font-bold text-white">Milestone Deposit Invoice Awaiting Authorization</h4>
       <p class="text-xs text-zinc-400 mt-1">Sprints activate immediately upon payment verification via Razorpay / UPI.</p>
     </div>
-    <a href="/payment/{{ project.id }}" class="px-5 py-2.5 rounded-xl bg-rose-500 hover:bg-rose-600 text-white font-bold text-xs shadow-lg transition whitespace-nowrap">
+    <a href="{{ url_for('payments.payment_page', project_id=project.id) }}" class="px-5 py-2.5 rounded-xl bg-rose-500 hover:bg-rose-600 text-white font-bold text-xs shadow-lg transition whitespace-nowrap">
       Pay Advance Invoice (Razorpay) →
     </a>
   </div>
   {% else %}
-  <div class="portal-card p-5 mt-6 border-emerald-500/30 bg-emerald-500/5 flex items-center justify-between">
+  <div class="portal-card p-5 border-emerald-500/30 bg-emerald-500/5 flex items-center justify-between">
     <div class="flex items-center gap-3">
       <div class="h-8 w-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold">✓</div>
       <div>
-        <h4 class="text-xs font-bold text-white">Milestone 1 Advance Deposit Authorized & Settled</h4>
-        <p class="text-[11px] text-zinc-400 mt-0.5">50% Advance received via Razorpay / UPI • Sprint is actively in progress</p>
+        <h4 class="text-xs font-bold text-white">Milestone Advance Deposit Authorized & Settled</h4>
+        <p class="text-[11px] text-zinc-400 mt-0.5">Kickoff advance received via Razorpay / UPI • Sprint is actively in progress</p>
       </div>
     </div>
     <span class="px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-mono font-bold">PAID (INR)</span>
   </div>
   {% endif %}
+
+  <!-- Active Deliverable Review Gate (2-Revision Scope Lock) -->
+  <div class="portal-card p-6">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-zinc-800 gap-2 mb-6">
+      <div>
+        <h3 class="text-sm font-bold text-white">Milestone Deliverables & Live Links</h3>
+        <p class="text-xs text-zinc-400 mt-1">Inspect specialist deliverables and approve milestone sign-off or request revisions.</p>
+      </div>
+
+      <span class="px-3 py-1 rounded-full text-xs font-mono {% if revisions_remaining > 0 %}bg-amber-500/10 text-amber-400 border border-amber-500/20{% else %}bg-rose-500/10 text-rose-400 border border-rose-500/20{% endif %}">
+        Complimentary Revisions: {{ revisions_remaining }} of 2 Remaining
+      </span>
+    </div>
+
+    {% if latest_delivery %}
+    <div class="space-y-4 text-xs">
+      <div class="p-4 rounded-xl bg-zinc-900 border border-zinc-800">
+        <span class="text-[10px] font-mono text-zinc-500 uppercase block mb-2">Live Production & Preview Links</span>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 font-mono">
+          <div>Staging URL: <a href="{{ latest_delivery.preview_url }}" target="_blank" class="text-indigo-400 hover:underline">{{ latest_delivery.preview_url or 'Pending setup' }}</a></div>
+          <div>Production Live: <a href="{{ latest_delivery.live_url }}" target="_blank" class="text-indigo-400 hover:underline">{{ latest_delivery.live_url or 'Pending handover' }}</a></div>
+        </div>
+      </div>
+
+      <div class="p-4 rounded-xl bg-zinc-900 border border-zinc-800">
+        <span class="text-[10px] font-mono text-zinc-500 uppercase block mb-1">Specialist Completion Notes</span>
+        <p class="text-zinc-300 leading-relaxed">{{ latest_delivery.completion_notes or 'All deliverable checklist requirements completed.' }}</p>
+      </div>
+
+      {% if project.status != 'Completed' %}
+      <div class="pt-4 border-t border-zinc-800 flex flex-col sm:flex-row items-center justify-between gap-4">
+        <p class="text-[11px] text-zinc-500">Sign-off approves the milestone deliverable and marks the sprint as Completed.</p>
+
+        <div class="flex items-center gap-3 w-full sm:w-auto">
+          {% if revisions_remaining > 0 %}
+          <button type="button" onclick="document.getElementById('revisionModal').style.display = 'flex'" class="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-amber-300 font-bold text-xs transition cursor-pointer">
+            Request Revision
+          </button>
+          {% else %}
+          <span class="px-4 py-2 rounded-xl bg-zinc-900 text-zinc-500 text-xs font-mono">Revisions Maxed (2/2)</span>
+          {% endif %}
+
+          <form method="POST" action="{{ url_for('customer.customer_approve_project', project_id=project.id) }}" class="w-full sm:w-auto">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-zinc-950 font-bold text-xs shadow-lg transition cursor-pointer">
+              Approve Deliverable ✅
+            </button>
+          </form>
+        </div>
+      </div>
+      {% else %}
+      <div class="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-bold text-center">
+        🎉 Project Deliverable Approved & Marked as Completed! All files handed over.
+      </div>
+      {% endif %}
+    </div>
+    {% else %}
+    <div class="py-8 text-center text-xs text-zinc-500 font-mono">
+      Specialist is currently developing this milestone. Deliverable links and previews will appear here for your review.
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Discussion Thread & Specifications Grid -->
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+    <!-- Team Notes & Chat -->
+    <div class="portal-card p-6">
+      <div class="flex items-center justify-between pb-3 border-b border-zinc-800 mb-4">
+        <h3 class="text-sm font-bold text-white flex items-center gap-2">
+          <i data-lucide="message-square" class="w-4 h-4 text-indigo-400"></i>
+          <span>Project Discussion</span>
+        </h3>
+        <span class="text-[10px] font-mono text-emerald-400">● Live Desk</span>
+      </div>
+
+      <div class="space-y-3 max-h-56 overflow-y-auto pr-1 text-xs">
+        {% for msg in messages %}
+        <div class="p-3 rounded-xl {% if msg.sender_id == current_user.id %}bg-indigo-950/20 border border-indigo-500/20 text-zinc-200 ml-4{% else %}bg-zinc-900 border border-zinc-800 text-zinc-300 mr-4{% endif %}">
+          <div class="flex justify-between items-center text-[10px] text-zinc-500 mb-1">
+            <span class="font-bold text-zinc-300">{{ msg.sender.name if msg.sender else 'Agency Lead' }}</span>
+            <span>{{ msg.created_at.strftime('%d %b, %I:%M %p') if msg.created_at else '' }}</span>
+          </div>
+          <p class="leading-relaxed">{{ msg.message }}</p>
+        </div>
+        {% else %}
+        <p class="text-center py-6 text-xs text-zinc-600 font-mono">No notes yet. Post questions to your team below.</p>
+        {% endfor %}
+      </div>
+
+      <form method="POST" action="{{ url_for('customer.send_project_message', project_id=project.id) }}" class="mt-4 flex gap-2 text-xs">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="text" name="message" required placeholder="Type a note to your team..." class="flex-1 p-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-white placeholder-zinc-500 focus:outline-none focus:border-indigo-500">
+        <button type="submit" class="px-4 py-2.5 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-bold transition">Send</button>
+      </form>
+    </div>
+
+    <!-- Scope & Briefing Card -->
+    <div class="portal-card p-6">
+      <h3 class="text-xs font-bold text-zinc-400 uppercase tracking-wider font-mono mb-3">Project Specifications & SOW Brief</h3>
+      <div class="p-4 rounded-xl bg-zinc-900 border border-zinc-800 text-xs text-zinc-300 leading-relaxed font-mono max-h-64 overflow-y-auto">
+        {{ project.requirements or 'Standard client milestone brief.' }}
+      </div>
+    </div>
+  </div>
+
+  <!-- Revision Modal (Centered Popup) -->
+  <div id="revisionModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" style="display: none;">
+    <div class="relative w-full max-w-lg p-6 bg-[#121215] border border-zinc-800 rounded-2xl shadow-2xl">
+      <div class="flex items-center justify-between pb-4 border-b border-zinc-800">
+        <h3 class="text-sm font-bold text-white flex items-center gap-2">
+          <i data-lucide="edit-3" class="w-4 h-4 text-amber-400"></i>
+          <span>Request Deliverable Revision ({{ revisions_remaining }} of 2 Left)</span>
+        </h3>
+        <button type="button" onclick="document.getElementById('revisionModal').style.display = 'none'" class="text-zinc-400 hover:text-white text-base cursor-pointer">×</button>
+      </div>
+
+      <form method="POST" action="{{ url_for('customer.customer_request_revision', project_id=project.id) }}" class="space-y-4 mt-4 text-xs">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <p class="text-zinc-400">Describe the specific changes required. Revisions must stay within the original SOW boundary to prevent scope creep.</p>
+        
+        <div>
+          <label class="block text-zinc-400 font-semibold mb-1">Feedback & Modification Notes</label>
+          <textarea name="revision_comment" rows="4" required placeholder="Specify design tweaks, copy changes, or adjustments..." class="w-full p-3 rounded-xl bg-zinc-950 border border-zinc-800 text-white focus:outline-none focus:border-amber-500"></textarea>
+        </div>
+
+        <div class="flex gap-2 pt-2">
+          <button type="submit" class="flex-1 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold transition cursor-pointer">Submit Revision Request</button>
+          <button type="button" onclick="document.getElementById('revisionModal').style.display = 'none'" class="px-4 py-2.5 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-400 cursor-pointer">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <footer class="mt-12 pt-6 border-t border-zinc-900 text-center text-xs font-mono text-zinc-600">
+    AgencyOS Milestone Workspace • SAC Code 998311 • IST Timezone
+  </footer>
+
+  <script>if (window.lucide) lucide.createIcons();</script>
+</body>
+</html>

@@ -1,3 +1,4 @@
+<!-- Save this directly into: templates/dashboard.html -->
 <!DOCTYPE html>
 <html lang="en" class="dark scroll-smooth">
 <head>
@@ -23,8 +24,8 @@
   <header class="border-b border-zinc-800/80 bg-zinc-950/80 backdrop-blur-md sticky top-0 z-50">
     <div class="max-w-7xl mx-auto px-6 h-18 flex items-center justify-between">
       <div class="flex items-center gap-6">
-        <a href="/dashboard" class="flex items-center gap-2.5">
-          <div class="h-9 w-9 rounded-xl bg-linear-to-tr from-indigo-600 via-indigo-500 to-violet-500 flex items-center justify-center font-bold text-white shadow-lg shadow-indigo-500/20">
+        <a href="{{ url_for('customer.dashboard') }}" class="flex items-center gap-2.5">
+          <div class="h-9 w-9 rounded-xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-violet-500 flex items-center justify-center font-bold text-white shadow-lg shadow-indigo-500/20">
             AO
           </div>
           <span class="font-extrabold text-base tracking-tight text-white">AgencyOS<span class="text-indigo-400">.</span></span>
@@ -32,9 +33,9 @@
 
         <!-- Segmented Navigation Tabs -->
         <nav class="hidden md:flex bg-zinc-900 border border-zinc-800 p-1 rounded-full text-xs font-semibold">
-          <a href="/dashboard" class="px-4 py-1.5 rounded-full bg-white text-zinc-950 font-bold shadow">Workspace</a>
-          <a href="/businesses" class="px-4 py-1.5 rounded-full text-zinc-400 hover:text-white transition">Businesses</a>
-          <a href="/customer/profile" class="px-4 py-1.5 rounded-full text-zinc-400 hover:text-white transition">Profile</a>
+          <a href="{{ url_for('customer.dashboard') }}" class="px-4 py-1.5 rounded-full bg-white text-zinc-950 font-bold shadow">Workspace</a>
+          <a href="{{ url_for('customer.businesses') }}" class="px-4 py-1.5 rounded-full text-zinc-400 hover:text-white transition">Businesses</a>
+          <a href="{{ url_for('customer.customer_profile') }}" class="px-4 py-1.5 rounded-full text-zinc-400 hover:text-white transition">Profile</a>
         </nav>
       </div>
 
@@ -45,7 +46,7 @@
           <span>WhatsApp Lead</span>
         </a>
 
-        <form method="POST" action="/logout">
+        <form method="POST" action="{{ url_for('auth.logout') }}">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <button type="submit" class="text-xs font-bold text-zinc-400 hover:text-rose-400 transition cursor-pointer">Sign Out</button>
         </form>
@@ -88,7 +89,7 @@
       </div>
 
       <div class="flex items-center gap-3">
-        <a href="/start-project/website-development" class="px-5 py-2.5 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-bold text-xs shadow-xl transition flex items-center gap-2 shrink-0">
+        <a href="{{ url_for('customer.start_project', service_slug='website-development') }}" class="px-5 py-2.5 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-bold text-xs shadow-xl transition flex items-center gap-2 shrink-0">
           <i data-lucide="plus" class="w-4 h-4"></i>
           <span>Commission New Project</span>
         </a>
@@ -129,7 +130,7 @@
       </div>
     </div>
 
-    <!-- FEATURE 1: ACTIVE SPRINT SPOTLIGHT (What is being built right now) -->
+    <!-- ACTIVE SPRINT SPOTLIGHT (Current Primary Focus) -->
     {% set active_spotlight = projects|selectattr("status", "in", ["Assigned", "In Progress", "Submitted", "Revision", "Payment Pending"])|list|first %}
     {% if active_spotlight %}
     <div class="spotlight-card p-6 relative overflow-hidden">
@@ -143,7 +144,7 @@
           <p class="text-xs text-zinc-300 mt-1">Package: <strong class="text-white">{{ active_spotlight.package }}</strong> • Status: <span class="text-indigo-400 font-mono font-bold">{{ active_spotlight.status }}</span></p>
         </div>
 
-        <a href="/project/{{ active_spotlight.id }}" class="px-5 py-2.5 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-bold text-xs shadow-lg transition flex items-center gap-2 self-start md:self-auto shrink-0">
+        <a href="{{ url_for('customer.project_details', project_id=active_spotlight.id) }}" class="px-5 py-2.5 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-bold text-xs shadow-lg transition flex items-center gap-2 self-start md:self-auto shrink-0">
           <span>Open Interactive Workspace</span>
           <i data-lucide="arrow-right" class="w-4 h-4"></i>
         </a>
@@ -215,14 +216,14 @@
 
               <div class="flex items-center gap-2 shrink-0">
                 {% if project.status == 'Payment Pending' %}
-                <a href="/payment/{{ project.id }}" class="px-3.5 py-1.5 rounded-xl bg-rose-500 text-white font-bold text-xs shadow hover:bg-rose-600 transition">
+                <a href="{{ url_for('payments.payment_page', project_id=project.id) }}" class="px-3.5 py-1.5 rounded-xl bg-rose-500 text-white font-bold text-xs shadow hover:bg-rose-600 transition">
                   Pay Advance
                 </a>
                 {% endif %}
-                <a href="/project/{{ project.id }}/invoice" target="_blank" class="px-3.5 py-1.5 rounded-xl bg-zinc-900 border border-zinc-800 text-xs text-zinc-300 font-bold hover:text-white transition">
+                <a href="{{ url_for('customer.view_invoice', project_id=project.id) }}" target="_blank" class="px-3.5 py-1.5 rounded-xl bg-zinc-900 border border-zinc-800 text-xs text-zinc-300 font-bold hover:text-white transition">
                   Invoice
                 </a>
-                <a href="/project/{{ project.id }}" class="px-4 py-1.5 rounded-xl bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-xs font-bold text-white transition">
+                <a href="{{ url_for('customer.project_details', project_id=project.id) }}" class="px-4 py-1.5 rounded-xl bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-xs font-bold text-white transition">
                   Workspace →
                 </a>
               </div>
@@ -231,13 +232,13 @@
             <div class="py-12 text-center text-xs text-zinc-500 font-mono">
               <i data-lucide="folder-plus" class="w-8 h-8 text-zinc-600 mx-auto mb-3"></i>
               <p>No active projects commissioned yet.</p>
-              <a href="/start-project/website-development" class="mt-4 inline-block px-4 py-2 rounded-xl bg-white text-zinc-950 font-bold">Commission First Sprint</a>
+              <a href="{{ url_for('customer.start_project', service_slug='website-development') }}" class="mt-4 inline-block px-4 py-2 rounded-xl bg-white text-zinc-950 font-bold">Commission First Sprint</a>
             </div>
             {% endfor %}
           </div>
         </div>
 
-        <!-- COMPETITOR KILLER: Live Google Maps & SEO Retainer Widget -->
+        <!-- Google Maps & Local SEO Retainer Widget -->
         <div class="portal-card p-6">
           <div class="flex items-center justify-between pb-4 border-b border-zinc-800 mb-6">
             <div>
@@ -283,7 +284,7 @@
       <!-- RIGHT COLUMN: Direct Chat & Brand Vault (35% Width) -->
       <div class="space-y-8">
         
-        <!-- FEATURE 2: DIRECT AGENCY CHAT STREAM -->
+        <!-- DIRECT AGENCY CHAT STREAM -->
         <div class="portal-card p-6">
           <div class="flex items-center justify-between pb-3 border-b border-zinc-800 mb-4">
             <h3 class="text-sm font-bold text-white flex items-center gap-2">
@@ -309,7 +310,7 @@
           </div>
 
           <!-- Post Quick Note Form -->
-          <form method="POST" action="/dashboard/quick-message" class="mt-4 space-y-3 text-xs">
+          <form method="POST" action="{{ url_for('customer.dashboard_quick_message') }}" class="mt-4 space-y-3 text-xs">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             
             {% if projects %}
@@ -333,11 +334,11 @@
           </form>
         </div>
 
-        <!-- FEATURE 3: BRAND ASSETS & STRATEGIC VAULT -->
+        <!-- BRAND ASSETS & STRATEGIC VAULT -->
         <div class="portal-card p-6">
           <div class="flex items-center justify-between pb-3 border-b border-zinc-800 mb-4">
             <h3 class="text-sm font-bold text-white">Brand & Strategy Vault</h3>
-            <a href="/customer/profile" class="text-[11px] text-indigo-400 hover:underline">Edit Context</a>
+            <a href="{{ url_for('customer.customer_profile') }}" class="text-[11px] text-indigo-400 hover:underline">Edit Context</a>
           </div>
 
           <div class="space-y-3 text-xs">
@@ -360,11 +361,11 @@
           </div>
         </div>
 
-        <!-- FEATURE 4: MY REGISTERED BUSINESSES -->
+        <!-- REGISTERED BUSINESSES -->
         <div class="portal-card p-6">
           <div class="flex items-center justify-between pb-3 border-b border-zinc-800 mb-4">
             <h3 class="text-sm font-bold text-white">Registered Businesses</h3>
-            <a href="/add-business" class="text-[11px] text-indigo-400 hover:underline">+ Add</a>
+            <a href="{{ url_for('customer.add_business') }}" class="text-[11px] text-indigo-400 hover:underline">+ Add</a>
           </div>
 
           <div class="space-y-2 text-xs">

@@ -1,32 +1,37 @@
+<!-- Save this directly into: templates/start_project.html -->
 <!DOCTYPE html>
 <html lang="en" class="dark scroll-smooth">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Commission Project Workspace — AgencyOS</title>
+  
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
+  
   <style>
     body { background-color: #09090b; font-family: 'Plus Jakarta Sans', sans-serif; color: #f4f4f5; }
     .form-card { background: #121215; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 18px; }
   </style>
 </head>
-<body class="bg-zinc-950 text-zinc-100 min-h-screen p-6 sm:p-12 max-w-4xl mx-auto selection:bg-indigo-500 selection:text-white">
+<body class="bg-zinc-950 text-zinc-100 min-h-screen p-6 sm:p-12 max-w-4xl mx-auto selection:bg-indigo-500 selection:text-white space-y-6">
 
-  <!-- Header -->
+  <!-- Header Return -->
   <a href="{{ url_for('customer.dashboard') }}" class="text-xs font-mono text-indigo-400 hover:underline flex items-center gap-1.5">
     <i data-lucide="arrow-left" class="w-3.5 h-3.5"></i>
     <span>Return to Workspace</span>
   </a>
 
-  <div class="mt-6 pb-6 border-b border-zinc-800">
+  <div class="pb-6 border-b border-zinc-800">
     <span class="text-xs font-mono uppercase text-indigo-400 font-bold">New Project Commission</span>
     <h1 class="text-3xl font-extrabold text-white mt-1">Configure Delivery Workspace</h1>
-    <p class="text-xs text-zinc-400 mt-1">Provide brand guidelines, reference sites, and feature requirements for our specialists and AI Copilot.</p>
+    <p class="text-xs text-zinc-400 mt-1">Provide project brief, target references, and required integrations. Advances immediately to milestone advance invoice.</p>
   </div>
 
-  <form method="POST" action="{{ url_for('customer.start_project', service_slug='website-development') }}" class="mt-8 space-y-6 text-xs">
+  <!-- Project Configuration Form -->
+  <form method="POST" action="{{ url_for('customer.start_project', service_slug=service_slug|default('website-development')) }}" class="space-y-6 text-xs">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
     <!-- 1. Service & Pricing Selection -->
@@ -51,15 +56,16 @@
         <div>
           <label class="block text-zinc-400 font-semibold mb-1.5">Service Category *</label>
           <select name="service" class="w-full px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-white focus:outline-none focus:border-indigo-500">
-            <option value="Website Design & Development">Website Design & Development</option>
-            <option value="SEO">Monthly SEO Growth Retainer</option>
+            <option value="Website Design & Development" {% if service_slug == 'website-development' %}selected{% endif %}>Website Design & Development</option>
+            <option value="SEO" {% if service_slug == 'seo' %}selected{% endif %}>Monthly SEO Growth Retainer</option>
+            <option value="Custom Web Application">Custom Web Application</option>
           </select>
         </div>
 
         <div>
           <label class="block text-zinc-400 font-semibold mb-1.5">Milestone Package Tier *</label>
           <select name="package" class="w-full px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-white font-mono focus:outline-none focus:border-indigo-500">
-            <option value="Milestone Growth">Milestone Growth (₹48,000)</option>
+            <option value="Milestone Growth" selected>Milestone Growth (₹48,000)</option>
             <option value="Starter Retainer">Starter Retainer (₹14,999/mo)</option>
             <option value="Enterprise">Enterprise Overhaul (₹1,25,000)</option>
           </select>
@@ -67,10 +73,10 @@
       </div>
     </div>
 
-    <!-- 2. Detailed Technical & Brand Specifications (NEW EXTRA FIELDS) -->
+    <!-- 2. Technical & Brand Briefing -->
     <div class="form-card p-6 space-y-4">
       <h3 class="text-sm font-bold text-white uppercase tracking-wider font-mono flex items-center gap-2">
-        <span class="h-2 w-2 rounded-full bg-indigo-500"></span>
+        <span class="h-2 w-2 rounded-full bg-emerald-400"></span>
         <span>2. Brand Guidelines & Technical Brief</span>
       </h3>
 
@@ -85,27 +91,22 @@
         </div>
 
         <div>
-          <label class="block text-zinc-400 font-semibold mb-1.5">Brand Color Palette / Preferred Hex Codes</label>
+          <label class="block text-zinc-400 font-semibold mb-1.5">Brand Color Palette / Hex Codes</label>
           <input type="text" name="brand_colors" placeholder="e.g. #09090b Obsidian, #4F46E5 Indigo, #10B981 Emerald" class="w-full px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-white focus:outline-none focus:border-indigo-500">
         </div>
 
         <div>
-          <label class="block text-zinc-400 font-semibold mb-1.5">Reference Websites / Competitors to Outrank</label>
-          <input type="text" name="reference_sites" placeholder="e.g. competitor.com, linear.app, stripe.com" class="w-full px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-white focus:outline-none focus:border-indigo-500">
+          <label class="block text-zinc-400 font-semibold mb-1.5">Reference Websites / Competitors</label>
+          <input type="text" name="reference_sites" placeholder="e.g. stripe.com, linear.app, competitor.in" class="w-full px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-white focus:outline-none focus:border-indigo-500">
         </div>
 
         <div>
-          <label class="block text-zinc-400 font-semibold mb-1.5">Figma, Logo, or Google Drive Asset Link</label>
+          <label class="block text-zinc-400 font-semibold mb-1.5">Figma, Logo, or Google Drive Link</label>
           <input type="url" name="asset_link" placeholder="https://figma.com/@file or drive.google.com/..." class="w-full px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-white focus:outline-none focus:border-indigo-500">
         </div>
       </div>
 
-      <div>
-        <label class="block text-zinc-400 font-semibold mb-1.5">Target SEO Keywords & Local Cities (for SEO & Copy)</label>
-        <input type="text" name="target_keywords" placeholder="e.g. Best organic bakery Mumbai, buy sourdough online India" class="w-full px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-white focus:outline-none focus:border-indigo-500">
-      </div>
-
-      <!-- Feature Checklist -->
+      <!-- Features Checklist -->
       <div>
         <label class="block text-zinc-400 font-semibold mb-2">Required Core Features & Integrations</label>
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-zinc-300">
@@ -128,15 +129,16 @@
         </div>
       </div>
 
+      <!-- Scope Description -->
       <div>
         <label class="block text-zinc-400 font-semibold mb-1.5">Detailed Project Scope / Problem to Solve *</label>
-        <textarea name="brief" rows="4" required placeholder="Describe your product catalog, design style (minimal/dark), user flows, or any special functionality..." class="w-full p-3.5 rounded-xl bg-zinc-950 border border-zinc-800 text-white focus:outline-none focus:border-indigo-500"></textarea>
+        <textarea name="brief" rows="4" required placeholder="Describe your product catalog, design style (minimal/dark), user flows, or any custom integrations..." class="w-full p-3.5 rounded-xl bg-zinc-950 border border-zinc-800 text-white focus:outline-none focus:border-indigo-500"></textarea>
       </div>
     </div>
 
-    <!-- Notice -->
+    <!-- Payment Notice -->
     <div class="p-4 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-400 text-[11px] leading-relaxed">
-      ℹ️ Work begins with an initial 50% milestone advance invoice. Each deliverable milestone comes with 2 complimentary review rounds under our Scope Protection Guarantee.
+      ℹ️ Work begins upon initial 50% milestone advance invoice settlement. Each deliverable milestone comes with 2 complimentary revision rounds under our Scope Protection Guarantee.
     </div>
 
     <button type="submit" class="w-full py-3.5 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-bold text-xs shadow-xl transition cursor-pointer">
