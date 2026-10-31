@@ -46,6 +46,7 @@ coverage/
 *.log
 *.tmp
 *.temp
+*.zip
 
 # Editor and operating system files
 .vscode/
