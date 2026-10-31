@@ -1,4 +1,6 @@
 import os
+import logging
+from logging.handlers import RotatingFileHandler
 from flask import Flask, url_for, request, jsonify, flash, session, redirect, send_from_directory
 from werkzeug.routing import BuildError
 from app.config import (
@@ -46,6 +48,23 @@ def _build_bare_endpoint_map(view_functions):
         )
 
     return bare_map
+
+
+def configure_logging(app):
+    if not os.path.exists("logs"):
+        os.mkdir("logs")
+    file_handler = RotatingFileHandler(
+        "logs/agencyos.log", maxBytes=1024000, backupCount=10
+    )
+    file_handler.setFormatter(
+        logging.Formatter(
+            "%(asctime)s %(levelname)s: %(message)s [in %(pathname)s:%(lineno)d]"
+        )
+    )
+    file_handler.setLevel(logging.INFO)
+    app.logger.addHandler(file_handler)
+    app.logger.setLevel(logging.INFO)
+    app.logger.info("AgencyOS startup")
 
 
 def create_app(config_name="default", config_overrides=None):
@@ -130,6 +149,8 @@ def create_app(config_name="default", config_overrides=None):
     csrf.init_app(app)
     limiter.init_app(app)
 
+    configure_logging(app)
+
     # Health check endpoint for monitoring uptime
     @app.route("/healthz", methods=["GET"])
     def health_check():
@@ -163,23 +184,16 @@ def create_app(config_name="default", config_overrides=None):
         return "Too many requests. Please try again later.", 429
 
     @app.errorhandler(404)
-    def handle_not_found(error):
-        if request.path.startswith(("/api/", "/payment/")):
-            return jsonify({
-                "success": False,
-                "message": "Not found.",
-            }), 404
-        return "Page not found.", 404
+    def not_found_error(error):
+        return jsonify({"error": "Resource not found", "code": "NOT_FOUND"}), 404
 
     @app.errorhandler(500)
-    def handle_internal_server_error(error):
-        app.logger.exception("Unhandled server error")
-        if request.path.startswith(("/api/", "/payment/")):
-            return jsonify({
-                "success": False,
-                "message": "Internal server error.",
-            }), 500
-        return "Internal server error.", 500
+    def internal_error(error):
+        db.session.rollback()
+        app.logger.error(f"Server Error: {error}")
+        return jsonify(
+            {"error": "An internal server error occurred", "code": "SERVER_ERROR"}
+        ), 500
 
     from app.models import User
     @login_manager.user_loader
