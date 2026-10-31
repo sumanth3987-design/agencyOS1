@@ -130,6 +130,11 @@ def create_app(config_name="default", config_overrides=None):
     csrf.init_app(app)
     limiter.init_app(app)
 
+    # Health check endpoint for monitoring uptime
+    @app.route("/healthz", methods=["GET"])
+    def health_check():
+        return jsonify({"status": "healthy", "service": "AgencyOS"}), 200
+
     @app.before_request
     def enforce_session_version():
         from flask import session
