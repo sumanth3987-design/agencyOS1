@@ -31,7 +31,7 @@
   </div>
 
   <!-- Project Configuration Form -->
-  <form method="POST" action="{{ url_for('customer.start_project', service_slug=service_slug|default('website-development')) }}" class="space-y-6 text-xs">
+  <form method="POST" action="{{ url_for('customer.start_project', service_slug=service_slug|default('website-development')) }}" enctype="multipart/form-data" class="space-y-6 text-xs">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
     <!-- 1. Service & Pricing Selection -->
@@ -126,6 +126,16 @@
             <input type="checkbox" name="features" value="SEO Schema & Meta Tags" checked class="rounded border-zinc-700 text-indigo-600">
             <span>SEO Schema</span>
           </label>
+        </div>
+      </div>
+
+      <div>
+        <label class="block text-zinc-400 font-semibold mb-2">Upload SRS Document or Brand Assets (Optional)</label>
+        <div class="relative border-2 border-dashed border-zinc-700 hover:border-indigo-500 rounded-xl p-6 bg-zinc-950/50 transition cursor-pointer text-center group">
+          <input type="file" name="srs_document" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.zip">
+          <i data-lucide="upload-cloud" class="w-6 h-6 text-zinc-500 group-hover:text-indigo-400 mx-auto mb-2 transition"></i>
+          <span class="text-zinc-300 font-semibold">Click to upload or drag & drop</span>
+          <p class="text-[10px] text-zinc-500 mt-1 font-mono">PDF, DOC, DOCX, PNG, JPG, ZIP (Max 10MB)</p>
         </div>
       </div>
 

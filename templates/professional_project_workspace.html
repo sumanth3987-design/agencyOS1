@@ -96,7 +96,7 @@
           <span class="text-xs font-mono text-zinc-500">Submission #{{ deliveries|length + 1 }}</span>
         </div>
 
-        <form method="POST" action="/professional/project/{{ project.id }}/submit" class="space-y-4 text-xs">
+        <form method="POST" action="/professional/project/{{ project.id }}/submit" enctype="multipart/form-data" class="space-y-4 text-xs">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
           <!-- Staging / Figma URL -->
@@ -138,6 +138,11 @@
                 <span>SEO Schema & Meta Tags Verified</span>
               </label>
             </div>
+          </div>
+
+          <div>
+            <label class="block text-zinc-400 font-semibold mb-1.5">Upload Design Files or Assets (ZIP/PDF/Images, max 10 MB)</label>
+            <input type="file" name="deliverable_file" accept=".zip,.pdf,.png,.jpg,.jpeg,.gif" class="w-full px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-zinc-400 cursor-pointer focus:outline-none focus:border-indigo-500 file:mr-4 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-[10px] file:font-bold file:bg-zinc-800 file:text-white hover:file:bg-zinc-700">
           </div>
 
           <!-- Completion Notes -->

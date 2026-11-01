@@ -12,6 +12,7 @@ from app.models import (
     ProfessionalProjectApplication, ProjectDelivery, ChatMessage, Invoice, Milestone,
     get_ist_now, PACKAGE_PRICES, calculate_customer_profile_completion, get_latest_project_delivery
 )
+from app.utils.project_uploads import save_project_upload
 
 customer_bp = Blueprint("customer", __name__)
 
@@ -498,6 +499,18 @@ def start_project(service_slug="website-development"):
         reqs = request.form.get("brief", "").strip() or request.form.get("requirements", "").strip()
         b_id = request.form.get("business_id", type=int)
         target_business_id = b_id if b_id else (businesses[0].id if businesses else None)
+
+        try:
+            attachment_url = save_project_upload(
+                request.files.get("srs_document"),
+                {"pdf", "doc", "docx", "png", "jpg", "jpeg", "zip"},
+            )
+        except ValueError as exc:
+            flash(str(exc), "danger")
+            return redirect(url_for("customer.start_project", service_slug=service_slug))
+
+        if attachment_url:
+            reqs += f"\n\nAttached Client Document: {attachment_url}"
 
         # 1. SMART RE-USE: Check if an unpaid draft project already exists for this client
         existing_draft = Project.query.filter_by(

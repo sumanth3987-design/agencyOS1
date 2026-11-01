@@ -105,6 +105,40 @@
     </div>
   </div>
 
+  {% if redeemable_invoices %}
+  <section class="pro-card p-6 border-emerald-500/30 bg-emerald-950/10 space-y-4">
+    <div class="flex items-center justify-between pb-3 border-b border-emerald-500/20">
+      <h2 class="text-sm font-bold text-white flex items-center gap-2">
+        <i data-lucide="indian-rupee" class="w-4 h-4 text-emerald-400"></i>
+        <span>Approved Payouts</span>
+      </h2>
+      <span class="text-[10px] font-mono text-emerald-400 uppercase font-bold">Client Approved</span>
+    </div>
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      {% for inv in redeemable_invoices %}
+      <div class="p-4 rounded-xl bg-zinc-950 border border-zinc-800 flex items-center justify-between gap-4">
+        <div>
+          <span class="text-[10px] font-mono text-zinc-500">Project #{{ inv.project_id }}</span>
+          <div class="font-mono text-lg font-extrabold text-white mt-0.5">₹{{ "{:,.2f}".format(inv.talent_payout) }}</div>
+        </div>
+
+        {% if inv.payout_status == 'Requested' %}
+          <span class="px-3 py-1.5 rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[10px] font-bold font-mono">Redemption Processing</span>
+        {% elif inv.payout_status == 'Settled' %}
+          <span class="px-3 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-bold font-mono">Settled (UTR: {{ inv.payout_utr or 'Recorded' }})</span>
+        {% else %}
+          <form method="POST" action="{{ url_for('professional.redeem_payout', invoice_id=inv.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-zinc-950 font-bold text-[11px] shadow-lg transition cursor-pointer">Redeem to UPI</button>
+          </form>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
   <!-- =========================================================================
        SECTION 1: OPEN OPPORTUNITIES (AVAILABLE CLIENT SPRINTS)
        ========================================================================= -->

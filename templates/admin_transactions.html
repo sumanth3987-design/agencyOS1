@@ -102,6 +102,9 @@
                 {% if inv.payout_status == 'Settled' %}
                   <span class="px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[9px] font-mono uppercase">Settled</span>
                 {% else %}
+                  {% if inv.payout_status == 'Requested' %}
+                    <span class="px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[9px] font-mono uppercase">Redemption Requested</span>
+                  {% endif %}
                   <!-- FIXED ONCLICK ATTRIBUTE HERE -->
                   <button type="button" onclick="openPayoutModal('{{ inv.id }}', '{{ inv.talent_payout }}')" class="px-2 py-0.5 rounded bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-[9px] font-mono uppercase transition cursor-pointer">
                     Release

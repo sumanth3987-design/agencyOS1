@@ -7,10 +7,11 @@ from app.extensions import db
 
 # 1. IMPORT MODELS & REPOSITORY HELPERS
 from app.models import (
-    User, ProfessionalProfile, Project, Payment,
+    User, ProfessionalProfile, Project, Payment, Notification,
     ProfessionalProjectApplication, ProjectDelivery, ChatMessage, Invoice, Milestone,
     get_ist_now, PACKAGE_PRICES, calculate_professional_profile_completion, get_latest_project_delivery
 )
+from app.utils.project_uploads import save_project_upload
 
 professional_bp = Blueprint("professional", __name__)
 
@@ -39,6 +40,17 @@ def professional_dashboard():
     assigned_projects = [app.project for app in my_applications if app.status == "Assigned" and app.project]
     my_applied_ids = [app.project_id for app in my_applications]
 
+    completed_project_ids = [
+        project.id for project in assigned_projects if project.status == "Completed"
+    ]
+    redeemable_invoices = []
+    if completed_project_ids:
+        redeemable_invoices = Invoice.query.filter(
+            Invoice.project_id.in_(completed_project_ids),
+            Invoice.status.ilike("Paid"),
+            Invoice.payout_status.in_(("Pending Approval", "Requested", "Settled")),
+        ).order_by(Invoice.created_at.desc()).all()
+
     # 2. Available Projects (Open Sprints to Claim)
     available_projects = Project.query.filter_by(status="Pending Assignment").order_by(Project.created_at.desc()).all()
 
@@ -66,6 +78,7 @@ def professional_dashboard():
         profile=profile,
         assigned_projects=assigned_projects,
         available_projects=available_projects,
+        redeemable_invoices=redeemable_invoices,
         my_applied_ids=my_applied_ids,
         total_earned=total_earned,
         pending_payout=pending_payout,
@@ -197,6 +210,14 @@ def submit_deliverable(project_id):
         return redirect(url_for("professional.professional_dashboard"))
 
     project = Project.query.get_or_404(project_id)
+
+    if user_role != "admin" and not ProfessionalProjectApplication.query.filter_by(
+        project_id=project.id,
+        professional_id=current_user.id,
+        status="Assigned",
+    ).first():
+        flash("You are not assigned to this project.", "danger")
+        return redirect(url_for("professional.professional_dashboard"))
     
     live_url = request.form.get("live_url", "").strip()
     preview_url = request.form.get("preview_url", "").strip()
@@ -206,6 +227,18 @@ def submit_deliverable(project_id):
     if not notes:
         flash("Please provide completion notes explaining what was built.", "warning")
         return redirect(url_for("professional.professional_project_workspace", project_id=project.id))
+
+    try:
+        attachment_url = save_project_upload(
+            request.files.get("deliverable_file"),
+            {"zip", "pdf", "png", "jpg", "jpeg", "gif"},
+        )
+    except ValueError as exc:
+        flash(str(exc), "danger")
+        return redirect(url_for("professional.professional_project_workspace", project_id=project.id))
+
+    if attachment_url:
+        notes += f"\n\nAttached Deliverable File: {attachment_url}"
 
     last_delivery = ProjectDelivery.query.filter_by(project_id=project.id).order_by(ProjectDelivery.submission_number.desc()).first()
     next_num = (last_delivery.submission_number + 1) if last_delivery else 1
@@ -238,6 +271,59 @@ def submit_deliverable(project_id):
         flash(f"Deliverable submitted! (WhatsApp alert skipped: {str(e)})", "info")
 
     flash(f"Milestone deliverable #{next_num} submitted! Advanced to Quality Review Gate.", "success")
+    return redirect(url_for("professional.professional_dashboard"))
+
+
+@professional_bp.route("/professional/invoice/<int:invoice_id>/redeem", methods=["POST"])
+@login_required
+def redeem_payout(invoice_id):
+    if getattr(current_user, "role", "").lower() != "professional":
+        flash("Specialist access required.", "danger")
+        return redirect(url_for("customer.dashboard"))
+
+    invoice = Invoice.query.get_or_404(invoice_id)
+    assigned_application = ProfessionalProjectApplication.query.filter_by(
+        project_id=invoice.project_id,
+        professional_id=current_user.id,
+        status="Assigned",
+    ).first()
+    if not assigned_application:
+        flash("You are not assigned to this project's payout.", "danger")
+        return redirect(url_for("professional.professional_dashboard"))
+
+    project = Project.query.get_or_404(invoice.project_id)
+    if project.status != "Completed" or invoice.status.lower() != "paid":
+        flash("Payout redemption is available after the client approves a paid milestone.", "warning")
+        return redirect(url_for("professional.professional_dashboard"))
+
+    if invoice.payout_status == "Settled":
+        flash("This payout has already been settled.", "info")
+        return redirect(url_for("professional.professional_dashboard"))
+    if invoice.payout_status == "Requested":
+        flash("This payout redemption is already being processed.", "info")
+        return redirect(url_for("professional.professional_dashboard"))
+    if invoice.payout_status != "Pending Approval":
+        flash("This payout is not available for redemption.", "warning")
+        return redirect(url_for("professional.professional_dashboard"))
+
+    admins = User.query.filter_by(role="admin").all()
+    invoice.payout_status = "Requested"
+    for admin in admins:
+        db.session.add(Notification(
+            user_id=admin.id,
+            title="Payout redemption requested",
+            message=(
+                f"{current_user.name} requested a ₹{invoice.talent_payout:,.2f} "
+                f"payout for Project #{project.id}."
+            ),
+            link=url_for("admin.admin_transactions"),
+        ))
+    db.session.commit()
+
+    if admins:
+        flash("Payout redemption requested. Admin has been notified.", "success")
+    else:
+        flash("Payout requested, but no admin account is available to notify.", "warning")
     return redirect(url_for("professional.professional_dashboard"))
 
 
