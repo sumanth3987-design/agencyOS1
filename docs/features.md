@@ -12,6 +12,7 @@
 - Client Sign-Off Gate with strict 2-revision limit.
 - Signed SOW PDF downloads from the customer project workspace after electronic acceptance.
 - 1-Click Paid Scope Add-on Generator (monetizing revisions 3+).
+- Project activity audit timeline recording project creation, SOW signatures, payments, deliverable submissions, revision requests, and milestone approvals with actor and timestamp.
 
 ## 3. SEO Retainer Operations
 - 30-Day recurring sprint cycle.
@@ -45,6 +46,7 @@
 - Milestone escrow release: Talent payouts marked `Ready to Pay` only upon client deliverable approval.
 - Specialist banking profile: `upi_id`, `bank_account_number`, `bank_ifsc`, and `pan_number`.
 - Admin payout tracking: `payout_status`, `payout_utr`, and `payout_paid_at`.
+- Admin specialist roster meritocracy metrics use completed assigned sprints, captured customer reviews, revision delivery records, and explicit milestone deadlines. On-time rate and star rating display as unavailable until there is supporting data; performance badges are awarded only when their evidence-based thresholds are met.
 
 ## 6. Corbel-Style Executive Workspace
 - Studio Dark aesthetic inspired by Linear and Corbel Supply Co.

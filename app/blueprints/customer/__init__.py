@@ -2,6 +2,7 @@
 
 import os
 from datetime import datetime
+from decimal import Decimal
 from urllib.parse import urlsplit
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, send_file
 from flask_login import login_required, current_user
@@ -11,11 +12,12 @@ from app.extensions import db
 from app.models import (
     User, CustomerProfile, Business, Project, Payment,
     ProfessionalProjectApplication, ProjectDelivery, ChatMessage, Invoice, Milestone,
-    RazorpaySubscription, SubscriptionCharge, get_ist_now, PACKAGE_PRICES,
+    ActivityLog, RazorpaySubscription, SubscriptionCharge, get_ist_now, PACKAGE_PRICES,
     calculate_customer_profile_completion, get_latest_project_delivery
 )
 from app.utils.project_uploads import save_project_upload
 from app.services.pdf_generator import extract_sow_signature, generate_sow_pdf
+from app.utils.currency import SUPPORTED_CURRENCIES, get_package_price
 
 customer_bp = Blueprint("customer", __name__)
 
@@ -128,6 +130,10 @@ def project_details(project_id):
         latest_delivery = ProjectDelivery.query.filter_by(project_id=project.id).order_by(ProjectDelivery.submission_number.desc()).first()
 
     deliveries = ProjectDelivery.query.filter_by(project_id=project.id).order_by(ProjectDelivery.submission_number.asc()).all()
+    activity_logs = ActivityLog.query.filter_by(project_id=project.id).order_by(
+        ActivityLog.created_at.desc(),
+        ActivityLog.id.desc(),
+    ).all()
     
     try:
         messages = ChatMessage.query.filter_by(project_id=project.id).order_by(ChatMessage.created_at.asc()).all()
@@ -158,8 +164,10 @@ def project_details(project_id):
         "customer_project_details.html",
         project=project,
         payment=payment,
+        currency=project.currency,
         latest_delivery=latest_delivery,
         deliveries=deliveries,
+        activity_logs=activity_logs,
         messages=messages,
         revision_count=revision_count,
         revisions_remaining=revisions_remaining,
@@ -248,12 +256,21 @@ def view_invoice(project_id):
     gross_amount = (
         invoice_record.gross_amount
         if invoice_record
-        else PACKAGE_PRICES.get(project.package, 48000)
+        else get_package_price(
+            project.package,
+            project.currency,
+            PACKAGE_PRICES,
+        )
     )
-    base_amount = round(gross_amount / 1.18, 2)
-    tax_total = round(gross_amount - base_amount, 2)
-    cgst_amount = round(tax_total / 2, 2)
-    sgst_amount = round(tax_total / 2, 2)
+    invoice_currency = (
+        invoice_record.currency if invoice_record else project.currency
+    )
+    base_amount = (
+        Decimal(gross_amount) / Decimal("1.18")
+    ).quantize(Decimal("0.01"))
+    tax_total = Decimal(gross_amount) - base_amount
+    cgst_amount = (tax_total / 2).quantize(Decimal("0.01"))
+    sgst_amount = tax_total - cgst_amount
     is_retainer_invoice = bool(
         invoice_record
         and SubscriptionCharge.query.filter_by(invoice_id=invoice_record.id).first()
@@ -266,6 +283,7 @@ def view_invoice(project_id):
         is_retainer_invoice=is_retainer_invoice,
         customer=customer,
         profile=profile,
+        invoice_currency=invoice_currency,
         gross_amount=gross_amount,
         base_amount=base_amount,
         tax_total=tax_total,
@@ -368,6 +386,13 @@ def project_contract(project_id):
         else:
             project.requirements = project.requirements + signature_entry
 
+        ActivityLog.log_event(
+            project.id,
+            "SOW_SIGNED",
+            f"Statement of Work digitally signed by {signer_name} ({signer_title}).",
+            current_user.id,
+            "success",
+        )
         db.session.commit()
         flash("SOW Agreement digitally signed! Please authorize the advance deposit.", "success")
         return redirect(url_for("payments.payment_page", project_id=project.id))
@@ -404,6 +429,13 @@ def customer_approve_project(project_id):
 
     project.status = "Completed"
     project.revision_comment = None
+    ActivityLog.log_event(
+        project.id,
+        "MILESTONE_APPROVED",
+        "Client signed off on milestone deliverable. Project marked Completed.",
+        current_user.id,
+        "success",
+    )
 
     try:
         Milestone.query.filter_by(project_id=project.id).update({
@@ -445,6 +477,13 @@ def customer_request_revision(project_id):
 
     project.status = "Revision"
     project.revision_comment = comment
+    ActivityLog.log_event(
+        project.id,
+        "REVISION_REQUESTED",
+        f"Client requested a revision: {comment}",
+        current_user.id,
+        "warning",
+    )
     db.session.commit()
 
     flash("Revision feedback submitted. The specialist will update the work.", "success")
@@ -466,6 +505,10 @@ def submit_project_review(project_id):
     rating = request.form.get("rating", 5, type=int)
     tags = ", ".join(request.form.getlist("tags"))
     feedback = request.form.get("feedback", "").strip()
+
+    if not 1 <= rating <= 5:
+        flash("Choose a rating from 1 to 5 stars.", "warning")
+        return redirect(url_for("customer.project_details", project_id=project.id))
 
     if not feedback:
         flash("Please provide a short review or feedback.", "warning")
@@ -598,6 +641,7 @@ def start_project(service_slug="website-development"):
         }
         service = request.form.get("service", "Website Design & Development").strip()
         package = request.form.get("package", "Basic Website").strip()
+        currency = request.form.get("currency", "INR").strip().upper()
         brief = (
             request.form.get("brief", "").strip()
             or request.form.get("requirements", "").strip()
@@ -607,6 +651,17 @@ def start_project(service_slug="website-development"):
             return redirect(url_for("customer.start_project", service_slug=service_slug))
         if package not in PACKAGE_PRICES:
             flash("Select a valid project package.", "warning")
+            return redirect(url_for("customer.start_project", service_slug=service_slug))
+        if currency not in SUPPORTED_CURRENCIES:
+            flash("Select a supported billing currency.", "warning")
+            return redirect(url_for("customer.start_project", service_slug=service_slug))
+        if package == "Starter Retainer" and currency != "INR":
+            flash("Starter Retainer billing is currently available in INR only.", "warning")
+            return redirect(url_for("customer.start_project", service_slug=service_slug))
+        try:
+            get_package_price(package, currency, PACKAGE_PRICES)
+        except ValueError:
+            flash("No price is configured for this package and currency.", "warning")
             return redirect(url_for("customer.start_project", service_slug=service_slug))
         if not brief or len(brief) > 10000:
             flash("Enter a project brief of 10,000 characters or fewer.", "warning")
@@ -733,8 +788,17 @@ def start_project(service_slug="website-development"):
             # Re-use existing draft instead of generating duplicate cards
             existing_draft.service = service
             existing_draft.package = package
+            existing_draft.currency = currency
             existing_draft.requirements = reqs
             existing_draft.business_id = target_business_id
+            if attachment_url:
+                ActivityLog.log_event(
+                    existing_draft.id,
+                    "DOCUMENT_UPLOADED",
+                    "Client uploaded a project scope document.",
+                    current_user.id,
+                    "info",
+                )
             db.session.commit()
             flash(f"Updated Project #{existing_draft.id}. Please review SOW and proceed to checkout.", "info")
             return redirect(url_for("customer.project_contract", project_id=existing_draft.id))
@@ -745,10 +809,27 @@ def start_project(service_slug="website-development"):
             business_id=target_business_id,
             service=service,
             package=package,
+            currency=currency,
             requirements=reqs,
             status="Payment Pending"
         )
         db.session.add(project)
+        db.session.flush()
+        ActivityLog.log_event(
+            project.id,
+            "PROJECT_CREATED",
+            "Project workspace created and awaiting SOW signature.",
+            current_user.id,
+            "info",
+        )
+        if attachment_url:
+            ActivityLog.log_event(
+                project.id,
+                "DOCUMENT_UPLOADED",
+                "Client uploaded a project scope document.",
+                current_user.id,
+                "info",
+            )
         db.session.commit()
 
         flash("Milestone project created! Please review and digitally sign the SOW Agreement.", "info")

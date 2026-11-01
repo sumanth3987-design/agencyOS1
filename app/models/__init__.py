@@ -527,6 +527,146 @@ class ProfessionalProfile(db.Model):
         onupdate=db.func.now()
     )
 
+    def get_performance_metrics(self):
+        assigned_projects = (
+            db.session.query(Project)
+            .join(
+                ProfessionalProjectApplication,
+                ProfessionalProjectApplication.project_id == Project.id,
+            )
+            .filter(
+                ProfessionalProjectApplication.professional_id == self.user_id,
+                ProfessionalProjectApplication.status == "Assigned",
+            )
+            .all()
+        )
+        projects_by_id = {project.id: project for project in assigned_projects}
+        project_ids = set(projects_by_id)
+        completed_ids = {
+            project.id
+            for project in assigned_projects
+            if project.status == "Completed"
+        }
+
+        deliveries = (
+            ProjectDelivery.query.filter(
+                ProjectDelivery.professional_id == self.user_id,
+                ProjectDelivery.project_id.in_(project_ids),
+            )
+            .order_by(
+                ProjectDelivery.project_id,
+                ProjectDelivery.submission_number,
+                ProjectDelivery.id,
+            )
+            .all()
+            if project_ids
+            else []
+        )
+        latest_deliveries = {}
+        revision_count = 0
+        for delivery in deliveries:
+            latest_deliveries[delivery.project_id] = delivery
+            if delivery.status == "Revision":
+                revision_count += 1
+
+        reviews = (
+            Review.query.filter(Review.project_id.in_(completed_ids)).all()
+            if completed_ids
+            else []
+        )
+        ratings = [
+            review.rating
+            for review in reviews
+            if review.rating is not None and 1 <= review.rating <= 5
+        ]
+
+        deadlines = {}
+        if completed_ids:
+            milestones = Milestone.query.filter(
+                Milestone.project_id.in_(completed_ids),
+                Milestone.due_date.isnot(None),
+            ).all()
+            for milestone in milestones:
+                current_deadline = deadlines.get(milestone.project_id)
+                if current_deadline is None or milestone.due_date > current_deadline:
+                    deadlines[milestone.project_id] = milestone.due_date
+
+        measurable_sprints = [
+            project_id
+            for project_id in completed_ids
+            if project_id in deadlines
+            and latest_deliveries.get(project_id) is not None
+        ]
+        on_time_sprints = sum(
+            latest_deliveries[project_id].submitted_at <= deadlines[project_id]
+            for project_id in measurable_sprints
+        )
+        early_sprints = sum(
+            latest_deliveries[project_id].submitted_at < deadlines[project_id]
+            for project_id in measurable_sprints
+        )
+        completed_count = len(completed_ids)
+        assigned_count = len(project_ids)
+
+        return {
+            "completed_sprints": completed_count,
+            "active_sprints": sum(
+                project.status in {"Assigned", "In Progress", "Submitted", "Revision"}
+                for project in projects_by_id.values()
+            ),
+            "completion_rate": (
+                completed_count / assigned_count * 100 if assigned_count else None
+            ),
+            "on_time_rate": (
+                on_time_sprints / len(measurable_sprints) * 100
+                if measurable_sprints
+                else None
+            ),
+            "average_rating": (
+                sum(ratings) / len(ratings) if ratings else None
+            ),
+            "revision_count": revision_count,
+            "early_sprints": early_sprints,
+        }
+
+    def get_completed_sprints_count(self):
+        return self.get_performance_metrics()["completed_sprints"]
+
+    def get_performance_rating(self):
+        return self.get_performance_metrics()["average_rating"]
+
+    def get_on_time_delivery_rate(self):
+        return self.get_performance_metrics()["on_time_rate"]
+
+    def get_badges(self, metrics=None):
+        metrics = metrics or self.get_performance_metrics()
+        badges = []
+        rating = metrics["average_rating"]
+        if rating is not None and rating >= 4.8 and metrics["revision_count"] == 0:
+            badges.append({
+                "name": "Top Rated 🌟",
+                "color": "bg-amber-500/10 text-amber-400 border-amber-500/20",
+            })
+        if metrics["early_sprints"] > 0:
+            badges.append({
+                "name": "Speed Demon ⚡",
+                "color": "bg-indigo-500/10 text-indigo-400 border-indigo-500/20",
+            })
+        if (
+            metrics["completion_rate"] is not None
+            and metrics["completion_rate"] == 100
+        ):
+            badges.append({
+                "name": "Reliable 🎯",
+                "color": "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
+            })
+        if self.verification_status == "Verified":
+            badges.append({
+                "name": "Verified Pro 🛡️",
+                "color": "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
+            })
+        return badges
+
 
 # =========================================================
 # PROJECT MODEL
@@ -564,6 +704,12 @@ class Project(db.Model):
     package = db.Column(
         db.String(100),
         nullable=False
+    )
+
+    currency = db.Column(
+        db.String(3),
+        nullable=False,
+        default="INR",
     )
 
     requirements = db.Column(
@@ -674,10 +820,7 @@ class Payment(db.Model):
         index=True
     )
 
-    amount = db.Column(
-        db.Integer,
-        nullable=False
-    )
+    amount = db.Column(db.Numeric(12, 2), nullable=False)
 
     currency = db.Column(
         db.String(10),
@@ -729,7 +872,7 @@ class Milestone(db.Model):
         nullable=False
     )
     title = db.Column(db.String(200), nullable=False)
-    amount = db.Column(db.Numeric(12, 2), nullable=False)
+    amount = db.Column(db.Integer, nullable=False)
     status = db.Column(
         db.String(30),
         default="pending",
@@ -1144,10 +1287,11 @@ class Invoice(db.Model):
     razorpay_order_id = db.Column(db.String(100), unique=True, nullable=True, index=True)
     project_id = db.Column(db.Integer, db.ForeignKey("project.id"), nullable=False, index=True)
     customer_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
-    gross_amount = db.Column(db.Integer, nullable=False)
-    talent_payout = db.Column(db.Integer, nullable=False)
-    agency_profit = db.Column(db.Integer, nullable=False)
-    tax_amount = db.Column(db.Integer, default=0, nullable=False)
+    gross_amount = db.Column(db.Numeric(12, 2), nullable=False)
+    talent_payout = db.Column(db.Numeric(12, 2), nullable=False)
+    agency_profit = db.Column(db.Numeric(12, 2), nullable=False)
+    tax_amount = db.Column(db.Numeric(12, 2), default=0, nullable=False)
+    currency = db.Column(db.String(3), default="INR", nullable=False)
     status = db.Column(db.String(30), default="Paid", nullable=False)
 
     # === NEW TALENT PAYOUT TRACKING FIELDS ===
@@ -1298,7 +1442,7 @@ class ProjectAddOn(db.Model):
         unique=True,
     )
     title = db.Column(db.String(200), nullable=False)
-    amount = db.Column(db.Integer, nullable=False)
+    amount = db.Column(db.Numeric(12, 2), nullable=False)
     status = db.Column(
         db.String(30),
         default="Pending Payment",
@@ -1311,3 +1455,56 @@ class ProjectAddOn(db.Model):
         backref=db.backref("add_ons", cascade="all, delete-orphan", lazy=True),
     )
     invoice = db.relationship("Invoice", backref=db.backref("project_add_on", uselist=False))
+
+
+class ActivityLog(db.Model):
+    __tablename__ = "activity_logs"
+    __table_args__ = (
+        db.Index(
+            "ix_activity_logs_project_created_at",
+            "project_id",
+            "created_at",
+        ),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    project_id = db.Column(
+        db.Integer,
+        db.ForeignKey("project.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("user.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    action = db.Column(db.String(100), nullable=False)
+    description = db.Column(db.Text, nullable=False)
+    category = db.Column(db.String(30), default="info", nullable=False)
+    created_at = db.Column(db.DateTime, default=get_ist_now, nullable=False)
+
+    project = db.relationship(
+        "Project",
+        backref=db.backref("activity_logs", cascade="all, delete-orphan", lazy=True),
+    )
+    actor = db.relationship("User", backref="activity_logs")
+
+    @classmethod
+    def log_event(
+        cls,
+        project_id: int,
+        action: str,
+        description: str,
+        user_id: int | None = None,
+        category: str = "info",
+    ):
+        log = cls(
+            project_id=project_id,
+            user_id=user_id,
+            action=action,
+            description=description,
+            category=category,
+        )
+        db.session.add(log)
+        return log

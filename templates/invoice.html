@@ -73,7 +73,7 @@
       <div>
         <div class="flex items-center gap-2 mb-2">
           <span class="px-2.5 py-0.5 rounded bg-emerald-100 text-emerald-800 font-mono text-[10px] font-bold uppercase">Original for Recipient</span>
-          <span class="px-2 py-0.5 rounded bg-zinc-100 text-zinc-600 font-mono text-[10px] font-bold">SAC 998311</span>
+          <span class="px-2 py-0.5 rounded bg-zinc-100 text-zinc-600 font-mono text-[10px] font-bold">{% if invoice_currency == 'INR' %}SAC 998311{% else %}International service invoice{% endif %}</span>
         </div>
         <h1 class="text-3xl font-black tracking-tight text-zinc-950">TAX INVOICE</h1>
         <p class="text-xs font-mono text-zinc-500 mt-1">Invoice #: <strong>{{ invoice_number }}</strong></p>
@@ -91,8 +91,10 @@
           <strong class="text-lg font-black text-zinc-950 block">{{ agency_settings.agency_name }}</strong>
         </div>
         <p class="text-zinc-600 mt-0.5">Bangalore & Hyderabad, India</p>
+        {% if invoice_currency == 'INR' %}
         <p class="font-mono text-zinc-600 mt-1">GSTIN: <strong>29AAAAA0000A1Z5</strong></p>
         <p class="font-mono text-zinc-500 text-[11px]">State of Supplier: Karnataka (29)</p>
+        {% endif %}
       </div>
     </div>
 
@@ -103,7 +105,7 @@
         <strong class="text-sm text-zinc-950 block">{{ customer.name if customer else 'Client Enterprise' }}</strong>
         <p class="text-zinc-700 font-semibold">{{ profile.business_name if profile and profile.business_name else 'Direct Business' }}</p>
         <p class="text-zinc-500">{{ customer.email if customer else '' }}</p>
-        <p class="font-mono text-zinc-500 mt-1">Place of Supply: {{ profile.location if profile and profile.location else 'India (State 29)' }}</p>
+        <p class="font-mono text-zinc-500 mt-1">{% if invoice_currency == 'INR' %}Place of Supply{% else %}Client Location{% endif %}: {{ profile.location if profile and profile.location else ('India (State 29)' if invoice_currency == 'INR' else 'Not provided') }}</p>
       </div>
 
       <div class="text-right invoice-project-details">
@@ -140,9 +142,9 @@
             {% endif %}
           </td>
           <td class="py-4 font-mono font-semibold" data-label="SAC">998311</td>
-          <td class="py-4 font-mono text-right" data-label="Taxable Value">₹{{ base_amount }}</td>
-          <td class="py-4 font-mono text-right" data-label="Tax Rate">18% GST</td>
-          <td class="py-4 font-mono font-bold text-right text-zinc-950" data-label="Total Amount">₹{{ gross_amount }}</td>
+          <td class="py-4 font-mono text-right" data-label="Taxable Value">{{ base_amount|format_currency(invoice_currency) }}</td>
+          <td class="py-4 font-mono text-right" data-label="Tax Rate">{% if invoice_currency == 'INR' %}18% GST{% else %}18% tax estimate{% endif %}</td>
+          <td class="py-4 font-mono font-bold text-right text-zinc-950" data-label="Total Amount">{{ gross_amount|format_currency(invoice_currency) }}</td>
         </tr>
       </tbody>
     </table>
@@ -152,19 +154,26 @@
       <div class="w-full max-w-72 space-y-2 text-xs">
         <div class="flex justify-between text-zinc-600">
           <span>Base Taxable Value:</span>
-          <span class="font-mono font-bold text-zinc-900">₹{{ base_amount }}</span>
+          <span class="font-mono font-bold text-zinc-900">{{ base_amount|format_currency(invoice_currency) }}</span>
         </div>
+        {% if invoice_currency == 'INR' %}
         <div class="flex justify-between text-zinc-600">
           <span>Central Tax (CGST 9%):</span>
-          <span class="font-mono">₹{{ cgst_amount }}</span>
+          <span class="font-mono">{{ cgst_amount|format_currency(invoice_currency) }}</span>
         </div>
         <div class="flex justify-between text-zinc-600">
           <span>State Tax (SGST 9%):</span>
-          <span class="font-mono">₹{{ sgst_amount }}</span>
+          <span class="font-mono">{{ sgst_amount|format_currency(invoice_currency) }}</span>
         </div>
+        {% else %}
+        <div class="flex justify-between text-zinc-600">
+          <span>Tax estimate (18%):</span>
+          <span class="font-mono">{{ tax_total|format_currency(invoice_currency) }}</span>
+        </div>
+        {% endif %}
         <div class="flex justify-between text-base font-black text-zinc-950 pt-2 border-t-2 border-zinc-900 invoice-total-row">
-          <span>Total Invoiced (INR):</span>
-          <span class="rounded-md px-2 py-1 font-mono text-lg invoice-total-amount" style="background-color: var(--agency-primary); color: var(--agency-on-primary)">₹{{ gross_amount }}</span>
+          <span>Total Invoiced ({{ invoice_currency }}):</span>
+          <span class="rounded-md px-2 py-1 font-mono text-lg invoice-total-amount" style="background-color: var(--agency-primary); color: var(--agency-on-primary)">{{ gross_amount|format_currency(invoice_currency) }}</span>
         </div>
       </div>
     </div>
@@ -172,9 +181,13 @@
     <!-- Digital Authorized Seal & Compliance Declaration -->
     <div class="mt-12 pt-8 border-t border-zinc-200 grid grid-cols-2 gap-4 text-xs items-end">
       <div>
-        <p class="font-mono text-[10px] text-zinc-500 uppercase tracking-wider">Compliance Declaration:</p>
+        <p class="font-mono text-[10px] text-zinc-500 uppercase tracking-wider">{% if invoice_currency == 'INR' %}Compliance Declaration:{% else %}International tax note:{% endif %}</p>
         <p class="text-[11px] text-zinc-600 mt-1 leading-relaxed">
+          {% if invoice_currency == 'INR' %}
           This invoice is issued under Rule 46 of CGST Rules, 2017. Services categorized under SAC Code 998311 (Information Technology Software Services).
+          {% else %}
+          Tax is shown as an 18% estimate for display purposes. Applicable tax treatment must be confirmed by the agency and client for their jurisdictions.
+          {% endif %}
         </p>
       </div>
 

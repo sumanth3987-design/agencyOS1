@@ -455,7 +455,7 @@
           <h2 tabindex="-1" class="text-sm font-bold uppercase tracking-[0.18em] text-zinc-200 mono">Service & business details</h2>
         </div>
 
-        <div class="grid gap-5 md:grid-cols-3">
+        <div class="grid gap-5 md:grid-cols-2 lg:grid-cols-4">
           <div>
             <label for="business_id" class="field-label">Associated business</label>
             <select id="business_id" name="business_id" class="field-select" {% if businesses %}required{% endif %}>
@@ -481,14 +481,26 @@
             <label for="package" class="field-label">Package</label>
             <select id="package" name="package" class="field-select" required>
               {% set current_package = request.form.get('package') or 'Basic Website' %}
-              <option value="Basic Website" {% if current_package == 'Basic Website' %}selected{% endif %}>Basic Website · ₹4,999</option>
-              <option value="Business Website" {% if current_package == 'Business Website' %}selected{% endif %}>Business Website · ₹9,999</option>
-              <option value="Advanced Website" {% if current_package == 'Advanced Website' %}selected{% endif %}>Advanced Website · ₹19,999</option>
-              <option value="SEO Starter" {% if current_package == 'SEO Starter' %}selected{% endif %}>SEO Starter · ₹2,999</option>
-              <option value="SEO Growth" {% if current_package == 'SEO Growth' %}selected{% endif %}>SEO Growth · ₹6,999</option>
-              <option value="SEO Advanced" {% if current_package == 'SEO Advanced' %}selected{% endif %}>SEO Advanced · ₹12,000</option>
-              <option value="Starter Retainer" {% if current_package == 'Starter Retainer' %}selected{% endif %}>Starter Retainer · ₹14,999/month</option>
+              <option value="Basic Website" data-inr="4999" data-usd="699" data-eur="650" data-gbp="550" {% if current_package == 'Basic Website' %}selected{% endif %}>Basic Website · ₹4,999</option>
+              <option value="Business Website" data-inr="9999" data-usd="1299" data-eur="1199" data-gbp="999" {% if current_package == 'Business Website' %}selected{% endif %}>Business Website · ₹9,999</option>
+              <option value="Advanced Website" data-inr="19999" data-usd="2499" data-eur="2299" data-gbp="1999" {% if current_package == 'Advanced Website' %}selected{% endif %}>Advanced Website · ₹19,999</option>
+              <option value="SEO Starter" data-inr="2999" data-usd="499" data-eur="450" data-gbp="390" {% if current_package == 'SEO Starter' %}selected{% endif %}>SEO Starter · ₹2,999</option>
+              <option value="SEO Growth" data-inr="6999" data-usd="899" data-eur="850" data-gbp="750" {% if current_package == 'SEO Growth' %}selected{% endif %}>SEO Growth · ₹6,999</option>
+              <option value="SEO Advanced" data-inr="12000" data-usd="1599" data-eur="1499" data-gbp="1299" {% if current_package == 'SEO Advanced' %}selected{% endif %}>SEO Advanced · ₹12,000</option>
+              <option value="Starter Retainer" data-inr="14999" {% if current_package == 'Starter Retainer' %}selected{% endif %}>Starter Retainer</option>
             </select>
+          </div>
+
+          <div>
+            <label for="currency" class="field-label">Billing Currency</label>
+            {% set current_currency = request.form.get('currency') or 'INR' %}
+            <select id="currency" name="currency" class="field-select" required>
+              <option value="INR" {% if current_currency == 'INR' %}selected{% endif %}>₹ INR</option>
+              <option value="USD" {% if current_currency == 'USD' %}selected{% endif %}>$ USD</option>
+              <option value="EUR" {% if current_currency == 'EUR' %}selected{% endif %}>€ EUR</option>
+              <option value="GBP" {% if current_currency == 'GBP' %}selected{% endif %}>£ GBP</option>
+            </select>
+            <p class="mt-1 text-[10px] leading-relaxed text-zinc-500">Starter Retainer recurring billing is INR-only.</p>
           </div>
         </div>
 
@@ -632,7 +644,32 @@
       const prevBtn = document.getElementById('prevBtn');
       const nextBtn = document.getElementById('nextBtn');
       const submitBtn = document.getElementById('submitBtn');
+      const packageSelect = document.getElementById('package');
+      const currencySelect = document.getElementById('currency');
+      const currencySymbols = { INR: '₹', USD: '$', EUR: '€', GBP: '£' };
       let currentStep = 0;
+
+      function updatePackagePrices() {
+        if (packageSelect.value === 'Starter Retainer' && currencySelect.value !== 'INR') {
+          currencySelect.value = 'INR';
+        }
+
+        Array.from(packageSelect.options).forEach((option) => {
+          const price = option.dataset[currencySelect.value.toLowerCase()];
+          if (!price) {
+            option.textContent = 'Starter Retainer · ₹14,999/month (INR only)';
+            return;
+          }
+          const formattedPrice = Number(price).toLocaleString(undefined, {
+            maximumFractionDigits: 0
+          });
+          option.textContent = `${option.value} · ${currencySymbols[currencySelect.value]}${formattedPrice}`;
+        });
+      }
+
+      packageSelect.addEventListener('change', updatePackagePrices);
+      currencySelect.addEventListener('change', updatePackagePrices);
+      updatePackagePrices();
 
       function updateButtons() {
         prevBtn.classList.toggle('hidden', currentStep === 0);

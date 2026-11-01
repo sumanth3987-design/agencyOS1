@@ -18,6 +18,7 @@ from app.config import (
     validate_secret_key,
 )
 from app.extensions import db, login_manager, csrf, limiter, migrate
+from app.utils.currency import format_currency
 
 
 def _build_bare_endpoint_map(view_functions):
@@ -70,6 +71,7 @@ def create_app(config_name="default", config_overrides=None):
         )
 
     app = Flask(__name__, template_folder="../templates", static_folder="../static")
+    app.jinja_env.filters["format_currency"] = format_currency
     app.config.from_object(config_by_name[config_name])
     if config_overrides is not None:
         app.config.update(config_overrides)

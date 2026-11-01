@@ -1,6 +1,7 @@
 # Save this directly into your file: app/blueprints/professional/__init__.py
 
 from datetime import datetime
+from decimal import Decimal
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from flask_login import login_required, current_user
 from app.extensions import db
@@ -9,9 +10,10 @@ from app.extensions import db
 from app.models import (
     User, ProfessionalProfile, Project, Payment, Notification,
     ProfessionalProjectApplication, ProjectDelivery, ChatMessage, Invoice, Milestone,
-    get_ist_now, PACKAGE_PRICES, calculate_professional_profile_completion, get_latest_project_delivery
+    ActivityLog, get_ist_now, PACKAGE_PRICES, calculate_professional_profile_completion, get_latest_project_delivery
 )
 from app.utils.project_uploads import save_project_upload
+from app.utils.currency import INTERNATIONAL_PACKAGE_PRICES, get_package_price
 
 professional_bp = Blueprint("professional", __name__)
 
@@ -55,14 +57,20 @@ def professional_dashboard():
     available_projects = Project.query.filter_by(status="Pending Assignment").order_by(Project.created_at.desc()).all()
 
     # 3. Financial Ledger (45% specialist share)
-    total_earned = sum(
-        int(PACKAGE_PRICES.get(p.package, 48000) * 0.45) 
-        for p in assigned_projects if p.status == "Completed"
-    )
-    pending_payout = sum(
-        int(PACKAGE_PRICES.get(p.package, 48000) * 0.45) 
-        for p in assigned_projects if p.status in ["In Progress", "Submitted", "Revision", "Assigned"]
-    )
+    total_earned = {}
+    pending_payout = {}
+    for project in assigned_projects:
+        currency = project.currency or "INR"
+        payout = (
+            get_package_price(project.package, currency, PACKAGE_PRICES)
+            * Decimal("0.45")
+        ).quantize(Decimal("0.01"))
+        if project.status == "Completed":
+            total_earned[currency] = total_earned.get(currency, Decimal("0")) + payout
+        elif project.status in {"In Progress", "Submitted", "Revision", "Assigned"}:
+            pending_payout[currency] = (
+                pending_payout.get(currency, Decimal("0")) + payout
+            )
 
     completed_sprints = sum(1 for p in assigned_projects if p.status == "Completed")
     active_sprints = sum(1 for p in assigned_projects if p.status in ["In Progress", "Submitted", "Revision", "Assigned"])
@@ -84,7 +92,9 @@ def professional_dashboard():
         pending_payout=pending_payout,
         completed_sprints=completed_sprints,
         active_sprints=active_sprints,
-        completion_score=completion_score
+        completion_score=completion_score,
+        package_prices=PACKAGE_PRICES,
+        international_package_prices=INTERNATIONAL_PACKAGE_PRICES
     )
 
 
@@ -184,7 +194,14 @@ def professional_project_workspace(project_id):
     deliveries = ProjectDelivery.query.filter_by(project_id=project.id).order_by(ProjectDelivery.submission_number.desc()).all()
     messages = ChatMessage.query.filter_by(project_id=project.id).order_by(ChatMessage.created_at.asc()).all()
 
-    specialist_share = int(PACKAGE_PRICES.get(project.package, 48000) * 0.45)
+    specialist_share = (
+        get_package_price(
+            project.package,
+            project.currency or "INR",
+            PACKAGE_PRICES,
+        )
+        * Decimal("0.45")
+    ).quantize(Decimal("0.01"))
     revision_count = ProjectDelivery.query.filter_by(project_id=project.id, status="Revision").count()
 
     return render_template(
@@ -193,6 +210,7 @@ def professional_project_workspace(project_id):
         deliveries=deliveries,
         messages=messages,
         specialist_share=specialist_share,
+        currency=project.currency or "INR",
         revision_count=revision_count
     )
 
@@ -258,6 +276,22 @@ def submit_deliverable(project_id):
 
     # Move project to Submitted status for Admin review gate
     project.status = "Submitted"
+    summary = notes[:60] + ("..." if len(notes) > 60 else "")
+    ActivityLog.log_event(
+        project.id,
+        "DELIVERABLE_SUBMITTED",
+        f"Specialist submitted deliverable #{next_num}: {summary}",
+        current_user.id,
+        "accent",
+    )
+    if attachment_url:
+        ActivityLog.log_event(
+            project.id,
+            "DOCUMENT_UPLOADED",
+            "Specialist uploaded a deliverable file.",
+            current_user.id,
+            "info",
+        )
     db.session.commit()
     # Trigger Automated WhatsApp Notification to Client
     try:

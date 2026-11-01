@@ -6,6 +6,7 @@ import hmac
 import hashlib
 import secrets
 from datetime import datetime
+from decimal import Decimal
 from typing import Protocol, cast
 
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
@@ -22,9 +23,11 @@ from app.models import (
     RazorpaySubscriptionPlan,
     RazorpaySubscription,
     SubscriptionCharge,
+    ActivityLog,
     get_ist_now,
 )
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
+from app.utils.currency import format_currency, get_package_price, to_minor_units
 
 logger = logging.getLogger(__name__)
 
@@ -93,7 +96,8 @@ def _create_payment_record(
     project_id: int,
     customer_id: int,
     order_id: str,
-    amount: int,
+    amount: Decimal,
+    currency: str,
     addon_id: int | None = None,
 ) -> Payment:
     payment = Payment()
@@ -102,7 +106,7 @@ def _create_payment_record(
     payment.addon_id = addon_id
     payment.razorpay_order_id = order_id
     payment.amount = amount
-    payment.currency = "INR"
+    payment.currency = currency
     payment.status = "Created"
     return payment
 
@@ -257,22 +261,35 @@ def payment_page(project_id):
         return redirect(url_for("customer.project_details", project_id=project.id))
 
     milestone_num = request.args.get("milestone", type=int)
-    total_pkg_amount = PACKAGE_PRICES.get(project.package, 48000)
-
     if addon is not None:
-        amount = addon.amount
-    elif milestone_num in (2, 3):
-        amount = int(total_pkg_amount * 0.25)
+        amount = Decimal(addon.amount)
+        project_currency = addon.invoice.currency
     else:
-        amount = int(total_pkg_amount * 0.50) if project.package in PACKAGE_PRICES else total_pkg_amount
+        project_currency = project.currency or "INR"
+        try:
+            total_pkg_amount = get_package_price(
+                project.package,
+                project_currency,
+                PACKAGE_PRICES,
+            )
+        except ValueError as exc:
+            logger.warning("Cannot price project #%s for checkout: %s", project.id, exc)
+            flash("This project package has no configured price in its billing currency.", "warning")
+            return redirect(url_for("customer.project_details", project_id=project.id))
+        if milestone_num in (2, 3):
+            amount = (total_pkg_amount * Decimal("0.25")).quantize(Decimal("0.01"))
+        else:
+            amount = (total_pkg_amount * Decimal("0.50")).quantize(Decimal("0.01"))
+    amount_minor_units = to_minor_units(amount)
 
     return render_template(
         "payment.html",
         project=project,
         addon=addon,
-        amount=amount * 100,
+        amount=amount_minor_units,
         gross_val=amount,
         milestone_num=milestone_num or 1,
+        currency=project_currency,
         razorpay_key_id=RAZORPAY_KEY_ID
     )
 
@@ -299,6 +316,11 @@ def create_subscription(project_id):
         return jsonify({
             "success": False,
             "message": "Auto-debit is only available for the Starter Retainer.",
+        }), 400
+    if project.currency != "INR":
+        return jsonify({
+            "success": False,
+            "message": "Starter Retainer auto-debit is currently available in INR only.",
         }), 400
 
     existing = (
@@ -527,16 +549,16 @@ def create_payment_order(project_id):
             return jsonify({
                 "success": True,
                 "order_id": existing_payment.razorpay_order_id,
-                "amount": int(addon.amount * 100),
-                "currency": "INR",
+                "amount": to_minor_units(addon.amount),
+                "currency": addon.invoice.currency,
                 "key_id": RAZORPAY_KEY_ID,
             })
 
-        amount_paise = int(addon.amount * 100)
+        amount_paise = to_minor_units(addon.amount)
         try:
             order = razorpay_client.order.create({
                 "amount": amount_paise,
-                "currency": "INR",
+                "currency": addon.invoice.currency,
                 "receipt": f"addon_{addon.id}_invoice_{addon.invoice_id}",
                 "notes": {
                     "project_id": str(project.id),
@@ -566,7 +588,8 @@ def create_payment_order(project_id):
             customer_id=project.customer_id,
             addon_id=addon.id,
             order_id=order_id,
-            amount=addon.amount,
+            amount=Decimal(addon.amount),
+            currency=addon.invoice.currency,
         ))
         try:
             db.session.commit()
@@ -594,7 +617,7 @@ def create_payment_order(project_id):
             "success": True,
             "order_id": order_id,
             "amount": amount_paise,
-            "currency": "INR",
+            "currency": addon.invoice.currency,
             "key_id": RAZORPAY_KEY_ID,
         })
 
@@ -606,18 +629,26 @@ def create_payment_order(project_id):
 
     milestone_num = data.get("milestone", 1)
     
-    total_pkg = PACKAGE_PRICES.get(project.package, 48000)
+    currency = project.currency or "INR"
+    try:
+        total_pkg = get_package_price(project.package, currency, PACKAGE_PRICES)
+    except ValueError as exc:
+        logger.warning("Cannot price project #%s for checkout: %s", project.id, exc)
+        return jsonify({
+            "success": False,
+            "message": "This project package has no configured price in its billing currency.",
+        }), 400
     if milestone_num in (2, 3):
-        amount = int(total_pkg * 0.25)
+        amount = (total_pkg * Decimal("0.25")).quantize(Decimal("0.01"))
     else:
-        amount = int(total_pkg * 0.50)
+        amount = (total_pkg * Decimal("0.50")).quantize(Decimal("0.01"))
 
-    amount_paise = int(amount * 100)
+    amount_paise = to_minor_units(amount)
 
     try:
         order = razorpay_client.order.create({
             "amount": amount_paise,
-            "currency": "INR",
+            "currency": currency,
             "receipt": f"proj_{project.id}_m{milestone_num}",
             "notes": {
                 "project_id": str(project.id),
@@ -643,6 +674,7 @@ def create_payment_order(project_id):
         customer_id=project.customer_id,
         order_id=order_id,
         amount=amount,
+        currency=currency,
     ))
     db.session.commit()
 
@@ -650,7 +682,7 @@ def create_payment_order(project_id):
         "success": True,
         "order_id": order_id,
         "amount": amount_paise,
-        "currency": "INR",
+        "currency": currency,
         "key_id": RAZORPAY_KEY_ID
     })
 
@@ -719,7 +751,7 @@ def verify_payment():
             "message": "Unable to verify payment details with the gateway.",
         }), 500
 
-    expected_amount_paise = int(payment.amount) * 100
+    expected_amount_paise = to_minor_units(payment.amount)
     amount_matches = (
         _get_gateway_amount(razorpay_order) == expected_amount_paise
         and _get_gateway_amount(razorpay_payment) == expected_amount_paise
@@ -727,9 +759,9 @@ def verify_payment():
 
     if (
         razorpay_order.get("id") != razorpay_order_id
-        or razorpay_order.get("currency") != "INR"
+        or razorpay_order.get("currency") != payment.currency
         or razorpay_payment.get("order_id") != razorpay_order_id
-        or razorpay_payment.get("currency") != "INR"
+        or razorpay_payment.get("currency") != payment.currency
         or razorpay_payment.get("status") != "captured"
         or not amount_matches
     ):
@@ -755,6 +787,13 @@ def verify_payment():
 
         if payment.addon_id is not None:
             addon = _mark_addon_payment_paid(payment)
+            ActivityLog.log_event(
+                payment.project_id,
+                "PAYMENT_RECEIVED",
+                f"Scope add-on payment of {format_currency(payment.amount, payment.currency)} verified via Razorpay.",
+                payment.customer_id,
+                "success",
+            )
             db.session.commit()
             logger.info(
                 "Scope add-on #%s paid for project #%s",
@@ -773,12 +812,21 @@ def verify_payment():
             project = Project.query.get(payment.project_id)
             if project:
                 project.status = "In Progress"
+            ActivityLog.log_event(
+                payment.project_id,
+                "PAYMENT_RECEIVED",
+                f"Milestone payment of {format_currency(payment.amount, payment.currency)} verified via Razorpay.",
+                payment.customer_id,
+                "success",
+            )
 
         # Calculate exact 45/55 split and statutory GST
-        amt = float(payment.amount or 24000)
-        talent_share = int(amt * 0.45)
-        agency_share = int(amt * 0.55)
-        tax_val = round(amt - (amt / 1.18), 2)
+        amt = Decimal(str(payment.amount or 24000))
+        talent_share = (amt * Decimal("0.45")).quantize(Decimal("0.01"))
+        agency_share = amt - talent_share
+        tax_val = (
+            amt - (amt / Decimal("1.18")).quantize(Decimal("0.01"))
+        ).quantize(Decimal("0.01"))
         unique_inv_number = f"INV-2026-{payment.project_id or 1:04d}-{secrets.token_hex(2).upper()}"
 
         # Safe GST Invoice handling
@@ -788,6 +836,7 @@ def verify_payment():
 
         if invoice:
             invoice.status = "Paid"
+            invoice.currency = payment.currency
             if not invoice.razorpay_order_id:
                 invoice.razorpay_order_id = razorpay_order_id
             if not invoice.talent_payout:
@@ -800,6 +849,7 @@ def verify_payment():
             new_inv.project_id = payment.project_id
             new_inv.customer_id = payment.customer_id
             new_inv.gross_amount = amt
+            new_inv.currency = payment.currency
             new_inv.talent_payout = talent_share
             new_inv.agency_profit = agency_share
             new_inv.tax_amount = tax_val
@@ -975,6 +1025,7 @@ def _handle_subscription_charged(
     invoice.project_id = subscription.project_id
     invoice.customer_id = subscription.customer_id
     invoice.gross_amount = amount
+    invoice.currency = subscription.currency
     invoice.talent_payout = talent_payout
     invoice.agency_profit = amount - talent_payout
     invoice.tax_amount = tax_amount
@@ -989,6 +1040,13 @@ def _handle_subscription_charged(
         project.status = "In Progress"
 
     db.session.add_all((payment, invoice))
+    ActivityLog.log_event(
+        subscription.project_id,
+        "PAYMENT_RECEIVED",
+        f"Monthly retainer payment of {format_currency(amount, subscription.currency)} received via Razorpay.",
+        subscription.customer_id,
+        "success",
+    )
     try:
         db.session.flush()
         charge = SubscriptionCharge()
@@ -1180,8 +1238,22 @@ def razorpay_webhook():
                         order_payment.addon_id,
                     )
                     return jsonify({"error": "Add-on payment record is unavailable"}), 500
+                ActivityLog.log_event(
+                    order_payment.project_id,
+                    "PAYMENT_RECEIVED",
+                    f"Scope add-on payment of ₹{order_payment.amount:,.2f} captured via Razorpay.",
+                    order_payment.customer_id,
+                    "success",
+                )
             elif order_payment.project_id:
                 Project.query.filter_by(id=order_payment.project_id).update({"status": "In Progress"})
+                ActivityLog.log_event(
+                    order_payment.project_id,
+                    "PAYMENT_RECEIVED",
+                    f"Milestone payment of ₹{order_payment.amount:,.2f} captured via Razorpay.",
+                    order_payment.customer_id,
+                    "success",
+                )
             db.session.commit()
 
     return jsonify({"status": "success"}), 200

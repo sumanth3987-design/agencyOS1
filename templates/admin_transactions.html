@@ -27,18 +27,22 @@
   <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
     <div class="p-6 rounded-2xl bg-[#121215] border border-zinc-800">
       <span class="text-xs font-mono uppercase text-zinc-400">Total Collected Revenue</span>
-      <div class="mt-3 font-mono text-3xl font-extrabold text-emerald-400">₹{{ "{:,.2f}".format(total_collected) }}</div>
-      <span class="mt-2 block text-[11px] text-zinc-500">Verified & Settled via Razorpay</span>
+      <div class="mt-3 space-y-1 font-mono text-xl font-extrabold text-emerald-400">
+        {% for currency, amount in total_collected|dictsort %}<div>{{ amount|format_currency(currency) }}</div>{% else %}<div>{{ 0|format_currency('INR') }}</div>{% endfor %}
+      </div>
+      <span class="mt-2 block text-[11px] text-zinc-500">Verified totals grouped by currency</span>
     </div>
     <div class="p-6 rounded-2xl bg-[#121215] border border-zinc-800">
       <span class="text-xs font-mono uppercase text-zinc-400">Pending Milestone Invoices</span>
-      <div class="mt-3 font-mono text-3xl font-extrabold text-amber-400">₹{{ "{:,.2f}".format(pending_amount) }}</div>
-      <span class="mt-2 block text-[11px] text-zinc-500">In draft / checkout pipeline</span>
+      <div class="mt-3 space-y-1 font-mono text-xl font-extrabold text-amber-400">
+        {% for currency, amount in pending_amount|dictsort %}<div>{{ amount|format_currency(currency) }}</div>{% else %}<div>{{ 0|format_currency('INR') }}</div>{% endfor %}
+      </div>
+      <span class="mt-2 block text-[11px] text-zinc-500">Pending totals grouped by currency</span>
     </div>
     <div class="p-6 rounded-2xl bg-[#121215] border border-zinc-800">
       <span class="text-xs font-mono uppercase text-zinc-400">Tax Compliance</span>
       <div class="mt-3 font-mono text-2xl font-bold text-white">SAC 998311</div>
-      <span class="mt-2 block text-[11px] text-zinc-500">18% GST (CGST 9% + SGST 9%)</span>
+      <span class="mt-2 block text-[11px] text-zinc-500">INR: 18% GST · Intl: 18% tax estimate</span>
     </div>
   </div>
 
@@ -65,7 +69,7 @@
         <tr>
           <th class="p-4">Payment ID / Order ID</th>
           <th class="p-4">Customer</th>
-          <th class="p-4">Gross Collected</th>
+          <th class="p-4">Gross / Currency</th>
           <th class="p-4">Client Payment</th>
           <th class="p-4">Talent Payout (45%)</th>
         </tr>
@@ -84,7 +88,7 @@
             <span class="font-mono text-zinc-500 text-[10px]">Project #{{ p.project_id }}</span>
           </td>
           <!-- Amount -->
-          <td class="p-4 font-mono font-bold text-white">₹{{ "{:,.2f}".format(p.amount) }}</td>
+          <td class="p-4 font-mono font-bold text-white">{{ p.amount|format_currency(p.currency) }}</td>
           <!-- Client Status -->
           <td class="p-4">
             <span class="px-2.5 py-0.5 rounded text-[10px] font-mono border {% if p.status.lower() == 'paid' %}bg-emerald-500/10 text-emerald-400 border-emerald-500/20{% elif p.status.lower() in ['created', 'pending'] %}bg-amber-500/10 text-amber-400 border-amber-500/20{% else %}bg-rose-500/10 text-rose-400 border-rose-500/20{% endif %}">
@@ -97,7 +101,7 @@
             {% set inv = p.project.invoices[0] if p.project and p.project.invoices else None %}
             {% if inv and inv.talent_payout %}
               <div class="flex items-center gap-2">
-                <div class="font-mono font-bold text-zinc-200">₹{{ "{:,.2f}".format(inv.talent_payout) }}</div>
+                <div class="font-mono font-bold text-zinc-200">{{ inv.talent_payout|format_currency(inv.currency) }}</div>
                 
                 {% if inv.payout_status == 'Settled' %}
                   <span class="px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[9px] font-mono uppercase">Settled</span>
@@ -106,7 +110,7 @@
                     <span class="px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[9px] font-mono uppercase">Redemption Requested</span>
                   {% endif %}
                   <!-- FIXED ONCLICK ATTRIBUTE HERE -->
-                  <button type="button" onclick="openPayoutModal('{{ inv.id }}', '{{ inv.talent_payout }}')" class="px-2 py-0.5 rounded bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-[9px] font-mono uppercase transition cursor-pointer">
+                  <button type="button" onclick="openPayoutModal('{{ inv.id }}', '{{ inv.talent_payout }}', '{{ inv.currency }}')" class="px-2 py-0.5 rounded bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-[9px] font-mono uppercase transition cursor-pointer">
                     Release
                   </button>
                 {% endif %}
@@ -160,7 +164,7 @@
 
     <form id="payoutForm" method="POST" action="" class="space-y-4 mt-4 text-xs">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <p class="text-zinc-400">You are about to mark a payout of <strong id="modalAmountDisplay" class="text-emerald-400 font-mono">₹0.00</strong> as settled.</p>
+      <p class="text-zinc-400">You are about to mark a payout allocation of <strong id="modalAmountDisplay" class="text-emerald-400 font-mono">0.00</strong> as settled.</p>
       
       <div>
         <label class="block text-zinc-400 font-semibold mb-1">Bank UTR / Transaction Reference (Optional)</label>
@@ -179,12 +183,15 @@
 <script>
   if (window.lucide) lucide.createIcons();
 
-  function openPayoutModal(invoiceId, amountStr) {
+  function openPayoutModal(invoiceId, amountStr, currency) {
     // Safely parse the amount string back into a number to prevent JS errors
     var amount = parseFloat(amountStr) || 0;
     
     document.getElementById('payoutForm').action = "/admin/invoice/" + invoiceId + "/release-payout";
-    document.getElementById('modalAmountDisplay').innerText = "₹" + amount.toLocaleString('en-IN', {minimumFractionDigits: 2});
+    document.getElementById('modalAmountDisplay').innerText = new Intl.NumberFormat(undefined, {
+      style: 'currency',
+      currency: currency || 'INR'
+    }).format(amount);
     document.getElementById('payoutModal').style.display = 'flex';
   }
 </script>

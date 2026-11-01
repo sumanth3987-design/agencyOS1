@@ -50,7 +50,7 @@
         <tr>
           <th class="p-4">Invoice #</th>
           <th class="p-4">Project / Milestone</th>
-          <th class="p-4">Amount (INR)</th>
+          <th class="p-4">Amount</th>
           <th class="p-4">Status</th>
           <th class="p-4">Date</th>
           <th class="p-4 text-right">Action</th>
@@ -69,7 +69,7 @@
             <span class="text-zinc-500 text-[11px] font-mono">{{ inv.project.package if inv.project else 'Custom' }}</span>
           </td>
           <td class="p-4 font-mono font-bold text-white">
-            ₹{{ inv.gross_amount or inv.amount or 48000 }}
+            {{ (inv.gross_amount or inv.amount or 48000)|format_currency(inv.currency) }}
           </td>
           <td class="p-4">
             <span class="px-2.5 py-0.5 rounded text-[10px] font-mono border {% if inv.status.lower() == 'paid' %}bg-emerald-500/10 text-emerald-400 border-emerald-500/20{% else %}bg-amber-500/10 text-amber-400 border-amber-500/20{% endif %}">

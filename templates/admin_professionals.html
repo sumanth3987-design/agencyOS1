@@ -30,10 +30,29 @@
           <td class="p-4">
             <strong class="text-white block">{{ profile.user.name if profile.user else 'Specialist' }}</strong>
             <span class="text-zinc-500 font-mono text-[11px]">{{ profile.user.email if profile.user else '' }}</span>
+            <div class="mt-2 flex flex-wrap items-center gap-1.5">
+              {% for badge in profile.get_badges(meritocracy_map.get(profile.id)) %}
+                <span class="rounded border px-2 py-0.5 font-mono text-[9px] {{ badge.color }}">
+                  {{ badge.name }}
+                </span>
+              {% endfor %}
+            </div>
           </td>
           <td class="p-4">
             <span class="text-zinc-200 font-semibold block">{{ profile.expertise or 'General' }}</span>
-            <span class="text-zinc-500 text-[11px]">{{ profile.experience or 'Experience not set' }}</span>
+            {% set metrics = meritocracy_map.get(profile.id, {}) %}
+            <span class="text-zinc-500 text-[11px] block">{{ profile.experience or 'Experience not set' }}</span>
+            <span class="mt-1 block font-mono text-[10px] text-zinc-400">
+              {{ metrics.get('completed_sprints', 0) }} completed · {{ metrics.get('active_sprints', 0) }} active
+            </span>
+            <span class="mt-1 block font-mono text-[10px] text-zinc-500">
+              On-time:
+              {% if metrics.get('on_time_rate') is not none %}{{ '%.0f'|format(metrics.get('on_time_rate')) }}%{% else %}N/A{% endif %}
+              · Rating:
+              {% if metrics.get('average_rating') is not none %}{{ '%.1f'|format(metrics.get('average_rating')) }}/5{% else %}N/A{% endif %}
+              · Completion:
+              {% if metrics.get('completion_rate') is not none %}{{ '%.0f'|format(metrics.get('completion_rate')) }}%{% else %}N/A{% endif %}
+            </span>
           </td>
           <td class="p-4 font-mono">
             {% if profile.upi_id %}

@@ -512,10 +512,10 @@ class TestVerifyPayment:
         )
         assert response.status_code == 404
 
-    def test_full_success_marks_paid_and_project_pending(
+    def test_full_success_marks_paid_and_project_in_progress(
         self, app, client, login, factories, csrf_token
     ):
-        """Successful verification marks payment 'Paid' and project 'Pending Assignment'."""
+        """Successful verification marks payment 'Paid' and project 'In Progress'."""
         customer_id = factories.user("customer", "fullsuccess@example.com")
         project_id = factories.project(customer_id)
         factories.payment(project_id, customer_id, razorpay_order_id="order_full")
@@ -549,11 +549,20 @@ class TestVerifyPayment:
         assert data["success"] is True
 
         with app.app_context():
+            from app.models import ActivityLog
+
             payment = Payment.query.filter_by(razorpay_order_id="order_full").first()
             assert payment.status == "Paid"
             assert payment.razorpay_payment_id == "pay_full"
             project = Project.query.get(project_id)
-            assert project.status == "Pending Assignment"
+            assert project.status == "In Progress"
+            audit_entry = ActivityLog.query.filter_by(
+                project_id=project_id,
+                action="PAYMENT_RECEIVED",
+            ).one()
+            assert audit_entry.user_id == customer_id
+            assert audit_entry.category == "success"
+            assert "₹4,999.00" in audit_entry.description
 
     def test_gateway_fetch_failure_returns_500(
         self, app, client, login, factories, csrf_token

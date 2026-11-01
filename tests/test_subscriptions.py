@@ -526,4 +526,4 @@ def test_subscription_invoice_list_links_to_the_selected_renewal_invoice(
     assert rendered_invoice.status_code == 200
     assert invoice.invoice_number.encode() in rendered_invoice.data
     assert b"Monthly SEO Retainer Renewal" in rendered_invoice.data
-    assert b"14999" in rendered_invoice.data
+    assert b"14,999.00" in rendered_invoice.data

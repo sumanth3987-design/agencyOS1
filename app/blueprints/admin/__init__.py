@@ -20,8 +20,9 @@ from app.models import (
     User, CustomerProfile, Business, ProfessionalProfile, Project, Payment,
     ProfessionalProjectApplication, ProjectDelivery, get_ist_now, PACKAGE_PRICES,
     calculate_professional_profile_completion, get_latest_project_delivery,
-    Invoice, Notification, ProjectAddOn, AgencySetting
+    Invoice, Notification, ProjectAddOn, AgencySetting, ActivityLog
 )
+from app.utils.currency import format_currency, get_package_price
 
 admin_bp = Blueprint("admin", __name__)
 
@@ -288,11 +289,13 @@ def admin_professionals():
 
     profiles = ProfessionalProfile.query.order_by(ProfessionalProfile.created_at.desc()).all()
     completion_map = {p.id: calculate_professional_profile_completion(p) for p in profiles}
+    meritocracy_map = {p.id: p.get_performance_metrics() for p in profiles}
 
     return render_template(
         "admin_professionals.html",
         profiles=profiles,
-        completion_map=completion_map
+        completion_map=completion_map,
+        meritocracy_map=meritocracy_map,
     )
 
 
@@ -482,6 +485,13 @@ def request_project_revision(project_id):
 
     project.status = "Revision"
     project.revision_comment = comment
+    ActivityLog.log_event(
+        project.id,
+        "REVISION_REQUESTED",
+        f"Agency requested a revision: {comment}",
+        current_user.id,
+        "warning",
+    )
     db.session.commit()
 
     flash("Revision requested successfully.", "warning")
@@ -503,6 +513,13 @@ def approve_project(project_id):
 
     project.status = "Completed"
     project.revision_comment = None
+    ActivityLog.log_event(
+        project.id,
+        "MILESTONE_APPROVED",
+        "Agency approved the milestone deliverable. Project marked Completed.",
+        current_user.id,
+        "success",
+    )
     db.session.commit()
 
     flash("Project deliverable approved and marked as Completed.", "success")
@@ -521,9 +538,16 @@ def admin_mark_paid(project_id):
         return redirect(url_for("customer.dashboard"))
 
     project = Project.query.get_or_404(project_id)
-    amount = PACKAGE_PRICES.get(project.package, 48000)
+    amount = get_package_price(
+        project.package,
+        project.currency,
+        PACKAGE_PRICES,
+    )
 
-    payment = Payment.query.filter_by(project_id=project.id).first()
+    payment = Payment.query.filter_by(
+        project_id=project.id,
+        addon_id=None,
+    ).first()
     if not payment:
         payment = Payment(
             project_id=project.id,
@@ -531,30 +555,48 @@ def admin_mark_paid(project_id):
             razorpay_order_id=f"offline_order_{project.id}",
             razorpay_payment_id=f"offline_bank_transfer_{project.id}",
             amount=amount,
+            currency=project.currency,
             status="Paid",
             paid_at=get_ist_now()
         )
         db.session.add(payment)
     else:
+        payment.amount = amount
+        payment.currency = project.currency
         payment.status = "Paid"
         payment.paid_at = get_ist_now()
 
     project.status = "Pending Assignment"
+    ActivityLog.log_event(
+        project.id,
+        "PAYMENT_RECEIVED",
+        f"Milestone payment of {format_currency(amount, project.currency)} recorded via offline bank settlement.",
+        current_user.id,
+        "success",
+    )
 
     # Ensure invoice exists
     invoice = Invoice.query.filter_by(project_id=project.id).first()
     if not invoice:
+        tax_amount = (
+            amount - (amount / Decimal("1.18")).quantize(Decimal("0.01"))
+        ).quantize(Decimal("0.01"))
+        talent_payout = (amount * Decimal("0.45")).quantize(Decimal("0.01"))
         db.session.add(Invoice(
             invoice_number=f"INV-2026-{project.id:04d}",
             project_id=project.id,
             customer_id=project.customer_id,
             gross_amount=amount,
-            tax_amount=int(amount - (amount / 1.18)),
+            talent_payout=talent_payout,
+            agency_profit=amount - talent_payout,
+            tax_amount=tax_amount,
+            currency=project.currency,
             status="Paid",
             payout_status="Pending Approval"
         ))
     else:
         invoice.status = "Paid"
+        invoice.currency = project.currency
 
     db.session.commit()
     flash(f"Project #{project.id} marked as Paid via Offline Bank Settlement.", "success")
@@ -585,19 +627,20 @@ def create_project_addon(project_id):
         or len(title) > 200
         or not amount.is_finite()
         or amount <= 0
-        or amount != amount.to_integral_value()
+        or amount != amount.quantize(Decimal("0.01"))
         or amount > Decimal("999999999")
     ):
         flash(
-            "Enter a title (up to 200 characters) and a positive whole-rupee amount.",
+            "Enter a title (up to 200 characters) and a positive amount with at most two decimal places.",
             "warning",
         )
         return redirect(url_for("customer.project_details", project_id=project.id))
 
-    gross_amount = int(amount)
-    tax_amount = int(
-        (amount - amount / Decimal("1.18")).quantize(Decimal("1"))
-    )
+    gross_amount = amount.quantize(Decimal("0.01"))
+    tax_amount = (
+        gross_amount
+        - (gross_amount / Decimal("1.18")).quantize(Decimal("0.01"))
+    ).quantize(Decimal("0.01"))
     invoice = Invoice(
         invoice_number=f"ADDON-{project.id}-{secrets.token_hex(4).upper()}",
         project_id=project.id,
@@ -606,6 +649,7 @@ def create_project_addon(project_id):
         talent_payout=0,
         agency_profit=gross_amount - tax_amount,
         tax_amount=tax_amount,
+        currency=project.currency,
         status="Pending",
         payout_status="Pending Approval",
     )
@@ -692,8 +736,21 @@ def admin_transactions():
 
     # Base query for metrics
     all_payments = Payment.query.all()
-    total_collected = sum(p.amount for p in all_payments if getattr(p, "status", "").lower() == "paid")
-    pending_amount = sum(p.amount for p in all_payments if getattr(p, "status", "").lower() in ["created", "pending"])
+    total_collected = {}
+    pending_amount = {}
+    for payment in all_payments:
+        currency = payment.currency or "INR"
+        status = getattr(payment, "status", "").lower()
+        if status == "paid":
+            total_collected[currency] = (
+                total_collected.get(currency, Decimal("0"))
+                + Decimal(str(payment.amount or 0))
+            )
+        elif status in {"created", "pending"}:
+            pending_amount[currency] = (
+                pending_amount.get(currency, Decimal("0"))
+                + Decimal(str(payment.amount or 0))
+            )
 
     # Query with filters
     query = Payment.query
@@ -800,13 +857,13 @@ def export_reports(report_type):
     writer = csv.writer(si)
 
     if report_type == "revenue":
-        writer.writerow(["Invoice #", "Payment Status", "Razorpay Payment ID", "Date", "Gross (INR)", "Taxable Value (INR)", "GST (INR)"])
+        writer.writerow(["Invoice #", "Payment Status", "Razorpay Payment ID", "Date", "Currency", "Gross", "Taxable Value", "Tax / Tax Estimate"])
         payments = Payment.query.order_by(Payment.created_at.desc()).all()
         for p in payments:
-            gross = p.amount or 0
-            base_val = round(gross / 1.18, 2) if gross > 0 else 0
-            tax_val = round(gross - base_val, 2)
-            writer.writerow([f"INV-{p.id:04d}", p.status, p.razorpay_payment_id or "—", p.created_at.strftime("%Y-%m-%d") if p.created_at else "—", gross, base_val, tax_val])
+            gross = Decimal(str(p.amount or 0))
+            base_val = (gross / Decimal("1.18")).quantize(Decimal("0.01")) if gross > 0 else Decimal("0")
+            tax_val = gross - base_val
+            writer.writerow([f"INV-{p.id:04d}", p.status, p.razorpay_payment_id or "—", p.created_at.strftime("%Y-%m-%d") if p.created_at else "—", p.currency or "INR", gross, base_val, tax_val])
         filename = f"AgencyOS_Revenue_{datetime.now().strftime('%Y%m%d_%H%M')}.csv"
     else:
         writer.writerow(["User ID", "Name", "Email", "Role", "Joined Date"])

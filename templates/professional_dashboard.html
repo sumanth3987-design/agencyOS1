@@ -72,8 +72,14 @@
         <span>Settled Payouts</span>
         <i data-lucide="check-circle" class="w-4 h-4 text-emerald-400"></i>
       </div>
-      <div class="mt-3 font-mono text-3xl font-extrabold text-emerald-400">₹{{ total_earned }}</div>
-      <span class="mt-2 block text-[11px] text-zinc-500">Transferred directly to UPI</span>
+      <div class="mt-3 space-y-1 font-mono text-xl font-extrabold text-emerald-400">
+        {% for currency, amount in total_earned|dictsort %}
+        <div>{{ amount|format_currency(currency) }}</div>
+        {% else %}
+        <div>{{ 0|format_currency('INR') }}</div>
+        {% endfor %}
+      </div>
+      <span class="mt-2 block text-[11px] text-zinc-500">Payout allocations grouped by project currency</span>
     </div>
 
     <div class="pro-card p-5">
@@ -81,8 +87,14 @@
         <span>Escrow In-Flight</span>
         <i data-lucide="clock" class="w-4 h-4 text-amber-400"></i>
       </div>
-      <div class="mt-3 font-mono text-3xl font-extrabold text-amber-400">₹{{ pending_payout }}</div>
-      <span class="mt-2 block text-[11px] text-zinc-500">Released upon client milestone sign-off</span>
+      <div class="mt-3 space-y-1 font-mono text-xl font-extrabold text-amber-400">
+        {% for currency, amount in pending_payout|dictsort %}
+        <div>{{ amount|format_currency(currency) }}</div>
+        {% else %}
+        <div>{{ 0|format_currency('INR') }}</div>
+        {% endfor %}
+      </div>
+      <span class="mt-2 block text-[11px] text-zinc-500">Payout allocations grouped by project currency</span>
     </div>
 
     <div class="pro-card p-5">
@@ -121,7 +133,7 @@
       <div class="p-4 rounded-xl bg-zinc-950 border border-zinc-800 flex items-center justify-between gap-4">
         <div>
           <span class="text-[10px] font-mono text-zinc-500">Project #{{ inv.project_id }}</span>
-          <div class="font-mono text-lg font-extrabold text-white mt-0.5">₹{{ "{:,.2f}".format(inv.talent_payout) }}</div>
+          <div class="font-mono text-lg font-extrabold text-white mt-0.5">{{ inv.talent_payout|format_currency(inv.currency) }}</div>
         </div>
 
         {% if inv.payout_status == 'Requested' %}
@@ -162,10 +174,15 @@
       {% for prj in available_projects if available_projects %}
       <div class="opportunity-card p-6 flex flex-col justify-between space-y-4">
         <div>
+          {% if prj.currency == 'INR' %}
+            {% set sprint_price = package_prices.get(prj.package) %}
+          {% else %}
+            {% set sprint_price = international_package_prices.get(prj.currency, {}).get(prj.package) %}
+          {% endif %}
           <div class="flex items-center justify-between text-xs mb-2">
             <span class="font-mono font-bold text-indigo-400">#{{ prj.id }}</span>
             <span class="px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-mono font-bold">
-              Specialist Payout: ₹{{ (48000 * 0.45)|int }}
+              {% if sprint_price is not none %}Specialist Payout: {{ (sprint_price * 0.45)|format_currency(prj.currency) }}{% else %}Payout quote unavailable{% endif %}
             </span>
           </div>
 

@@ -154,8 +154,8 @@
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <label class="sr-only" for="addon-title">Add-on title</label>
       <input id="addon-title" name="title" type="text" maxlength="200" required placeholder="e.g. Extra checkout integration" class="rounded-xl bg-zinc-950 border border-zinc-800 px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500">
-      <label class="sr-only" for="addon-amount">Add-on amount in INR</label>
-      <input id="addon-amount" name="amount" type="number" min="1" max="999999999" step="1" required placeholder="Amount (₹)" class="rounded-xl bg-zinc-950 border border-zinc-800 px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500">
+      <label class="sr-only" for="addon-amount">Add-on amount in {{ project.currency }}</label>
+      <input id="addon-amount" name="amount" type="number" min="0.01" max="999999999" step="0.01" required placeholder="Amount ({{ 0|format_currency(project.currency) }})" class="rounded-xl bg-zinc-950 border border-zinc-800 px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500">
       <button type="submit" class="agency-action rounded-xl px-4 py-2 text-xs font-bold transition">Issue Add-On Invoice</button>
     </form>
   </section>
@@ -178,7 +178,7 @@
         <p class="text-xs text-zinc-400 mt-1">Additional scope outside the original SOW.</p>
       </div>
       <div class="flex items-center gap-3">
-        <span class="font-mono text-lg font-bold text-white">₹{{ "{:,.2f}".format(addon.amount) }}</span>
+        <span class="font-mono text-lg font-bold text-white">{{ addon.amount|format_currency(addon.invoice.currency) }}</span>
         {% if addon.status == 'Paid' %}
         <span class="px-3 py-1.5 rounded-xl bg-emerald-500/10 text-emerald-400 font-bold text-xs border border-emerald-500/20 font-mono">Paid</span>
         {% elif addon.status == 'Pending Payment' and addon.invoice.status != 'Paid' %}
@@ -209,7 +209,7 @@
         <ul class="mt-2 space-y-2" aria-label="Confirmed captured charges">
           {% for charge in retainer_charges %}
           <li class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 border-b border-zinc-800 pb-2 last:border-0 last:pb-0">
-            <span class="text-xs font-mono font-bold text-emerald-300">Captured · ₹{{ "{:,.0f}".format(charge.amount) }}</span>
+            <span class="text-xs font-mono font-bold text-emerald-300">Captured · {{ charge.amount|format_currency(charge.currency) }}</span>
             <time class="text-xs text-zinc-400" datetime="{{ charge.charged_at.isoformat() }}">{{ charge.charged_at.strftime('%d %b %Y') }}</time>
           </li>
           {% endfor %}
@@ -288,7 +288,7 @@
         <p class="text-[11px] text-zinc-400 mt-0.5">Kickoff advance received via Razorpay / UPI • Sprint is actively in progress</p>
       </div>
     </div>
-    <span class="px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-mono font-bold">PAID (INR)</span>
+    <span class="px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-mono font-bold">PAID ({{ payment.currency if payment else project.currency }})</span>
   </div>
   {% endif %}
   {% endif %}
@@ -599,7 +599,37 @@
       });
     }());
   </script>
-  <script>if (window.lucide) lucide.createIcons();</script>
+  <!-- IMMUTABLE ACTIVITY AUDIT TIMELINE -->
+  <section class="portal-card p-5 sm:p-6" aria-labelledby="activity-audit-title">
+    <div class="mb-6 flex items-center justify-between gap-3 border-b border-zinc-800 pb-4">
+      <h3 id="activity-audit-title" class="flex items-center gap-2 font-mono text-xs font-bold uppercase tracking-wider text-zinc-400">
+        <i data-lucide="history" class="h-4 w-4 text-indigo-400"></i>
+        <span>Project Activity Audit Trail</span>
+      </h3>
+      <span class="shrink-0 font-mono text-[10px] text-zinc-500">Immutable Log</span>
+    </div>
+
+    <div class="relative space-y-4 before:absolute before:inset-y-0 before:left-3 before:w-0.5 before:bg-zinc-800">
+      {% for log in activity_logs %}
+      <article class="relative flex items-start gap-4 pl-8">
+        <span class="absolute left-1.5 top-1.5 h-3 w-3 rounded-full border-2 border-zinc-950
+          {% if log.category == 'success' %}bg-emerald-400
+          {% elif log.category == 'warning' %}bg-amber-400
+          {% elif log.category == 'accent' %}bg-indigo-400
+          {% else %}bg-zinc-600{% endif %}"></span>
+        <div class="min-w-0 w-full rounded-xl border border-zinc-800 bg-zinc-900/60 p-3.5 text-xs">
+          <div class="mb-1 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 font-mono text-[10px] text-zinc-500">
+            <span class="font-bold text-zinc-300">{{ log.actor.name if log.actor else 'System' }}</span>
+            <time datetime="{{ log.created_at.isoformat() if log.created_at else '' }}">{{ log.created_at.strftime('%d %b %Y, %I:%M %p') if log.created_at else '' }}</time>
+          </div>
+          <p class="break-words text-zinc-200">{{ log.description }}</p>
+        </div>
+      </article>
+      {% else %}
+      <p class="py-4 text-center font-mono text-xs text-zinc-500">No activity events recorded yet.</p>
+      {% endfor %}
+    </div>
+  </section>
 
 <!-- Testimonial & Rating Modal (Appears when project is Completed) -->
 {% if project.status == 'Completed' and not project.review %}
@@ -666,5 +696,6 @@
 </div>
 {% endif %}
 
+<script>if (window.lucide) lucide.createIcons();</script>
 </body>
 </html>

@@ -28,7 +28,7 @@
 
     <!-- Payout Share Indicator -->
     <span class="px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-mono font-bold">
-      Specialist Payout Share: ₹{{ specialist_share }} (UPI)
+      Specialist Payout Share: {{ specialist_share|format_currency(currency) }} allocation
     </span>
   </div>
 

@@ -72,7 +72,7 @@
       {% set gross_val = (amount / 100)|round(2) if amount else (payment.amount if payment and payment.amount else 48000) %}
       {% if addon %}
       {% set tax_val = addon.invoice.tax_amount %}
-      {% set base_val = gross_val - tax_val %}
+      {% set base_val = gross_val - (tax_val|float) %}
       {% else %}
       {% set base_val = (gross_val / 1.18)|round(2) %}
       {% set tax_val = (gross_val - base_val)|round(2) %}
@@ -81,29 +81,29 @@
       <div class="p-4 rounded-xl bg-zinc-950 border border-zinc-800 space-y-2 text-xs">
         <div class="flex justify-between text-zinc-400">
           <span>Base Milestone Value:</span>
-          <span class="font-mono text-zinc-200">₹{{ base_val }}</span>
+          <span class="font-mono text-zinc-200">{{ base_val|format_currency(currency) }}</span>
         </div>
         <div class="flex justify-between text-zinc-400">
-          <span>Statutory GST (18% SAC 998311):</span>
-          <span class="font-mono text-zinc-200">₹{{ tax_val }}</span>
+          <span>{% if currency == 'INR' %}Statutory GST (18% SAC 998311):{% else %}Tax estimate (18%):{% endif %}</span>
+          <span class="font-mono text-zinc-200">{{ tax_val|format_currency(currency) }}</span>
         </div>
         <div class="pt-2 border-t border-zinc-800 flex justify-between items-baseline">
-          <span class="font-bold text-white text-sm">Total Payable (INR):</span>
-          <span class="font-mono text-2xl font-extrabold text-white">₹{{ gross_val }}</span>
+          <span class="font-bold text-white text-sm">Total Payable ({{ currency }}):</span>
+          <span class="font-mono text-2xl font-extrabold text-white">{{ gross_val|format_currency(currency) }}</span>
         </div>
       </div>
 
       <!-- Supported Rails -->
       <div class="p-3.5 rounded-xl bg-zinc-900/60 border border-zinc-800/80 text-[11px] text-zinc-400 flex items-center gap-2">
         <i data-lucide="zap" class="w-4 h-4 text-emerald-400 shrink-0"></i>
-        <span>Supports Instant UPI (GPay, PhonePe, Paytm, BHIM), Netbanking, Cards & RuPay</span>
+        <span>{% if currency == 'INR' %}Supports Instant UPI (GPay, PhonePe, Paytm, BHIM), Netbanking, Cards &amp; RuPay{% else %}Supports international cards and payment methods available for your region{% endif %}</span>
       </div>
     </div>
 
     <!-- Primary Action: Real Razorpay Checkout Launcher -->
     <button type="button" id="payBtn" onclick="launchRazorpayCheckout()" class="w-full py-3.5 rounded-xl font-bold text-sm shadow-xl transition flex items-center justify-center gap-2 cursor-pointer">
       <i data-lucide="shield-check" class="w-4 h-4"></i>
-      <span id="btnText">{% if addon %}Authorize Add-On with Razorpay / UPI{% else %}Pay Deposit with Razorpay / UPI{% endif %} (₹{{ gross_val }})</span>
+      <span id="btnText">{% if addon %}Authorize Add-On with Razorpay{% else %}Pay Deposit with Razorpay{% endif %} ({{ gross_val|format_currency(currency) }})</span>
     </button>
 
     <!-- Return Link -->
@@ -198,7 +198,7 @@
           modal: {
             ondismiss: function () {
               btn.disabled = false;
-              btnText.textContent = "{% if addon %}Authorize Add-On{% else %}Pay Deposit{% endif %} with Razorpay / UPI (₹{{ gross_val }})";
+              btnText.textContent = "{% if addon %}Authorize Add-On{% else %}Pay Deposit{% endif %} with Razorpay ({{ gross_val|format_currency(currency) }})";
             }
           },
           theme: { color: {{ agency_settings.primary_color|tojson }} }
@@ -208,7 +208,7 @@
         rzp.open();
       } catch (err) {
         btn.disabled = false;
-        btnText.textContent = "{% if addon %}Authorize Add-On{% else %}Pay Deposit{% endif %} with Razorpay / UPI (₹{{ gross_val }})";
+        btnText.textContent = "{% if addon %}Authorize Add-On{% else %}Pay Deposit{% endif %} with Razorpay ({{ gross_val|format_currency(currency) }})";
         showError(err.message);
       }
     }
