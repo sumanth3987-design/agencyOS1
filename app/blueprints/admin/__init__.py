@@ -455,6 +455,44 @@ def admin_transactions():
     )
 
 
+@admin_bp.route("/admin/invoice/<int:invoice_id>/release-payout", methods=["POST"])
+@login_required
+def release_talent_payout(invoice_id):
+    if getattr(current_user, "role", "").lower() != "admin":
+        flash("Admin access required.", "danger")
+        return redirect(url_for("customer.dashboard"))
+
+    invoice = Invoice.query.get_or_404(invoice_id)
+    if invoice.status.lower() != "paid":
+        flash("Cannot release payout for an unpaid milestone.", "warning")
+        return redirect(url_for("admin.admin_transactions"))
+
+    if invoice.payout_status == "Settled":
+        flash("This specialist payout has already been settled.", "info")
+        return redirect(url_for("admin.admin_transactions"))
+
+    assigned_application = ProfessionalProjectApplication.query.filter_by(
+        project_id=invoice.project_id,
+        status="Assigned",
+    ).first()
+    if not assigned_application:
+        flash("Cannot release payout until a specialist is assigned to the project.", "warning")
+        return redirect(url_for("admin.admin_transactions"))
+
+    utr_number = request.form.get("utr_number", "").strip()
+    if len(utr_number) > 100:
+        flash("The UTR reference must be 100 characters or fewer.", "danger")
+        return redirect(url_for("admin.admin_transactions"))
+
+    invoice.payout_status = "Settled"
+    invoice.payout_utr = utr_number or "UPI_INSTANT"
+    invoice.payout_paid_at = get_ist_now()
+    db.session.commit()
+
+    flash(f"Talent payout marked as Settled! UTR logged: {invoice.payout_utr}", "success")
+    return redirect(url_for("admin.admin_transactions"))
+
+
 @admin_bp.route("/admin/notifications/broadcast", methods=["POST"])
 @login_required
 def broadcast_notification():

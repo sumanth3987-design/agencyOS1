@@ -64,34 +64,61 @@
       <thead class="bg-[#18181d] text-zinc-400 font-mono uppercase tracking-wider border-b border-zinc-800">
         <tr>
           <th class="p-4">Payment ID / Order ID</th>
-          <th class="p-4">Customer Email</th>
-          <th class="p-4">Project</th>
-          <th class="p-4">Amount (INR)</th>
-          <th class="p-4">Status</th>
-          <th class="p-4 text-right">Timestamp (IST)</th>
+          <th class="p-4">Customer</th>
+          <th class="p-4">Gross Collected</th>
+          <th class="p-4">Client Payment</th>
+          <th class="p-4">Talent Payout (45%)</th>
         </tr>
       </thead>
       <tbody class="divide-y divide-zinc-800/60 text-zinc-300">
         {% for p in payments %}
         <tr class="hover:bg-white/[0.02] transition">
+          <!-- IDs -->
           <td class="p-4">
             <span class="font-mono text-indigo-400 block font-bold">{{ p.razorpay_payment_id or 'Order Initiated' }}</span>
             <span class="text-zinc-500 font-mono text-[10px]">{{ p.razorpay_order_id }}</span>
           </td>
-          <td class="p-4 font-bold text-white">{{ p.customer.email if p.customer else 'Direct Client' }}</td>
-          <td class="p-4 font-mono text-zinc-400">#{{ p.project_id }}</td>
+          <!-- Customer -->
+          <td class="p-4">
+            <span class="font-bold text-white block">{{ p.customer.email if p.customer else 'Direct Client' }}</span>
+            <span class="font-mono text-zinc-500 text-[10px]">Project #{{ p.project_id }}</span>
+          </td>
+          <!-- Amount -->
           <td class="p-4 font-mono font-bold text-white">₹{{ "{:,.2f}".format(p.amount) }}</td>
+          <!-- Client Status -->
           <td class="p-4">
             <span class="px-2.5 py-0.5 rounded text-[10px] font-mono border {% if p.status.lower() == 'paid' %}bg-emerald-500/10 text-emerald-400 border-emerald-500/20{% elif p.status.lower() in ['created', 'pending'] %}bg-amber-500/10 text-amber-400 border-amber-500/20{% else %}bg-rose-500/10 text-rose-400 border-rose-500/20{% endif %}">
               {{ p.status }}
             </span>
           </td>
-          <td class="p-4 text-right font-mono text-zinc-500">
-            {{ p.created_at.strftime('%d %b %Y, %I:%M %p') if p.created_at else '—' }}
+          <!-- Specialist Payout Status -->
+          <td class="p-4">
+            {% set inv = p.project.invoice_record if p.project else None %}
+            {% set assigned_application = (p.project.applications|selectattr('status', 'equalto', 'Assigned')|first) if p.project else None %}
+            {% if inv and inv.talent_payout %}
+              <div class="flex items-center gap-2">
+                <div class="font-mono font-bold text-zinc-200">₹{{ "{:,.2f}".format(inv.talent_payout) }}</div>
+
+                {% if inv.payout_status == 'Settled' %}
+                  <span class="px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[9px] font-mono uppercase">Settled</span>
+                {% elif not assigned_application %}
+                  <span class="px-2 py-0.5 rounded bg-zinc-800 text-zinc-400 text-[9px] font-mono uppercase">No Specialist Assigned</span>
+                {% elif inv.status.lower() == 'paid' %}
+                  <button type="button" onclick="openPayoutModal({{ inv.id }}, {{ inv.talent_payout }})" class="px-2 py-0.5 rounded bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-[9px] font-mono uppercase transition cursor-pointer">
+                    Release
+                  </button>
+                {% else %}
+                  <span class="px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[9px] font-mono uppercase">Pending Payment</span>
+                {% endif %}
+              </div>
+              <div class="text-[9px] font-mono text-zinc-500 mt-1">UTR: {{ inv.payout_utr or 'Pending' }}</div>
+            {% else %}
+              <span class="text-zinc-600 text-[10px] font-mono">No payout record</span>
+            {% endif %}
           </td>
         </tr>
         {% else %}
-        <tr><td colspan="6" class="p-12 text-center text-zinc-500 font-mono">No payment records found matching this filter.</td></tr>
+        <tr><td colspan="5" class="p-12 text-center text-zinc-500 font-mono">No payment records found matching this filter.</td></tr>
         {% endfor %}
       </tbody>
     </table>
@@ -120,4 +147,42 @@
   {% endif %}
 
 </main>
+
+<!-- PAYOUT RELEASE MODAL -->
+<div id="payoutModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" style="display: none;">
+  <div class="relative w-full max-w-sm p-6 bg-[#121215] border border-zinc-800 rounded-2xl shadow-2xl">
+    <div class="flex items-center justify-between pb-4 border-b border-zinc-800">
+      <h3 class="text-sm font-bold text-white flex items-center gap-2">
+        <i data-lucide="check-circle" class="w-4 h-4 text-emerald-400"></i>
+        <span>Release Specialist Payout</span>
+      </h3>
+      <button type="button" onclick="document.getElementById('payoutModal').style.display='none'" class="text-zinc-400 hover:text-white text-base cursor-pointer">×</button>
+    </div>
+
+    <form id="payoutForm" method="POST" action="" class="space-y-4 mt-4 text-xs">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <p class="text-zinc-400">You are about to mark a payout of <strong id="modalAmountDisplay" class="text-emerald-400 font-mono">₹0.00</strong> as settled.</p>
+
+      <div>
+        <label class="block text-zinc-400 font-semibold mb-1">Bank UTR / Transaction Reference (Optional)</label>
+        <input type="text" name="utr_number" maxlength="100" placeholder="e.g. UPI Ref 30582910..." class="w-full p-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-white focus:outline-none focus:border-indigo-500 font-mono uppercase">
+      </div>
+
+      <div class="flex gap-2 pt-2">
+        <button type="submit" class="flex-1 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-zinc-950 font-bold transition cursor-pointer">Confirm Settlement</button>
+        <button type="button" onclick="document.getElementById('payoutModal').style.display='none'" class="px-4 py-2.5 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-400 cursor-pointer">Cancel</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+  if (window.lucide) lucide.createIcons();
+
+  function openPayoutModal(invoiceId, amount) {
+    document.getElementById('payoutForm').action = "/admin/invoice/" + invoiceId + "/release-payout";
+    document.getElementById('modalAmountDisplay').innerText = "₹" + amount.toLocaleString('en-IN', {minimumFractionDigits: 2});
+    document.getElementById('payoutModal').style.display = 'flex';
+  }
+</script>
 {% endblock %}

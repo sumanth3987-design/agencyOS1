@@ -204,36 +204,88 @@
 
   <!-- Discussion Thread & Specifications Grid -->
   <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-    <!-- Team Notes & Chat -->
-    <div class="portal-card p-6">
-      <div class="flex items-center justify-between pb-3 border-b border-zinc-800 mb-4">
-        <h3 class="text-sm font-bold text-white flex items-center gap-2">
-          <i data-lucide="message-square" class="w-4 h-4 text-indigo-400"></i>
-          <span>Project Discussion</span>
-        </h3>
-        <span class="text-[10px] font-mono text-emerald-400">● Live Desk</span>
+    <!-- Team Notes & Chat (UPGRADED UI) -->
+    <div class="portal-card p-0 flex flex-col h-[500px]">
+      <div class="flex items-center justify-between p-5 border-b border-zinc-800 shrink-0">
+        <div>
+          <h3 class="text-sm font-bold text-white flex items-center gap-2">
+            <i data-lucide="message-square" class="w-4 h-4 text-indigo-400"></i>
+            <span>Project Discussion Workspace</span>
+          </h3>
+          <p class="text-[11px] text-zinc-400 mt-0.5">Communicate directly with your Agency Lead & Specialist.</p>
+        </div>
+        <span class="text-[10px] font-mono text-emerald-400 flex items-center gap-1.5 bg-emerald-500/10 px-2.5 py-1 rounded border border-emerald-500/20">
+          <span class="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+          Live
+        </span>
       </div>
 
-      <div class="space-y-3 max-h-56 overflow-y-auto pr-1 text-xs">
+      <!-- Message History Stream -->
+      <div id="chatStream" class="flex-1 overflow-y-auto p-5 space-y-4 text-xs scroll-smooth">
         {% for msg in messages %}
-        <div class="p-3 rounded-xl {% if msg.sender_id == current_user.id %}bg-indigo-950/20 border border-indigo-500/20 text-zinc-200 ml-4{% else %}bg-zinc-900 border border-zinc-800 text-zinc-300 mr-4{% endif %}">
-          <div class="flex justify-between items-center text-[10px] text-zinc-500 mb-1">
-            <span class="font-bold text-zinc-300">{{ msg.sender.name if msg.sender else 'Agency Lead' }}</span>
-            <span>{{ msg.created_at.strftime('%d %b, %I:%M %p') if msg.created_at else '' }}</span>
+          {% set is_me = (msg.sender_id == current_user.id) %}
+          {% set role = msg.sender.role.lower() if msg.sender else 'unknown' %}
+
+          <div class="flex gap-3 {% if is_me %}flex-row-reverse{% endif %}">
+            <!-- Avatar -->
+            <div class="h-8 w-8 rounded-full flex items-center justify-center font-bold text-[10px] shrink-0
+              {% if role == 'admin' %}bg-indigo-600 text-white
+              {% elif role == 'professional' %}bg-sky-600 text-white
+              {% else %}bg-emerald-600 text-white{% endif %}">
+              {{ msg.sender.name[:2]|upper if msg.sender and msg.sender.name else 'U' }}
+            </div>
+
+            <!-- Message Bubble -->
+            <div class="flex flex-col {% if is_me %}items-end{% else %}items-start{% endif %} max-w-[80%]">
+              <div class="flex items-center gap-2 mb-1 px-1">
+                <span class="font-bold text-zinc-300 text-[11px]">{{ msg.sender.name if msg.sender else 'User' }}</span>
+
+                <!-- Role Badge -->
+                {% if role == 'admin' %}
+                  <span class="px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 text-[9px] font-mono uppercase">Agency Lead</span>
+                {% elif role == 'professional' %}
+                  <span class="px-1.5 py-0.5 rounded bg-sky-500/20 text-sky-300 text-[9px] font-mono uppercase">Specialist</span>
+                {% else %}
+                  <span class="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 text-[9px] font-mono uppercase">Client</span>
+                {% endif %}
+
+                <span class="text-[9px] font-mono text-zinc-500">{{ msg.created_at.strftime('%I:%M %p') if msg.created_at else '' }}</span>
+              </div>
+
+              <div class="p-3.5 rounded-2xl {% if is_me %}bg-indigo-600 text-white rounded-tr-sm{% else %}bg-zinc-900 border border-zinc-800 text-zinc-200 rounded-tl-sm{% endif %} shadow-md">
+                <p class="leading-relaxed whitespace-pre-wrap">{{ msg.message }}</p>
+              </div>
+            </div>
           </div>
-          <p class="leading-relaxed">{{ msg.message }}</p>
-        </div>
         {% else %}
-        <p class="text-center py-6 text-xs text-zinc-600 font-mono">No notes yet. Post questions to your team below.</p>
+          <div class="h-full flex flex-col items-center justify-center text-center text-zinc-500 opacity-60">
+            <i data-lucide="messages-square" class="w-8 h-8 mb-3"></i>
+            <p class="font-mono text-[11px]">Workspace chat initialized.<br>Send a message to ping your agency team.</p>
+          </div>
         {% endfor %}
       </div>
 
-      <form method="POST" action="{{ url_for('customer.send_project_message', project_id=project.id) }}" class="mt-4 flex gap-2 text-xs">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <input type="text" name="message" required placeholder="Type a note to your team..." class="flex-1 p-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-white placeholder-zinc-500 focus:outline-none focus:border-indigo-500">
-        <button type="submit" class="px-4 py-2.5 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-bold transition">Send</button>
-      </form>
+      <!-- Post Message Form -->
+      <div class="p-4 border-t border-zinc-800 bg-zinc-900/50 shrink-0">
+        <form method="POST" action="{{ url_for('customer.send_project_message', project_id=project.id) }}" class="flex gap-2 text-xs relative">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="text" name="message" required placeholder="Type a note to your team..." autocomplete="off" class="flex-1 p-3.5 pl-4 pr-24 rounded-xl bg-zinc-950 border border-zinc-800 text-white placeholder-zinc-500 focus:outline-none focus:border-indigo-500 shadow-inner">
+          <button type="submit" class="absolute right-2 top-2 bottom-2 px-5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold transition flex items-center justify-center cursor-pointer">
+            <i data-lucide="send" class="w-3.5 h-3.5"></i>
+          </button>
+        </form>
+      </div>
     </div>
+
+    <!-- Add Auto-Scroll Script right below it -->
+    <script>
+      document.addEventListener("DOMContentLoaded", function() {
+        const chatStream = document.getElementById("chatStream");
+        if(chatStream) {
+          chatStream.scrollTop = chatStream.scrollHeight;
+        }
+      });
+    </script>
 
     <!-- Scope & Briefing Card -->
     <div class="portal-card p-6">
