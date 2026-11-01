@@ -122,6 +122,10 @@ def create_app(config_name="default", config_overrides=None):
     csrf.init_app(app)
     limiter.init_app(app)
 
+    # Auto-create any newly added database tables
+    with app.app_context():
+        db.create_all()
+
     configure_logging(app)
 
     # Health check endpoint for monitoring uptime
