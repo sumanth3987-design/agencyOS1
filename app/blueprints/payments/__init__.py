@@ -196,6 +196,15 @@ def verify_payment():
             ))
 
         db.session.commit()
+        # Trigger Automated WhatsApp Notification to Client
+        try:
+            from app.services.whatsapp import notify_payment_received
+            client_phone = getattr(project.customer.customer_profile, "phone", None) if project.customer else None
+            client_name = getattr(project.customer, "name", "Client") if project.customer else "Client"
+            if client_phone:
+                notify_payment_received(project.id, project.service, payment.amount, client_phone, client_name)
+        except Exception as e:
+            logger.warning(f"WhatsApp notification trigger skipped: {str(e)}")
         return jsonify({"success": True, "message": "Payment verified successfully.", "project_id": payment.project_id})
     except Exception as exc:
         db.session.rollback()

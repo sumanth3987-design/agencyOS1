@@ -226,6 +226,16 @@ def submit_deliverable(project_id):
     # Move project to Submitted status for Admin review gate
     project.status = "Submitted"
     db.session.commit()
+    # Trigger Automated WhatsApp Notification to Client
+    try:
+        from app.services.whatsapp import notify_deliverable_ready
+        client_phone = getattr(project.customer.customer_profile, "phone", None) if project.customer else None
+        client_name = getattr(project.customer, "name", "Client") if project.customer else "Client"
+        if client_phone:
+            preview = preview_url or live_url or "https://yourdomain.com"
+            notify_deliverable_ready(project.id, project.service, preview, client_phone, client_name)
+    except Exception as e:
+        flash(f"Deliverable submitted! (WhatsApp alert skipped: {str(e)})", "info")
 
     flash(f"Milestone deliverable #{next_num} submitted! Advanced to Quality Review Gate.", "success")
     return redirect(url_for("professional.professional_dashboard"))

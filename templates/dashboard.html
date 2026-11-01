@@ -38,6 +38,13 @@
           <a href="{{ url_for('customer.customer_profile') }}" class="px-4 py-1.5 rounded-full text-zinc-400 hover:text-white transition">Profile</a>
         </nav>
       </div>
+      
+      <nav class="hidden md:flex bg-zinc-900 border border-zinc-800 p-1 rounded-full text-xs font-semibold">
+        <a href="{{ url_for('customer.dashboard') }}" class="...">Workspace</a>
+        <a href="{{ url_for('customer.businesses') }}" class="...">Businesses</a>
+        <a href="{{ url_for('customer.invoices_list') }}" class="px-4 py-1.5 rounded-full text-zinc-400 hover:text-white transition">Invoices</a>
+        <a href="{{ url_for('customer.customer_profile') }}" class="...">Profile</a>
+      </nav>
 
       <!-- Quick Actions -->
       <div class="flex items-center gap-4">

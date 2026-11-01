@@ -233,20 +233,18 @@ def view_invoice(project_id):
 # CLIENT INVOICES / BILLING LEDGER
 # =========================================================
 
+# In app/blueprints/customer/__init__.py
+
 @customer_bp.route("/invoices")
 @login_required
 def invoices_list():
     user_role = getattr(current_user, "role", "").lower()
-    if user_role not in ("customer", "client", "admin"):
-        return redirect(url_for("customer.dashboard"))
-
     if user_role == "admin":
         invoices = Invoice.query.order_by(Invoice.id.desc()).all()
     else:
         invoices = Invoice.query.filter_by(customer_id=current_user.id).order_by(Invoice.id.desc()).all()
 
-    return render_template("admin_transactions.html" if user_role == "admin" else "dashboard.html", invoices=invoices)
-
+    return render_template("client_invoices.html", invoices=invoices)
 
 # =========================================================
 # DELIVERABLE APPROVAL & REVISION
@@ -426,6 +424,48 @@ def start_project(service_slug="website-development"):
         db.session.commit()
 
         flash("Milestone project created! Please authorize advance deposit.", "success")
-        return redirect(url_for("payments.payment_page", project_id=project.id))
+        return redirect(url_for("customer.project_contract", project_id=project.id))
 
     return render_template("start_project.html", service_slug=service_slug, businesses=businesses)
+
+# In app/blueprints/customer/__init__.py
+
+@customer_bp.route("/project/<int:project_id>/review", methods=["POST"])
+@login_required
+def submit_project_review(project_id):
+    project = Project.query.get_or_404(project_id)
+    if project.customer_id != current_user.id and current_user.role != "admin":
+        flash("Unauthorized action.", "danger")
+        return redirect(url_for("customer.dashboard"))
+
+    rating = request.form.get("rating", 5, type=int)
+    tags = ", ".join(request.form.getlist("tags"))
+    feedback = request.form.get("feedback", "").strip()
+
+    if not feedback:
+        flash("Please provide a short review or feedback.", "warning")
+        return redirect(url_for("customer.project_details", project_id=project.id))
+
+    try:
+        from app.models import Review
+        existing_review = Review.query.filter_by(project_id=project.id).first()
+        if existing_review:
+            existing_review.rating = rating
+            existing_review.tags = tags
+            existing_review.feedback = feedback
+        else:
+            db.session.add(Review(
+                project_id=project.id,
+                customer_id=current_user.id,
+                rating=rating,
+                tags=tags,
+                feedback=feedback,
+                is_public=True
+            ))
+        db.session.commit()
+        flash("Thank you for your review! Your feedback helps us maintain top delivery standards.", "success")
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Could not submit review: {str(e)}", "danger")
+
+    return redirect(url_for("customer.project_details", project_id=project.id))

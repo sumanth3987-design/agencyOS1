@@ -1015,7 +1015,7 @@ def calculate_customer_profile_completion(profile):
 def get_business_for_customer(business_id, customer_id):
 
     if not business_id:
-        return None
+        return None 
 
     try:
         business_id = int(business_id)
@@ -1126,3 +1126,18 @@ class Invoice(db.Model):
 
     project = db.relationship("Project", backref=db.backref("invoice_record", uselist=False))
     customer = db.relationship("User", backref="invoices")
+# Add this class to app/models/__init__.py:
+
+class Review(db.Model):
+    __tablename__ = 'reviews'
+    id = db.Column(db.Integer, primary_key=True)
+    project_id = db.Column(db.Integer, db.ForeignKey('projects.id', ondelete='CASCADE'), nullable=False)
+    customer_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
+    rating = db.Column(db.Integer, default=5, nullable=False)
+    tags = db.Column(db.String(255), nullable=True)  # e.g. "Shipped on Time, High ROI"
+    feedback = db.Column(db.Text, nullable=False)
+    is_public = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=get_ist_now)
+
+    project = db.relationship('Project', backref=db.backref('review', uselist=False))
+    customer = db.relationship('User', backref='reviews')

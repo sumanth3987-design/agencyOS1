@@ -1,0 +1,132 @@
+<!-- Save this directly into: templates/contract.html -->
+<!DOCTYPE html>
+<html lang="en" class="dark scroll-smooth">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Statement of Work & Agreement — Project #{{ project.id }} — AgencyOS</title>
+  
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  
+  <style>
+    body { background-color: #09090b; font-family: 'Plus Jakarta Sans', sans-serif; color: #f4f4f5; }
+    .contract-paper { background: #121215; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 20px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7); }
+  </style>
+</head>
+<body class="bg-zinc-950 text-zinc-100 min-h-screen p-6 sm:p-12 max-w-4xl mx-auto selection:bg-indigo-500 selection:text-white space-y-6">
+
+  <!-- Header Return -->
+  <div class="flex items-center justify-between pb-6 border-b border-zinc-800">
+    <a href="{{ url_for('customer.dashboard') }}" class="text-xs font-mono text-indigo-400 hover:underline flex items-center gap-1.5">
+      <i data-lucide="arrow-left" class="w-3.5 h-3.5"></i>
+      <span>Save as Draft & Return</span>
+    </a>
+
+    <span class="px-3 py-1 rounded-full text-xs font-mono bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 font-bold">
+      Binding Scope Contract
+    </span>
+  </div>
+
+  <!-- Contract Container -->
+  <div class="contract-paper p-8 sm:p-12 relative overflow-hidden space-y-8">
+    <div class="absolute inset-x-0 -top-px h-px bg-gradient-to-r from-transparent via-indigo-500/60 to-transparent"></div>
+
+    <!-- Contract Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-6 border-b border-zinc-800 gap-4">
+      <div>
+        <span class="text-xs font-mono uppercase text-indigo-400 font-bold">Standard Client Agreement</span>
+        <h1 class="text-2xl sm:text-3xl font-extrabold text-white mt-1">Statement of Work (SOW)</h1>
+        <p class="text-xs text-zinc-400 mt-1">Project Ref: <strong class="text-white font-mono">#{{ project.id }}</strong> • Service: <strong class="text-white">{{ project.service }}</strong></p>
+      </div>
+
+      <div class="text-right text-xs">
+        <strong class="text-indigo-400 font-bold block text-sm">AgencyOS Digital Solutions</strong>
+        <span class="text-zinc-500 font-mono text-[11px]">SAC Code: 998311</span>
+      </div>
+    </div>
+
+    <!-- Parties Involved -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-6 p-4 rounded-xl bg-zinc-950 border border-zinc-800 text-xs">
+      <div>
+        <span class="text-zinc-500 font-mono uppercase text-[10px] font-bold block mb-1">Service Provider:</span>
+        <strong class="text-white block">AgencyOS Digital Solutions</strong>
+        <p class="text-zinc-400">Bangalore & Hyderabad, India</p>
+      </div>
+      <div>
+        <span class="text-zinc-500 font-mono uppercase text-[10px] font-bold block mb-1">Client (Recipient):</span>
+        <strong class="text-white block">{{ customer.name if customer else 'Client Enterprise' }}</strong>
+        <p class="text-zinc-400">{{ business.name if business else 'Direct Business Account' }}</p>
+        <p class="text-zinc-500 font-mono">{{ customer.email if customer else '' }}</p>
+      </div>
+    </div>
+
+    <!-- SOW Brief & Scope Details -->
+    <div class="space-y-4 text-xs leading-relaxed text-zinc-300">
+      <h3 class="text-sm font-bold text-white uppercase tracking-wider font-mono">1. Scope of Deliverables</h3>
+      <div class="p-4 rounded-xl bg-zinc-950 border border-zinc-800 font-mono text-zinc-300">
+        {{ project.requirements or 'Website development, responsive mobile polish, and search optimization as per configured milestone package.' }}
+      </div>
+
+      <h3 class="text-sm font-bold text-white uppercase tracking-wider font-mono pt-4">2. Three-Milestone Execution Schedule</h3>
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div class="p-3.5 rounded-xl bg-zinc-950 border border-zinc-800">
+          <strong class="text-white block text-xs">Milestone 1 (50% Advance)</strong>
+          <p class="text-zinc-400 text-[11px] mt-1">Kickoff, wireframes & architecture. Work commences upon settlement.</p>
+        </div>
+        <div class="p-3.5 rounded-xl bg-zinc-950 border border-zinc-800">
+          <strong class="text-white block text-xs">Milestone 2 (25% UI Sign-Off)</strong>
+          <p class="text-zinc-400 text-[11px] mt-1">Interactive prototype & responsive UI code review gate.</p>
+        </div>
+        <div class="p-3.5 rounded-xl bg-zinc-950 border border-zinc-800">
+          <strong class="text-white block text-xs">Milestone 3 (25% Final)</strong>
+          <p class="text-zinc-400 text-[11px] mt-1">Live production deployment, domain DNS setup & IP handover.</p>
+        </div>
+      </div>
+
+      <h3 class="text-sm font-bold text-white uppercase tracking-wider font-mono pt-4">3. Statutory Terms & Guarantees</h3>
+      <ul class="space-y-2 list-disc list-inside text-zinc-400 text-[11px]">
+        <li><strong class="text-zinc-200">2-Revision Cap:</strong> Each milestone deliverable includes up to two (2) complimentary rounds of revisions. Further revisions require a written scope add-on.</li>
+        <li><strong class="text-zinc-200">Intellectual Property:</strong> 100% of source code, design assets, and domains transfer to the Client upon final milestone payment.</li>
+        <li><strong class="text-zinc-200">Electronic Validity:</strong> This agreement is digitally executed under Section 10A of the Information Technology Act, 2000 (India).</li>
+      </ul>
+    </div>
+
+    <!-- Digital E-Signature Form -->
+    <form method="POST" action="{{ url_for('customer.project_contract', project_id=project.id) }}" class="p-6 rounded-2xl bg-zinc-950 border border-indigo-500/30 space-y-4 text-xs pt-6">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+      <div class="flex items-center gap-2 mb-2">
+        <i data-lucide="check-square" class="w-4 h-4 text-indigo-400"></i>
+        <h4 class="text-sm font-bold text-white">Electronic Signature Authorization</h4>
+      </div>
+
+      <label class="flex items-start gap-3 text-zinc-300 cursor-pointer">
+        <input type="checkbox" name="agreed_terms" required class="mt-0.5 rounded border-zinc-700 text-indigo-600 focus:ring-0">
+        <span>I, the authorized representative of <strong class="text-white">{{ business.name if business else 'the Client' }}</strong>, have read and agree to the Statement of Work, 50/25/25 milestone terms, and 2-revision limit.</span>
+      </label>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+        <div>
+          <label class="block text-zinc-400 font-semibold mb-1">Authorized Signer Full Legal Name *</label>
+          <input type="text" name="signer_name" value="{{ customer.name if customer else '' }}" required placeholder="Type your full legal name" class="w-full px-3.5 py-2.5 rounded-xl bg-zinc-900 border border-zinc-800 text-white font-semibold focus:outline-none focus:border-indigo-500">
+        </div>
+
+        <div>
+          <label class="block text-zinc-400 font-semibold mb-1">Corporate Title / Role *</label>
+          <input type="text" name="signer_title" required placeholder="e.g. Founder, CEO, Director" value="Director / Founder" class="w-full px-3.5 py-2.5 rounded-xl bg-zinc-900 border border-zinc-800 text-white font-semibold focus:outline-none focus:border-indigo-500">
+        </div>
+      </div>
+
+      <button type="submit" class="w-full py-3.5 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-bold text-xs shadow-xl transition flex items-center justify-center gap-2 cursor-pointer mt-4">
+        <i data-lucide="pen-tool" class="w-4 h-4 text-indigo-600"></i>
+        <span>Digitally Sign SOW & Proceed to Deposit Payment →</span>
+      </button>
+    </form>
+  </div>
+
+  <script>if (window.lucide) lucide.createIcons();</script>
+</body>
+</html>

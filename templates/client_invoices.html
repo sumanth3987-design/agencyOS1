@@ -1,0 +1,104 @@
+<!-- Save this directly into: templates/client_invoices.html -->
+<!DOCTYPE html>
+<html lang="en" class="dark scroll-smooth">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Billing Ledger & GST Invoices — AgencyOS</title>
+  
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  
+  <style>
+    body { background-color: #09090b; font-family: 'Plus Jakarta Sans', sans-serif; color: #f4f4f5; }
+    .portal-card { background: #121215; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 20px; }
+  </style>
+</head>
+<body class="bg-zinc-950 text-zinc-100 min-h-screen p-6 sm:p-10 max-w-5xl mx-auto selection:bg-indigo-500 selection:text-white space-y-6">
+
+  <!-- Header Return -->
+  <div class="flex items-center justify-between pb-6 border-b border-zinc-800">
+    <a href="{{ url_for('customer.dashboard') }}" class="text-xs font-mono text-indigo-400 hover:underline flex items-center gap-1.5">
+      <i data-lucide="arrow-left" class="w-3.5 h-3.5"></i>
+      <span>Return to Workspace</span>
+    </a>
+
+    <span class="px-3 py-1 rounded-full text-xs font-mono bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-bold">
+      SAC 998311 Compliant
+    </span>
+  </div>
+
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div>
+      <h1 class="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">Billing Ledger & Invoices</h1>
+      <p class="text-xs text-zinc-400 mt-1">Official tax invoices (18% GST) and payment receipts for your company accounting records.</p>
+    </div>
+
+    <div class="p-3 rounded-xl bg-zinc-900 border border-zinc-800 text-xs text-right">
+      <span class="text-zinc-500 text-[10px] font-mono block">Registered GSTIN:</span>
+      <span class="font-mono text-white font-bold">29AAAAA0000A1Z5</span>
+    </div>
+  </div>
+
+  <!-- Invoices Table Card -->
+  <div class="portal-card overflow-hidden shadow-2xl">
+    <table class="w-full text-left text-xs">
+      <thead class="bg-[#18181d] text-zinc-400 font-mono uppercase tracking-wider border-b border-zinc-800">
+        <tr>
+          <th class="p-4">Invoice #</th>
+          <th class="p-4">Project / Milestone</th>
+          <th class="p-4">Amount (INR)</th>
+          <th class="p-4">Status</th>
+          <th class="p-4">Date</th>
+          <th class="p-4 text-right">Action</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-zinc-800/60 text-zinc-300">
+        {% for inv in invoices %}
+        <tr class="hover:bg-white/[0.02] transition">
+          <td class="p-4 font-mono font-bold text-indigo-400">
+            {{ inv.invoice_number if inv.invoice_number else ('INV-2026-' ~ inv.id) }}
+          </td>
+          <td class="p-4">
+            <span class="font-bold text-white block">{{ inv.project.service if inv.project else 'Milestone Sprint' }}</span>
+            <span class="text-zinc-500 text-[11px] font-mono">{{ inv.project.package if inv.project else 'Custom' }}</span>
+          </td>
+          <td class="p-4 font-mono font-bold text-white">
+            ₹{{ inv.gross_amount or inv.amount or 48000 }}
+          </td>
+          <td class="p-4">
+            <span class="px-2.5 py-0.5 rounded text-[10px] font-mono border {% if inv.status.lower() == 'paid' %}bg-emerald-500/10 text-emerald-400 border-emerald-500/20{% else %}bg-amber-500/10 text-amber-400 border-amber-500/20{% endif %}">
+              {{ inv.status }}
+            </span>
+          </td>
+          <td class="p-4 font-mono text-zinc-500 text-[11px]">
+            {{ inv.paid_at.strftime('%d %b %Y') if inv.paid_at else (inv.issued_at.strftime('%d %b %Y') if inv.issued_at else '—') }}
+          </td>
+          <td class="p-4 text-right">
+            {% if inv.project_id %}
+            <a href="{{ url_for('customer.view_invoice', project_id=inv.project_id) }}" target="_blank" class="px-3.5 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-white font-bold text-[11px] transition inline-flex items-center gap-1.5 shadow">
+              <i data-lucide="printer" class="w-3.5 h-3.5 text-indigo-400"></i>
+              <span>View / PDF</span>
+            </a>
+            {% else %}
+            <span class="text-zinc-600 font-mono text-[11px]">Direct</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="6" class="p-12 text-center text-zinc-500 font-mono text-xs">
+            <i data-lucide="receipt" class="w-8 h-8 text-zinc-600 mx-auto mb-3"></i>
+            <p>No invoices on file yet. Invoices generate automatically upon milestone commissioning.</p>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <script>if (window.lucide) lucide.createIcons();</script>
+</body>
+</html>
