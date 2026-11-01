@@ -1,3 +1,4 @@
+<!-- Save this directly into: templates/admin_transactions.html -->
 {% extends "admin_base.html" %}
 {% block title %}Payments & Transactions Ledger — AgencyOS{% endblock %}
 {% block content %}
@@ -54,10 +55,9 @@
         Pending / Checkout
       </a>
     </div>
-    <span class="text-zinc-500 font-mono text-[11px]">
-      Showing {{ payments|length }} records (Deduplicated)
-    </span>
+    <span class="text-zinc-500 font-mono text-[11px]">Showing {{ payments|length }} records</span>
   </div>
+
   <!-- Transactions Table -->
   <div class="rounded-2xl bg-[#121215] border border-zinc-800 overflow-hidden shadow-xl">
     <table class="w-full text-left text-xs">
@@ -91,29 +91,26 @@
               {{ p.status }}
             </span>
           </td>
+
           <!-- Specialist Payout Status -->
           <td class="p-4">
-            {% set inv = p.project.invoice_record if p.project else None %}
-            {% set assigned_application = (p.project.applications|selectattr('status', 'equalto', 'Assigned')|first) if p.project else None %}
+            {% set inv = p.project.invoices[0] if p.project and p.project.invoices else None %}
             {% if inv and inv.talent_payout %}
               <div class="flex items-center gap-2">
                 <div class="font-mono font-bold text-zinc-200">₹{{ "{:,.2f}".format(inv.talent_payout) }}</div>
-
+                
                 {% if inv.payout_status == 'Settled' %}
                   <span class="px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[9px] font-mono uppercase">Settled</span>
-                {% elif not assigned_application %}
-                  <span class="px-2 py-0.5 rounded bg-zinc-800 text-zinc-400 text-[9px] font-mono uppercase">No Specialist Assigned</span>
-                {% elif inv.status.lower() == 'paid' %}
-                  <button type="button" onclick="openPayoutModal({{ inv.id }}, {{ inv.talent_payout }})" class="px-2 py-0.5 rounded bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-[9px] font-mono uppercase transition cursor-pointer">
+                {% else %}
+                  <!-- FIXED ONCLICK ATTRIBUTE HERE -->
+                  <button type="button" onclick="openPayoutModal('{{ inv.id }}', '{{ inv.talent_payout }}')" class="px-2 py-0.5 rounded bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-[9px] font-mono uppercase transition cursor-pointer">
                     Release
                   </button>
-                {% else %}
-                  <span class="px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[9px] font-mono uppercase">Pending Payment</span>
                 {% endif %}
               </div>
               <div class="text-[9px] font-mono text-zinc-500 mt-1">UTR: {{ inv.payout_utr or 'Pending' }}</div>
             {% else %}
-              <span class="text-zinc-600 text-[10px] font-mono">No payout record</span>
+              <span class="text-zinc-600 text-[10px] font-mono">No assignment</span>
             {% endif %}
           </td>
         </tr>
@@ -128,7 +125,7 @@
   {% if pagination and pagination.pages > 1 %}
   <div class="flex items-center justify-between p-4 rounded-2xl bg-[#121215] border border-zinc-800 text-xs text-zinc-400">
     <div>
-      Showing page <span class="font-bold text-white">{{ pagination.page }}</span> of <span class="font-bold text-white">{{ pagination.pages }}</span> (Total {{ pagination.total }} entries)
+      Showing page <span class="font-bold text-white">{{ pagination.page }}</span> of <span class="font-bold text-white">{{ pagination.pages }}</span>
     </div>
     <div class="flex items-center gap-2">
       {% if pagination.has_prev %}
@@ -145,7 +142,6 @@
     </div>
   </div>
   {% endif %}
-
 </main>
 
 <!-- PAYOUT RELEASE MODAL -->
@@ -162,10 +158,10 @@
     <form id="payoutForm" method="POST" action="" class="space-y-4 mt-4 text-xs">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <p class="text-zinc-400">You are about to mark a payout of <strong id="modalAmountDisplay" class="text-emerald-400 font-mono">₹0.00</strong> as settled.</p>
-
+      
       <div>
         <label class="block text-zinc-400 font-semibold mb-1">Bank UTR / Transaction Reference (Optional)</label>
-        <input type="text" name="utr_number" maxlength="100" placeholder="e.g. UPI Ref 30582910..." class="w-full p-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-white focus:outline-none focus:border-indigo-500 font-mono uppercase">
+        <input type="text" name="utr_number" placeholder="e.g. UPI Ref 30582910..." class="w-full p-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-white focus:outline-none focus:border-indigo-500 font-mono uppercase">
       </div>
 
       <div class="flex gap-2 pt-2">
@@ -176,10 +172,14 @@
   </div>
 </div>
 
+<!-- FIXED SCRIPT HERE -->
 <script>
   if (window.lucide) lucide.createIcons();
 
-  function openPayoutModal(invoiceId, amount) {
+  function openPayoutModal(invoiceId, amountStr) {
+    // Safely parse the amount string back into a number to prevent JS errors
+    var amount = parseFloat(amountStr) || 0;
+    
     document.getElementById('payoutForm').action = "/admin/invoice/" + invoiceId + "/release-payout";
     document.getElementById('modalAmountDisplay').innerText = "₹" + amount.toLocaleString('en-IN', {minimumFractionDigits: 2});
     document.getElementById('payoutModal').style.display = 'flex';
