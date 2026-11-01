@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Specialist Task Workspace — AgencyOS</title>
+  <title>Specialist Task Workspace — {{ agency_settings.agency_name }}</title>
   
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -15,8 +15,9 @@
     .pro-card { background: #121215; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 18px; }
   </style>
 </head>
-<body class="bg-zinc-950 text-zinc-100 min-h-screen p-6 sm:p-10 max-w-6xl mx-auto selection:bg-indigo-500 selection:text-white">
+<body class="bg-zinc-950 text-zinc-100 min-h-screen p-6 sm:p-10 max-w-6xl mx-auto selection:bg-indigo-500 selection:text-white" style="--agency-primary: {{ agency_settings.primary_color }}; --agency-on-primary: {{ agency_settings.primary_contrast }};">
 
+  {% include "includes/agency_brand.html" %}
   <!-- Header -->
   <header class="flex flex-col sm:flex-row sm:items-center justify-between pb-6 border-b border-zinc-800/80 gap-4">
     <div>
@@ -96,7 +97,7 @@
         </div>
 
         <div class="flex items-center gap-3">
-          <a href="/professional/project/{{ project.id }}/workspace" class="px-4 py-2 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-bold text-xs transition flex items-center gap-1.5 shadow">
+          <a href="/professional/project/{{ project.id }}/workspace" class="px-4 py-2 rounded-xl font-bold text-xs transition flex items-center gap-1.5 shadow {% if current_user.role|lower == 'admin' %}bg-white hover:bg-zinc-200 text-zinc-950{% else %}hover:brightness-110{% endif %}" {% if current_user.role|lower != 'admin' %}style="background-color: var(--agency-primary); color: var(--agency-on-primary)"{% endif %}>
             <span>Open Delivery Workspace</span>
             <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
           </a>

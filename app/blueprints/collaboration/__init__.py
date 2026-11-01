@@ -1,6 +1,7 @@
 import os
 import uuid
 from datetime import datetime
+from urllib.parse import urlsplit
 from werkzeug.utils import secure_filename
 from flask import Blueprint, request, jsonify, render_template, flash, redirect, url_for
 from flask_login import login_required, current_user
@@ -47,7 +48,11 @@ def get_project_messages(project_id):
         ]
     })
 
-@collaboration_bp.route("/api/project/<int:project_id>/messages", methods=["POST"])
+@collaboration_bp.route(
+    "/api/project/<int:project_id>/messages",
+    methods=["POST"],
+    endpoint="api_send_project_message",
+)
 @login_required
 def send_project_message(project_id):
     project = Project.query.get_or_404(project_id)
@@ -98,16 +103,40 @@ def send_project_message(project_id):
 @collaboration_bp.route("/api/notifications", methods=["GET"])
 @login_required
 def get_notifications():
-    notifs = Notification.query.filter_by(user_id=current_user.id, is_read=False).order_by(Notification.created_at.desc()).limit(10).all()
+    notifs = Notification.query.filter_by(user_id=current_user.id).order_by(
+        Notification.created_at.desc()
+    ).limit(10).all()
+    unread_count = Notification.query.filter_by(
+        user_id=current_user.id, is_read=False
+    ).count()
+
+    def safe_link(value):
+        if not value:
+            return url_for("customer.dashboard")
+        candidate = value.strip()
+        parsed = urlsplit(candidate)
+        if (
+            parsed.scheme
+            or parsed.netloc
+            or not parsed.path.startswith("/")
+            or parsed.path.startswith("//")
+            or "\\" in candidate
+            or any(ord(char) < 32 for char in candidate)
+        ):
+            return url_for("customer.dashboard")
+        return candidate
+
     return jsonify({
         "success": True,
-        "count": len(notifs),
+        "count": unread_count,
+        "unread_count": unread_count,
         "notifications": [
             {
                 "id": n.id,
                 "title": n.title,
                 "message": n.message,
-                "link": n.link or "#",
+                "link": safe_link(n.link),
+                "is_read": n.is_read,
                 "created_at": n.created_at.strftime("%d %b %H:%M")
             }
             for n in notifs
@@ -118,10 +147,29 @@ def get_notifications():
 @login_required
 def mark_notification_read(notification_id):
     notif = Notification.query.filter_by(id=notification_id, user_id=current_user.id).first()
-    if notif:
+    if not notif:
+        return jsonify({"success": False, "error": "Notification not found."}), 404
+    try:
         notif.is_read = True
         db.session.commit()
+    except Exception:
+        db.session.rollback()
+        return jsonify({"success": False, "error": "Could not update notification."}), 500
     return jsonify({"success": True})
+
+
+@collaboration_bp.route("/api/notifications/clear-all", methods=["POST"])
+@login_required
+def clear_all_notifications():
+    try:
+        updated_count = Notification.query.filter_by(
+            user_id=current_user.id, is_read=False
+        ).update({Notification.is_read: True}, synchronize_session=False)
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        return jsonify({"success": False, "error": "Could not clear notifications."}), 500
+    return jsonify({"success": True, "updated_count": updated_count, "count": 0})
 
 # =========================================================
 # 3. DIRECT FILE UPLOADS (Assets, ZIPs, Design Files)
@@ -162,7 +210,7 @@ def upload_file():
 # 4. AUTOMATED PDF/HTML INVOICING & PROFIT MARGINS
 # =========================================================
 
-@collaboration_bp.route("/invoice/<int:project_id>")
+@collaboration_bp.route("/invoice/<int:project_id>", endpoint="collaboration_view_invoice")
 @login_required
 def view_invoice(project_id):
     project = Project.query.get_or_404(project_id)

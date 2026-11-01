@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Specialist Executive Workspace — AgencyOS</title>
+  <title>Specialist Executive Workspace — {{ agency_settings.agency_name }}</title>
   
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -18,7 +18,8 @@
     .opportunity-card:hover { border-color: rgba(99, 102, 241, 0.5); transform: translateY(-2px); }
   </style>
 </head>
-<body class="bg-zinc-950 text-zinc-100 min-h-screen p-6 sm:p-10 max-w-6xl mx-auto selection:bg-indigo-500 selection:text-white space-y-8">
+<body class="bg-zinc-950 text-zinc-100 min-h-screen p-6 sm:p-10 max-w-6xl mx-auto selection:bg-indigo-500 selection:text-white space-y-8" style="--agency-primary: {{ agency_settings.primary_color }}; --agency-on-primary: {{ agency_settings.primary_contrast }};">
+  {% include "includes/agency_brand.html" %}
 
   <!-- ==================== HEADER BAR ==================== -->
   <header class="flex flex-col sm:flex-row sm:items-center justify-between pb-6 border-b border-zinc-800/80 gap-6">
@@ -186,7 +187,7 @@
           {% else %}
             <form method="POST" action="/professional/project/{{ prj.id }}/apply">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-              <button type="submit" class="px-4 py-2 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-bold text-xs shadow-lg transition flex items-center gap-1.5 cursor-pointer">
+              <button type="submit" class="px-4 py-2 rounded-xl font-bold text-xs shadow-lg transition flex items-center gap-1.5 cursor-pointer hover:brightness-110" style="background-color: var(--agency-primary); color: var(--agency-on-primary)">
                 <span>Claim Sprint ⚡</span>
               </button>
             </form>
@@ -209,7 +210,7 @@
     <div class="flex items-center justify-between pb-3 border-b border-zinc-800">
       <div>
         <h2 class="text-lg font-bold text-white tracking-tight">My Active Delivery Workspaces</h2>
-        <p class="text-xs text-zinc-400 mt-0.5">Projects assigned to you by AgencyOS. Submit deliverable staging URLs or review client feedback.</p>
+        <p class="text-xs text-zinc-400 mt-0.5">Projects assigned to you by {{ agency_settings.agency_name }}. Submit deliverable staging URLs or review client feedback.</p>
       </div>
       <span class="text-xs font-mono text-zinc-400">{{ assigned_projects|length }} Assigned</span>
     </div>
@@ -233,7 +234,7 @@
           </div>
 
           <div class="flex items-center gap-3">
-            <a href="/professional/project/{{ project.id }}/workspace" class="px-4 py-2 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-bold text-xs transition flex items-center gap-1.5 shadow cursor-pointer">
+            <a href="/professional/project/{{ project.id }}/workspace" class="px-4 py-2 rounded-xl font-bold text-xs transition flex items-center gap-1.5 shadow cursor-pointer hover:brightness-110" style="background-color: var(--agency-primary); color: var(--agency-on-primary)">
               <span>Open Delivery Workspace</span>
               <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
             </a>
@@ -249,7 +250,7 @@
   </div>
 
   <footer class="pt-6 border-t border-zinc-900 text-center text-xs font-mono text-zinc-600">
-    AgencyOS Specialist Partner Network • Instant IMPS/UPI Payout Settlement
+    {{ agency_settings.agency_name }} Specialist Partner Network • Instant IMPS/UPI Payout Settlement
   </footer>
 
   <script>if (window.lucide) lucide.createIcons();</script>

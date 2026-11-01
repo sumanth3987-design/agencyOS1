@@ -2,7 +2,7 @@
 <html lang="en" class="dark scroll-smooth">
 <head>
   <meta charset="UTF-8">
-  <title>Account Profile & GST Billing Context — AgencyOS</title>
+  <title>Account Profile & GST Billing Context — {{ agency_settings.agency_name }}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <script src="https://cdn.tailwindcss.com"></script>
@@ -12,21 +12,22 @@
     .form-card { background: #121215; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 18px; }
   </style>
 </head>
-<body class="bg-zinc-950 text-zinc-100 min-h-screen p-6 sm:p-12 max-w-4xl mx-auto selection:bg-indigo-500 selection:text-white">
+<body class="bg-zinc-950 text-zinc-100 min-h-screen p-6 sm:p-12 max-w-4xl mx-auto selection:bg-[var(--agency-primary)] selection:text-[var(--agency-on-primary)]" style="--agency-primary: {{ agency_settings.primary_color }}; --agency-on-primary: {{ agency_settings.primary_contrast }};">
 
+  {% include "includes/agency_brand.html" %}
   <!-- Header -->
-  <a href="{{ url_for('customer.dashboard') }}" class="text-xs font-mono text-indigo-400 hover:underline flex items-center gap-1.5">
+  <a href="{{ url_for('customer.dashboard') }}" class="text-xs font-mono text-[var(--agency-primary)] hover:underline flex items-center gap-1.5">
     <i data-lucide="arrow-left" class="w-3.5 h-3.5"></i>
     <span>Return to Workspace</span>
   </a>
 
   <div class="mt-6 pb-6 border-b border-zinc-800 flex items-center justify-between">
     <div>
-      <span class="text-xs font-mono uppercase text-indigo-400 font-bold">Client Identity & Tax Context</span>
+      <span class="text-xs font-mono uppercase text-[var(--agency-primary)] font-bold">Client Identity & Tax Context</span>
       <h1 class="text-3xl font-extrabold text-white mt-1">Company & Billing Profile</h1>
       <p class="text-xs text-zinc-400 mt-1">Maintain legal company information for GST tax invoices (SAC 998311) and WhatsApp status alerts.</p>
     </div>
-    <span class="px-3 py-1 rounded-full text-xs font-mono bg-indigo-500/10 border border-indigo-500/20 text-indigo-400">
+    <span class="px-3 py-1 rounded-full text-xs font-mono" style="background-color: color-mix(in srgb, var(--agency-primary) 10%, transparent); border: 1px solid color-mix(in srgb, var(--agency-primary) 20%, transparent); color: var(--agency-primary);">
       100% Tax Compliant
     </span>
   </div>
@@ -45,11 +46,11 @@
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label class="block text-zinc-400 font-semibold mb-1.5">WhatsApp Number (For Milestone Updates) *</label>
-          <input type="tel" name="phone" value="{{ profile.phone or '' }}" placeholder="+91 98765 43210" class="w-full px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-white font-mono focus:outline-none focus:border-indigo-500">
+          <input type="tel" name="phone" value="{{ profile.phone or '' }}" placeholder="+91 98765 43210" class="w-full px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-white font-mono focus:outline-none focus:border-[var(--agency-primary)]">
         </div>
         <div>
           <label class="block text-zinc-400 font-semibold mb-1.5">City & State (State of Supply) *</label>
-          <input type="text" name="location" value="{{ profile.location or '' }}" placeholder="e.g. Bangalore, Karnataka (29)" class="w-full px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-white focus:outline-none focus:border-indigo-500">
+          <input type="text" name="location" value="{{ profile.location or '' }}" placeholder="e.g. Bangalore, Karnataka (29)" class="w-full px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-white focus:outline-none focus:border-[var(--agency-primary)]">
         </div>
       </div>
     </div>
@@ -57,32 +58,32 @@
     <!-- 2. Legal Business Identity for GST Invoicing -->
     <div class="form-card p-6 space-y-4">
       <h3 class="text-sm font-bold text-white uppercase tracking-wider font-mono flex items-center gap-2">
-        <span class="h-2 w-2 rounded-full bg-indigo-500"></span>
+        <span class="h-2 w-2 rounded-full bg-[var(--agency-primary)]"></span>
         <span>2. Legal Business Identity & GST Context</span>
       </h3>
       
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label class="block text-zinc-400 font-semibold mb-1.5">Registered Legal Entity Name</label>
-          <input type="text" name="business_name" value="{{ profile.business_name or '' }}" placeholder="Legal Business Name for Tax Invoices" class="w-full px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-white focus:outline-none focus:border-indigo-500">
+          <input type="text" name="business_name" value="{{ profile.business_name or '' }}" placeholder="Legal Business Name for Tax Invoices" class="w-full px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-white focus:outline-none focus:border-[var(--agency-primary)]">
         </div>
         <div>
           <label class="block text-zinc-400 font-semibold mb-1.5">Industry / Domain</label>
-          <input type="text" name="business_type" value="{{ profile.business_type or '' }}" placeholder="Retail, SaaS, Hospitality" class="w-full px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-white focus:outline-none focus:border-indigo-500">
+          <input type="text" name="business_type" value="{{ profile.business_type or '' }}" placeholder="Retail, SaaS, Hospitality" class="w-full px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-white focus:outline-none focus:border-[var(--agency-primary)]">
         </div>
         <div>
           <label class="block text-zinc-400 font-semibold mb-1.5">Official Website URL</label>
-          <input type="url" name="website" value="{{ profile.website or '' }}" placeholder="https://domain.com" class="w-full px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-white focus:outline-none focus:border-indigo-500">
+          <input type="url" name="website" value="{{ profile.website or '' }}" placeholder="https://domain.com" class="w-full px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-white focus:outline-none focus:border-[var(--agency-primary)]">
         </div>
         <div>
           <label class="block text-zinc-400 font-semibold mb-1.5">Social Profiles (Instagram / LinkedIn)</label>
-          <input type="text" name="social_links" value="{{ profile.social_links or '' }}" placeholder="instagram.com/brand" class="w-full px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-white focus:outline-none focus:border-indigo-500">
+          <input type="text" name="social_links" value="{{ profile.social_links or '' }}" placeholder="instagram.com/brand" class="w-full px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-white focus:outline-none focus:border-[var(--agency-primary)]">
         </div>
       </div>
 
       <div>
         <label class="block text-zinc-400 font-semibold mb-1.5">Brief Company Description</label>
-        <textarea name="business_description" rows="2" placeholder="Describe products/services offered..." class="w-full p-3 rounded-xl bg-zinc-950 border border-zinc-800 text-white focus:outline-none focus:border-indigo-500">{{ profile.business_description or '' }}</textarea>
+        <textarea name="business_description" rows="2" placeholder="Describe products/services offered..." class="w-full p-3 rounded-xl bg-zinc-950 border border-zinc-800 text-white focus:outline-none focus:border-[var(--agency-primary)]">{{ profile.business_description or '' }}</textarea>
       </div>
     </div>
 
@@ -96,17 +97,17 @@
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label class="block text-zinc-400 font-semibold mb-1.5">Target Audience & Geography</label>
-          <input type="text" name="target_audience" value="{{ profile.target_audience or '' }}" placeholder="e.g. Urban consumers ages 20-35" class="w-full px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-white focus:outline-none focus:border-indigo-500">
+          <input type="text" name="target_audience" value="{{ profile.target_audience or '' }}" placeholder="e.g. Urban consumers ages 20-35" class="w-full px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-white focus:outline-none focus:border-[var(--agency-primary)]">
         </div>
         <div>
           <label class="block text-zinc-400 font-semibold mb-1.5">Primary Growth Objective</label>
-          <input type="text" name="business_goals" value="{{ profile.business_goals or '' }}" placeholder="e.g. 10x Inbound inquiries / Rank #1 on Maps" class="w-full px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-white focus:outline-none focus:border-indigo-500">
+          <input type="text" name="business_goals" value="{{ profile.business_goals or '' }}" placeholder="e.g. 10x Inbound inquiries / Rank #1 on Maps" class="w-full px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-white focus:outline-none focus:border-[var(--agency-primary)]">
         </div>
       </div>
 
       <div>
         <label class="block text-zinc-400 font-semibold mb-1.5">Preferred Monthly Agency Retainer Budget</label>
-        <select name="preferred_budget" class="w-full px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-white font-mono focus:outline-none focus:border-indigo-500">
+        <select name="preferred_budget" class="w-full px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-white font-mono focus:outline-none focus:border-[var(--agency-primary)]">
           <option value="₹25,000 – ₹50,000" {% if profile.preferred_budget == '₹25,000 – ₹50,000' %}selected{% endif %}>₹25,000 – ₹50,000 (Growth Tier)</option>
           <option value="₹50,000 – ₹1,00,000" {% if profile.preferred_budget == '₹50,000 – ₹1,00,000' %}selected{% endif %}>₹50,000 – ₹1,00,000 (Scale Tier)</option>
           <option value="₹1,00,000+" {% if profile.preferred_budget == '₹1,00,000+' %}selected{% endif %}>₹1,00,000+ (Enterprise Overhaul)</option>

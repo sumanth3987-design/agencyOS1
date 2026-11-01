@@ -1,6 +1,7 @@
 <!DOCTYPE html>
-<html lang="en" class="dark"><head><meta charset="UTF-8"><title>Specialist Workspace — AgencyOS</title><script src="https://cdn.tailwindcss.com"></script></head>
-<body class="bg-[#09090b] text-zinc-100 font-sans min-h-screen p-6 sm:p-12 max-w-5xl mx-auto">
+<html lang="en" class="dark"><head><meta charset="UTF-8"><title>Specialist Workspace — {{ agency_settings.agency_name }}</title><script src="https://cdn.tailwindcss.com"></script></head>
+<body class="bg-[#09090b] text-zinc-100 font-sans min-h-screen p-6 sm:p-12 max-w-5xl mx-auto" style="--agency-primary: {{ agency_settings.primary_color }}; --agency-on-primary: {{ agency_settings.primary_contrast }};">
+  {% include "includes/agency_brand.html" %}
   <div class="flex items-center justify-between pb-6 border-b border-zinc-800 mb-8">
     <div>
       <h1 class="text-2xl font-extrabold text-white">Specialist Task Board</h1>

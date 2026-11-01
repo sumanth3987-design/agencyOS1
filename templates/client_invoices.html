@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Billing Ledger & GST Invoices — AgencyOS</title>
+  <title>Billing Ledger & GST Invoices — {{ agency_settings.agency_name }}</title>
   
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -16,8 +16,9 @@
     .portal-card { background: #121215; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 20px; }
   </style>
 </head>
-<body class="bg-zinc-950 text-zinc-100 min-h-screen p-6 sm:p-10 max-w-5xl mx-auto selection:bg-indigo-500 selection:text-white space-y-6">
+<body class="bg-zinc-950 text-zinc-100 min-h-screen p-6 sm:p-10 max-w-5xl mx-auto selection:bg-indigo-500 selection:text-white space-y-6" style="--agency-primary: {{ agency_settings.primary_color }}; --agency-on-primary: {{ agency_settings.primary_contrast }};">
 
+  {% include "includes/agency_brand.html" %}
   <!-- Header Return -->
   <div class="flex items-center justify-between pb-6 border-b border-zinc-800">
     <a href="{{ url_for('customer.dashboard') }}" class="text-xs font-mono text-indigo-400 hover:underline flex items-center gap-1.5">
@@ -58,8 +59,10 @@
       <tbody class="divide-y divide-zinc-800/60 text-zinc-300">
         {% for inv in invoices %}
         <tr class="hover:bg-white/[0.02] transition">
-          <td class="p-4 font-mono font-bold text-indigo-400">
-            {{ inv.invoice_number if inv.invoice_number else ('INV-2026-' ~ inv.id) }}
+          <td class="p-4 font-mono font-bold">
+            <span class="inline-block rounded px-2 py-1" style="background-color: var(--agency-primary); color: var(--agency-on-primary)">
+              {{ inv.invoice_number if inv.invoice_number else ('INV-2026-' ~ inv.id) }}
+            </span>
           </td>
           <td class="p-4">
             <span class="font-bold text-white block">{{ inv.project.service if inv.project else 'Milestone Sprint' }}</span>
@@ -78,7 +81,7 @@
           </td>
           <td class="p-4 text-right">
             {% if inv.project_id %}
-            <a href="{{ url_for('customer.view_invoice', project_id=inv.project_id) }}" target="_blank" class="px-3.5 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-white font-bold text-[11px] transition inline-flex items-center gap-1.5 shadow">
+            <a href="{{ url_for('customer.view_invoice', project_id=inv.project_id, invoice_id=inv.id) }}" target="_blank" class="px-3.5 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-white font-bold text-[11px] transition inline-flex items-center gap-1.5 shadow">
               <i data-lucide="printer" class="w-3.5 h-3.5 text-indigo-400"></i>
               <span>View / PDF</span>
             </a>

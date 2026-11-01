@@ -54,7 +54,9 @@ PACKAGE_PRICES = {
 
     "SEO Growth": 6999,
 
-    "SEO Advanced": 12000
+    "SEO Advanced": 12000,
+
+    "Starter Retainer": 14999
 }
 
 class User(UserMixin, db.Model):
@@ -579,6 +581,11 @@ class Project(db.Model):
         nullable=True
     )
 
+    payment_reminder_sent_at = db.Column(
+        db.DateTime,
+        nullable=True,
+    )
+
     created_at = db.Column(
         db.DateTime,
         server_default=db.func.now(),
@@ -615,8 +622,15 @@ class Payment(db.Model):
             'project_id',
             'customer_id',
             unique=True,
-            postgresql_where=db.text("status = 'Created'"),
-            sqlite_where=db.text("status = 'Created'"),
+            postgresql_where=db.text("status = 'Created' AND addon_id IS NULL"),
+            sqlite_where=db.text("status = 'Created' AND addon_id IS NULL"),
+        ),
+        db.Index(
+            'uq_payment_addon_created',
+            'addon_id',
+            unique=True,
+            postgresql_where=db.text("status = 'Created' AND addon_id IS NOT NULL"),
+            sqlite_where=db.text("status = 'Created' AND addon_id IS NOT NULL"),
         ),
     )
 
@@ -635,6 +649,12 @@ class Payment(db.Model):
         db.Integer,
         db.ForeignKey("user.id"),
         nullable=False
+    )
+
+    addon_id = db.Column(
+        db.Integer,
+        db.ForeignKey("project_add_ons.id", ondelete="CASCADE"),
+        nullable=True,
     )
 
     razorpay_order_id = db.Column(
@@ -691,6 +711,8 @@ class Payment(db.Model):
         "User",
         backref="payments"
     )
+
+    add_on = db.relationship("ProjectAddOn", backref="payments")
 
 
 # =========================================================
@@ -844,6 +866,11 @@ class ProjectDelivery(db.Model):
         nullable=True
     )
 
+    review_reminder_sent_at = db.Column(
+        db.DateTime,
+        nullable=True,
+    )
+
     project = db.relationship(
         "Project",
         backref=db.backref(
@@ -913,6 +940,12 @@ services = [
                 "id": "seo-advanced",
                 "name": "SEO Advanced",
                 "price": 12000
+            },
+            {
+                "id": "seo-starter-retainer",
+                "name": "Starter Retainer",
+                "price": 14999,
+                "billing_period": "month",
             }
         ]
     }
@@ -1124,8 +1157,113 @@ class Invoice(db.Model):
 
     created_at = db.Column(db.DateTime, default=get_ist_now, nullable=False)
 
-    project = db.relationship("Project", backref=db.backref("invoice_record", uselist=False))
+    project = db.relationship(
+        "Project",
+        backref=db.backref("invoice_records", lazy=True, order_by="Invoice.id.desc()"),
+    )
     customer = db.relationship("User", backref="invoices")
+
+
+class AgencySetting(db.Model):
+    __tablename__ = "agency_settings"
+
+    id = db.Column(db.Integer, primary_key=True, default=1)
+    agency_name = db.Column(db.String(120), nullable=False, default="AgencyOS")
+    primary_color = db.Column(db.String(7), nullable=False, default="#6366f1")
+    logo_url = db.Column(db.String(500), nullable=True)
+    whatsapp_support_number = db.Column(db.String(16), nullable=False, default="+919876543210")
+    updated_at = db.Column(db.DateTime, nullable=False, default=get_ist_now, onupdate=get_ist_now)
+
+
+class RazorpaySubscriptionPlan(db.Model):
+    __tablename__ = "razorpay_subscription_plan"
+
+    id = db.Column(db.Integer, primary_key=True)
+    code = db.Column(db.String(80), nullable=False, unique=True)
+    razorpay_plan_id = db.Column(db.String(100), nullable=True, unique=True)
+    name = db.Column(db.String(150), nullable=False)
+    amount = db.Column(db.Integer, nullable=False)
+    currency = db.Column(db.String(10), nullable=False, default="INR")
+    created_at = db.Column(db.DateTime, nullable=False, default=get_ist_now)
+
+
+class RazorpaySubscription(db.Model):
+    __tablename__ = "razorpay_subscription"
+    __table_args__ = (
+        db.Index(
+            "uq_razorpay_subscription_project_open",
+            "project_id",
+            unique=True,
+            postgresql_where=db.text(
+                "status IN ('initializing', 'created', 'authenticated', 'active', 'pending', 'halted', 'paused', 'resumed')"
+            ),
+            sqlite_where=db.text(
+                "status IN ('initializing', 'created', 'authenticated', 'active', 'pending', 'halted', 'paused', 'resumed')"
+            ),
+        ),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    project_id = db.Column(
+        db.Integer, db.ForeignKey("project.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    customer_id = db.Column(
+        db.Integer, db.ForeignKey("user.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    plan_id = db.Column(
+        db.Integer, db.ForeignKey("razorpay_subscription_plan.id"), nullable=False
+    )
+    razorpay_subscription_id = db.Column(db.String(100), nullable=True, unique=True)
+    amount = db.Column(db.Integer, nullable=False)
+    currency = db.Column(db.String(10), nullable=False, default="INR")
+    status = db.Column(db.String(30), nullable=False, default="created")
+    start_at = db.Column(db.DateTime, nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=get_ist_now)
+    updated_at = db.Column(
+        db.DateTime, nullable=False, default=get_ist_now, onupdate=get_ist_now
+    )
+
+    project = db.relationship("Project", backref=db.backref("retainer_subscriptions", lazy=True))
+    customer = db.relationship("User", backref=db.backref("retainer_subscriptions", lazy=True))
+    plan = db.relationship("RazorpaySubscriptionPlan")
+    charges = db.relationship(
+        "SubscriptionCharge", back_populates="subscription", lazy=True
+    )
+
+
+class SubscriptionCharge(db.Model):
+    __tablename__ = "subscription_charge"
+
+    id = db.Column(db.Integer, primary_key=True)
+    subscription_id = db.Column(
+        db.Integer,
+        db.ForeignKey("razorpay_subscription.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    payment_id = db.Column(
+        db.Integer,
+        db.ForeignKey("payment.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+    )
+    invoice_id = db.Column(
+        db.Integer,
+        db.ForeignKey("invoice.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+    )
+    razorpay_payment_id = db.Column(db.String(100), nullable=False, unique=True)
+    event_id = db.Column(db.String(100), nullable=True, unique=True)
+    amount = db.Column(db.Integer, nullable=False)
+    currency = db.Column(db.String(10), nullable=False, default="INR")
+    charged_at = db.Column(db.DateTime, nullable=False, default=get_ist_now)
+
+    subscription = db.relationship("RazorpaySubscription", back_populates="charges")
+    payment = db.relationship("Payment")
+    invoice = db.relationship("Invoice")
+
+
 # Add this class to app/models/__init__.py:
 
 class Review(db.Model):
@@ -1141,3 +1279,35 @@ class Review(db.Model):
 
     project = db.relationship('Project', backref=db.backref('review', uselist=False), foreign_keys=[project_id])
     customer = db.relationship('User', backref='reviews', foreign_keys=[customer_id])
+
+
+class ProjectAddOn(db.Model):
+    __tablename__ = "project_add_ons"
+
+    id = db.Column(db.Integer, primary_key=True)
+    project_id = db.Column(
+        db.Integer,
+        db.ForeignKey("project.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    invoice_id = db.Column(
+        db.Integer,
+        db.ForeignKey("invoice.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+    )
+    title = db.Column(db.String(200), nullable=False)
+    amount = db.Column(db.Integer, nullable=False)
+    status = db.Column(
+        db.String(30),
+        default="Pending Payment",
+        nullable=False,
+    )
+    created_at = db.Column(db.DateTime, default=get_ist_now, nullable=False)
+
+    project = db.relationship(
+        "Project",
+        backref=db.backref("add_ons", cascade="all, delete-orphan", lazy=True),
+    )
+    invoice = db.relationship("Invoice", backref=db.backref("project_add_on", uselist=False))

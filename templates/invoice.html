@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Tax Invoice — {{ invoice_number }} — AgencyOS</title>
+  <title>Tax Invoice — {{ invoice_number }} — {{ agency_settings.agency_name }}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <script src="https://cdn.tailwindcss.com"></script>
@@ -14,19 +14,54 @@
     @page { size: A4 portrait; margin: 12mm; }
     @media print {
       .no-print { display: none !important; }
-      body { background: #ffffff !important; padding: 0 !important; color: #000000 !important; }
-      .invoice-box { border: none !important; box-shadow: none !important; padding: 0 !important; }
+      body, .invoice-box { background: #ffffff !important; padding: 0 !important; color: #000000 !important; }
+      body, .invoice-box, .invoice-box * { -webkit-print-color-adjust: economy !important; print-color-adjust: economy !important; }
+      .invoice-box { border: none !important; box-shadow: none !important; }
+      .invoice-issuer, .invoice-issuer * { color: #000000 !important; }
+      .invoice-brand-mark { background: transparent !important; color: #000000 !important; border: 1px solid #000000 !important; }
+      .invoice-total-amount { background: transparent !important; color: #000000 !important; border: 1px solid #000000 !important; }
+      .invoice-table { display: table !important; width: 100% !important; table-layout: fixed !important; border-collapse: collapse !important; }
+      .invoice-table thead { display: table-header-group !important; }
+      .invoice-table tbody { display: table-row-group !important; }
+      .invoice-table tr { display: table-row !important; }
+      .invoice-table th, .invoice-table td { display: table-cell !important; padding: 2mm 1mm !important; font-size: 8pt !important; overflow-wrap: anywhere; }
+      .invoice-table th::before, .invoice-table td::before { content: none !important; display: none !important; }
+      .invoice-table th:nth-child(1), .invoice-table td:nth-child(1) { width: 35%; text-align: left !important; }
+      .invoice-table th:nth-child(2), .invoice-table td:nth-child(2) { width: 10%; text-align: left !important; }
+      .invoice-table th:nth-child(3), .invoice-table td:nth-child(3) { width: 20%; text-align: right !important; }
+      .invoice-table th:nth-child(4), .invoice-table td:nth-child(4) { width: 13%; text-align: right !important; }
+      .invoice-table th:nth-child(5), .invoice-table td:nth-child(5) { width: 22%; text-align: right !important; }
+    }
+    @media screen and (max-width: 800px) {
+      .invoice-box { padding: 1.25rem !important; border-radius: 1rem; }
+      .invoice-header { flex-direction: column; gap: 1.5rem; }
+      .invoice-issuer { text-align: left; }
+      .invoice-issuer > div { justify-content: flex-start; }
+      .invoice-details { grid-template-columns: minmax(0, 1fr); gap: 1.25rem; }
+      .invoice-project-details { text-align: left; }
+      .invoice-table { margin-top: 1.25rem; }
+      .invoice-table thead { display: none; }
+      .invoice-table tbody tr { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem 1rem; padding: 1rem 0; }
+      .invoice-table tbody td { display: flex; flex-direction: column; gap: .25rem; padding: 0; text-align: left; overflow-wrap: anywhere; }
+      .invoice-table tbody td:first-child { grid-column: 1 / -1; }
+      .invoice-table tbody td::before { content: attr(data-label); color: #71717a; font: 700 10px 'JetBrains Mono', monospace; text-transform: uppercase; }
+      .invoice-table tbody td:first-child::before { content: ''; display: none; }
+      .invoice-total-row { align-items: flex-start; gap: .5rem; font-size: .875rem; }
+      .invoice-total-amount { font-size: 1rem !important; white-space: nowrap; }
+    }
+    @media screen and (min-width: 481px) and (max-width: 800px) {
+      .invoice-box { padding: 2rem !important; }
     }
   </style>
 </head>
-<body class="bg-zinc-100 text-zinc-900 p-4 sm:p-10 font-sans antialiased min-h-screen">
+<body class="bg-zinc-100 text-zinc-900 p-4 sm:p-10 font-sans antialiased min-h-screen" style="--agency-primary: {{ agency_settings.primary_color }}; --agency-on-primary: {{ agency_settings.primary_contrast }};">
   
   <div class="max-w-3xl mx-auto bg-white p-8 sm:p-12 rounded-2xl shadow-xl border border-zinc-200 invoice-box">
     
     <!-- Action Bar (Hidden during Print) -->
     <div class="no-print flex justify-between items-center pb-6 border-b border-zinc-200 mb-8">
-      <a href="{{ url_for('customer.project_details', project_id=project.id) }}" class="text-xs font-semibold text-indigo-600 hover:underline flex items-center gap-1.5">
-        <span>← Return to Project Workspace</span>
+      <a href="{{ url_for('customer.project_details', project_id=project.id) }}" class="text-xs font-semibold hover:underline flex items-center gap-1.5" style="color: var(--agency-primary)">
+        <span class="rounded-md px-2 py-1" style="background-color: var(--agency-primary); color: var(--agency-on-primary)">← Return to Project Workspace</span>
       </a>
       <button onclick="window.print()" class="px-5 py-2.5 rounded-xl bg-zinc-950 hover:bg-zinc-800 text-white font-bold text-xs shadow-md transition flex items-center gap-2 cursor-pointer">
         <span>🖨️ Print / Download PDF</span>
@@ -34,7 +69,7 @@
     </div>
 
     <!-- Header & Tax Identity -->
-    <div class="flex justify-between items-start pb-8 border-b border-zinc-200">
+    <div class="flex justify-between items-start pb-8 border-b border-zinc-200 invoice-header">
       <div>
         <div class="flex items-center gap-2 mb-2">
           <span class="px-2.5 py-0.5 rounded bg-emerald-100 text-emerald-800 font-mono text-[10px] font-bold uppercase">Original for Recipient</span>
@@ -45,8 +80,16 @@
         <p class="text-xs font-mono text-zinc-500">Date of Issue: <strong>{{ invoice_date }}</strong></p>
       </div>
 
-      <div class="text-right text-xs">
-        <strong class="text-lg font-black text-indigo-600 block">AgencyOS Digital Solutions</strong>
+      <div class="text-right text-xs invoice-issuer">
+        <div class="mb-1 flex items-center justify-end gap-2">
+          {% if agency_settings.logo_url %}
+          <img src="{{ agency_settings.logo_url }}" alt="{{ agency_settings.agency_name }} logo" onerror="this.hidden=true; this.nextElementSibling.hidden=false; this.nextElementSibling.classList.remove('hidden');" class="h-8 w-8 object-contain">
+          <span class="hidden h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[10px] font-extrabold invoice-brand-mark" style="background-color: var(--agency-primary); color: var(--agency-on-primary)" aria-hidden="true">{{ agency_settings.agency_name[:2]|upper }}</span>
+          {% else %}
+          <span class="flex h-8 w-8 items-center justify-center rounded-lg text-[10px] font-extrabold invoice-brand-mark" style="background-color: var(--agency-primary); color: var(--agency-on-primary)" aria-hidden="true">{{ agency_settings.agency_name[:2]|upper }}</span>
+          {% endif %}
+          <strong class="text-lg font-black text-zinc-950 block">{{ agency_settings.agency_name }}</strong>
+        </div>
         <p class="text-zinc-600 mt-0.5">Bangalore & Hyderabad, India</p>
         <p class="font-mono text-zinc-600 mt-1">GSTIN: <strong>29AAAAA0000A1Z5</strong></p>
         <p class="font-mono text-zinc-500 text-[11px]">State of Supplier: Karnataka (29)</p>
@@ -54,7 +97,7 @@
     </div>
 
     <!-- Client & Project Details -->
-    <div class="grid grid-cols-2 gap-8 py-8 border-b border-zinc-200 text-xs">
+    <div class="grid grid-cols-2 gap-8 py-8 border-b border-zinc-200 text-xs invoice-details">
       <div>
         <span class="text-zinc-400 uppercase font-mono font-bold block mb-1.5">Billed To (Client):</span>
         <strong class="text-sm text-zinc-950 block">{{ customer.name if customer else 'Client Enterprise' }}</strong>
@@ -63,7 +106,7 @@
         <p class="font-mono text-zinc-500 mt-1">Place of Supply: {{ profile.location if profile and profile.location else 'India (State 29)' }}</p>
       </div>
 
-      <div class="text-right">
+      <div class="text-right invoice-project-details">
         <span class="text-zinc-400 uppercase font-mono font-bold block mb-1.5">Milestone Project Context:</span>
         <strong class="text-sm text-zinc-950 block">Project #{{ project.id }}</strong>
         <p class="text-zinc-700">{{ project.service }}</p>
@@ -75,7 +118,7 @@
     </div>
 
     <!-- Line Items Table -->
-    <table class="w-full text-left text-xs my-8 border-collapse">
+    <table class="w-full text-left text-xs my-8 border-collapse invoice-table">
       <thead class="border-b-2 border-zinc-900 font-mono uppercase text-zinc-500 text-[11px]">
         <tr>
           <th class="py-3">Service Description</th>
@@ -87,21 +130,26 @@
       </thead>
       <tbody class="divide-y divide-zinc-200 text-zinc-800">
         <tr>
-          <td class="py-4">
+          <td class="py-4" data-label="Service">
+            {% if is_retainer_invoice %}
+            <strong class="text-zinc-950 block text-xs">Monthly SEO Retainer Renewal</strong>
+            <span class="text-zinc-500 text-[11px]">{{ project.package }} · Monthly recurring service</span>
+            {% else %}
             <strong class="text-zinc-950 block text-xs">{{ project.service }} — Milestone Kickoff</strong>
             <span class="text-zinc-500 text-[11px]">{{ project.package }} Package Sprint Delivery</span>
+            {% endif %}
           </td>
-          <td class="py-4 font-mono font-semibold">998311</td>
-          <td class="py-4 font-mono text-right">₹{{ base_amount }}</td>
-          <td class="py-4 font-mono text-right">18% GST</td>
-          <td class="py-4 font-mono font-bold text-right text-zinc-950">₹{{ gross_amount }}</td>
+          <td class="py-4 font-mono font-semibold" data-label="SAC">998311</td>
+          <td class="py-4 font-mono text-right" data-label="Taxable Value">₹{{ base_amount }}</td>
+          <td class="py-4 font-mono text-right" data-label="Tax Rate">18% GST</td>
+          <td class="py-4 font-mono font-bold text-right text-zinc-950" data-label="Total Amount">₹{{ gross_amount }}</td>
         </tr>
       </tbody>
     </table>
 
     <!-- Totals & Tax Calculation Breakdown -->
     <div class="flex justify-end pt-4 border-t border-zinc-200">
-      <div class="w-72 space-y-2 text-xs">
+      <div class="w-full max-w-72 space-y-2 text-xs">
         <div class="flex justify-between text-zinc-600">
           <span>Base Taxable Value:</span>
           <span class="font-mono font-bold text-zinc-900">₹{{ base_amount }}</span>
@@ -114,9 +162,9 @@
           <span>State Tax (SGST 9%):</span>
           <span class="font-mono">₹{{ sgst_amount }}</span>
         </div>
-        <div class="flex justify-between text-base font-black text-zinc-950 pt-2 border-t-2 border-zinc-900">
+        <div class="flex justify-between text-base font-black text-zinc-950 pt-2 border-t-2 border-zinc-900 invoice-total-row">
           <span>Total Invoiced (INR):</span>
-          <span class="font-mono text-lg text-indigo-600">₹{{ gross_amount }}</span>
+          <span class="rounded-md px-2 py-1 font-mono text-lg invoice-total-amount" style="background-color: var(--agency-primary); color: var(--agency-on-primary)">₹{{ gross_amount }}</span>
         </div>
       </div>
     </div>
@@ -132,7 +180,7 @@
 
       <div class="text-right">
         <div class="inline-block text-center border-t border-zinc-400 pt-2 px-6">
-          <span class="font-bold text-xs text-zinc-900 block">AgencyOS Digital Solutions</span>
+          <span class="font-bold text-xs text-zinc-900 block">{{ agency_settings.agency_name }}</span>
           <span class="text-[10px] text-zinc-500 font-mono">Digitally Authorized Signatory</span>
         </div>
       </div>

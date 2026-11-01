@@ -1,0 +1,214 @@
+{% extends "admin_base.html" %}
+
+{% block title %}Agency Settings — Admin Workspace{% endblock %}
+
+{% block extra_css %}
+<style>
+  .settings-panel { background: #121215; border: 1px solid rgba(255,255,255,.09); }
+  .settings-field { background: #09090b; border: 1px solid #3f3f46; color: #f4f4f5; }
+  .settings-field:focus { outline: 2px solid var(--agency-primary); outline-offset: 2px; border-color: var(--agency-primary); }
+  .settings-primary { background: var(--agency-primary); color: var(--agency-on-primary); }
+  .settings-primary:hover { filter: brightness(1.08); }
+</style>
+{% endblock %}
+
+{% block content %}
+<main class="mx-auto max-w-5xl px-5 py-8 sm:px-8 sm:py-10" style="--agency-primary: {{ agency_settings.primary_color }}; --agency-on-primary: {{ agency_settings.primary_contrast }};">
+  <div class="mb-8 flex flex-col gap-5 border-b border-zinc-800 pb-7 sm:flex-row sm:items-end sm:justify-between">
+    <div>
+      <p class="mb-2 font-mono text-[10px] font-bold uppercase tracking-[.2em] text-zinc-500">Module 6 / Agency identity</p>
+      <h1 class="text-2xl font-extrabold tracking-tight text-white sm:text-3xl">Brand settings</h1>
+      <p class="mt-2 max-w-2xl text-sm leading-6 text-zinc-400">Set the identity clients and specialists see across their portals and invoices.</p>
+    </div>
+    <span class="inline-flex items-center gap-2 self-start rounded-full border border-zinc-800 bg-zinc-900 px-3 py-1.5 font-mono text-[10px] uppercase tracking-wider text-zinc-400 sm:self-auto">
+      <span class="h-1.5 w-1.5 rounded-full" style="background-color: var(--agency-primary)"></span>
+      Global agency profile
+    </span>
+  </div>
+
+  {% if errors %}
+  <div class="mb-6 rounded-xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-200" role="alert" aria-labelledby="settings-errors-title">
+    <h2 id="settings-errors-title" class="font-bold">Settings were not saved</h2>
+    <p class="mt-1 text-xs text-rose-200/80">Correct the highlighted fields below. No changes were applied.</p>
+  </div>
+  {% endif %}
+
+  <div class="grid gap-6 lg:grid-cols-[minmax(0,1.3fr)_minmax(280px,.7fr)]">
+    <form method="post" action="{{ url_for('admin.agency_settings') }}" class="settings-panel rounded-2xl p-5 sm:p-7" novalidate>
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <fieldset class="space-y-6">
+        <legend class="mb-5 text-sm font-bold text-white">Agency identity</legend>
+
+        <div>
+          <label for="agency_name" class="mb-2 block text-xs font-semibold text-zinc-300">Agency name</label>
+          <input id="agency_name" name="agency_name" type="text" maxlength="120" required
+                 value="{{ form_values.agency_name }}" autocomplete="organization"
+                 aria-invalid="{{ 'true' if errors.get('agency_name') else 'false' }}"
+                 aria-describedby="agency_name_help{% if errors.get('agency_name') %} agency_name_error{% endif %}"
+                 class="settings-field w-full rounded-xl px-3.5 py-3 text-sm">
+          <p id="agency_name_help" class="mt-2 text-[11px] text-zinc-500">Shown as the issuer and brand name throughout the portals.</p>
+          {% if errors.get('agency_name') %}<p id="agency_name_error" class="mt-1.5 text-xs text-rose-300">{{ errors.agency_name }}</p>{% endif %}
+        </div>
+
+        <div>
+          <label for="logo_url" class="mb-2 block text-xs font-semibold text-zinc-300">Logo URL <span class="font-normal text-zinc-500">· optional</span></label>
+          <input id="logo_url" name="logo_url" type="url" maxlength="500" inputmode="url"
+                 value="{{ form_values.logo_url }}" placeholder="https://example.com/brand-mark.png"
+                 aria-invalid="{{ 'true' if errors.get('logo_url') else 'false' }}"
+                 aria-describedby="logo_url_help{% if errors.get('logo_url') %} logo_url_error{% endif %}"
+                 class="settings-field w-full rounded-xl px-3.5 py-3 text-sm">
+          <p id="logo_url_help" class="mt-2 text-[11px] text-zinc-500">Use an HTTP(S) image URL. If it cannot load, the agency name remains visible.</p>
+          {% if errors.get('logo_url') %}<p id="logo_url_error" class="mt-1.5 text-xs text-rose-300">{{ errors.logo_url }}</p>{% endif %}
+        </div>
+
+        <div>
+          <label for="whatsapp_support_number" class="mb-2 block text-xs font-semibold text-zinc-300">WhatsApp support number</label>
+          <input id="whatsapp_support_number" name="whatsapp_support_number" type="tel" required
+                 value="{{ form_values.whatsapp_support_number }}" autocomplete="tel"
+                 aria-invalid="{{ 'true' if errors.get('whatsapp_support_number') else 'false' }}"
+                 aria-describedby="support_help{% if errors.get('whatsapp_support_number') %} support_error{% endif %}"
+                 class="settings-field w-full rounded-xl px-3.5 py-3 font-mono text-sm">
+          <p id="support_help" class="mt-2 text-[11px] text-zinc-500">8–15 digits, with an optional leading +. Store the international dialing code.</p>
+          {% if errors.get('whatsapp_support_number') %}<p id="support_error" class="mt-1.5 text-xs text-rose-300">{{ errors.whatsapp_support_number }}</p>{% endif %}
+        </div>
+
+        <div class="border-t border-zinc-800 pt-6">
+          <div class="mb-3">
+            <label for="primary_color_text" class="block text-xs font-semibold text-zinc-300">Primary color</label>
+            <p class="mt-1 text-[11px] text-zinc-500">Used on brand marks and primary actions; status colors stay unchanged.</p>
+          </div>
+          <div class="flex flex-col gap-3 sm:flex-row">
+            <label class="flex h-12 items-center gap-3 rounded-xl border border-zinc-700 bg-zinc-950 px-3 text-[11px] text-zinc-400">
+              <span>Pick</span>
+              <input id="primary_color_picker" type="color" value="{{ color_picker_value }}" aria-label="Choose primary brand color" class="h-8 w-10 cursor-pointer rounded border-0 bg-transparent p-0">
+            </label>
+            <div class="min-w-0 flex-1">
+              <label for="primary_color_text" class="sr-only">Primary color hex value</label>
+              <input id="primary_color_text" name="primary_color" type="text" required maxlength="7" spellcheck="false"
+                     value="{{ form_values.primary_color }}" placeholder="#6366f1"
+                     pattern="^#[0-9A-Fa-f]{6}$"
+                     aria-invalid="{{ 'true' if errors.get('primary_color') else 'false' }}"
+                     aria-describedby="color_help{% if errors.get('primary_color') %} color_error{% endif %}"
+                     class="settings-field w-full rounded-xl px-3.5 py-3 font-mono text-sm uppercase">
+              <p id="color_help" class="mt-2 text-[11px] text-zinc-500">Hex format #RRGGBB. Both controls stay synchronized.</p>
+              <p id="client_color_error" class="mt-1.5 hidden text-xs text-rose-300" role="alert">Enter a six-digit hex color, such as #6366f1.</p>
+              {% if errors.get('primary_color') %}<p id="color_error" class="mt-1.5 text-xs text-rose-300">{{ errors.primary_color }}</p>{% endif %}
+            </div>
+          </div>
+        </div>
+      </fieldset>
+
+      <div class="mt-7 flex flex-col-reverse gap-3 border-t border-zinc-800 pt-5 sm:flex-row sm:items-center sm:justify-between">
+        <p class="text-[11px] text-zinc-500">Changes apply globally after saving.</p>
+        <button type="submit" class="settings-primary inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-5 py-3 text-xs font-extrabold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white">
+          <i data-lucide="save" class="h-4 w-4" aria-hidden="true"></i>
+          Save agency settings
+        </button>
+      </div>
+    </form>
+
+    <aside class="settings-panel h-fit rounded-2xl p-5 sm:p-6" aria-labelledby="preview-title">
+      <div class="flex items-start justify-between gap-3">
+        <div>
+          <p class="font-mono text-[10px] font-bold uppercase tracking-[.18em] text-zinc-500">Live preview</p>
+          <h2 id="preview-title" class="mt-1 text-sm font-bold text-white">Portal brand mark</h2>
+        </div>
+        <span class="rounded-md border border-zinc-800 px-2 py-1 font-mono text-[9px] uppercase tracking-wider text-zinc-500">Preview</span>
+      </div>
+      <div class="mt-5 rounded-xl border border-zinc-800 bg-zinc-950 p-4">
+        <div class="flex items-center gap-3">
+          <span id="preview_mark" class="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl text-sm font-extrabold shadow-lg" style="background-color: {{ color_picker_value }}; color: {{ agency_settings.primary_contrast }};">
+            <img id="preview_logo" src="" alt="" class="hidden h-full w-full object-contain p-1">
+            <span id="preview_initials" aria-hidden="true">{{ form_values.agency_name[:2]|upper or 'AG' }}</span>
+          </span>
+          <div class="min-w-0">
+            <p id="preview_name" class="truncate text-sm font-extrabold tracking-tight text-white">{{ form_values.agency_name or 'AgencyOS' }}</p>
+            <p class="mt-0.5 font-mono text-[10px] text-zinc-500">Client &amp; specialist workspace</p>
+          </div>
+        </div>
+        <div class="mt-5 border-t border-zinc-800 pt-4">
+          <button id="preview_action" type="button" class="settings-primary pointer-events-none rounded-lg px-3.5 py-2 text-[11px] font-bold">Primary action</button>
+          <span class="ml-2 font-mono text-[10px] text-zinc-500" id="preview_hex">{{ color_picker_value }}</span>
+        </div>
+      </div>
+      <p class="mt-4 text-[11px] leading-5 text-zinc-500">Preview updates as you edit. A logo that cannot load falls back to your agency initials.</p>
+    </aside>
+  </div>
+</main>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(() => {
+  const colorText = document.getElementById("primary_color_text");
+  const colorPicker = document.getElementById("primary_color_picker");
+  const nameInput = document.getElementById("agency_name");
+  const logoInput = document.getElementById("logo_url");
+  const previewName = document.getElementById("preview_name");
+  const previewMark = document.getElementById("preview_mark");
+  const previewAction = document.getElementById("preview_action");
+  const previewInitials = document.getElementById("preview_initials");
+  const previewLogo = document.getElementById("preview_logo");
+  const previewHex = document.getElementById("preview_hex");
+  const colorError = document.getElementById("client_color_error");
+
+  function updateColor(value, source) {
+    if (!/^#[0-9a-f]{6}$/i.test(value)) {
+      colorText.setAttribute("aria-invalid", "true");
+      colorError.classList.remove("hidden");
+      return;
+    }
+    const normalized = value.toLowerCase();
+    colorText.setAttribute("aria-invalid", "false");
+    colorError.classList.add("hidden");
+    previewMark.style.backgroundColor = normalized;
+    const channels = normalized.slice(1).match(/.{2}/g).map(channel => parseInt(channel, 16) / 255);
+    const luminance = channels.map(channel => channel <= 0.03928 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4);
+    const brightness = 0.2126 * luminance[0] + 0.7152 * luminance[1] + 0.0722 * luminance[2];
+    const foreground = brightness > 0.179 ? "#09090b" : "#ffffff";
+    previewMark.style.color = foreground;
+    previewAction.style.backgroundColor = normalized;
+    previewAction.style.color = foreground;
+    previewHex.textContent = normalized;
+    if (source !== "picker") colorPicker.value = normalized;
+  }
+
+  function updateName() {
+    const value = nameInput.value.trim();
+    previewName.textContent = value || "AgencyOS";
+    previewInitials.textContent = (value || "AgencyOS").slice(0, 2).toUpperCase();
+  }
+
+  function updateLogo() {
+    let parsed;
+    try { parsed = new URL(logoInput.value.trim()); } catch (_) { parsed = null; }
+    if (!parsed || !["http:", "https:"].includes(parsed.protocol) || !parsed.hostname || parsed.username || parsed.password) {
+      previewLogo.removeAttribute("src");
+      previewLogo.classList.add("hidden");
+      previewInitials.classList.remove("hidden");
+      return;
+    }
+    previewLogo.onload = () => {
+      previewLogo.classList.remove("hidden");
+      previewInitials.classList.add("hidden");
+    };
+    previewLogo.onerror = () => {
+      previewLogo.classList.add("hidden");
+      previewInitials.classList.remove("hidden");
+    };
+    previewLogo.src = parsed.href;
+  }
+
+  colorText.addEventListener("input", () => updateColor(colorText.value.trim(), "text"));
+  colorPicker.addEventListener("input", () => {
+    colorText.value = colorPicker.value;
+    updateColor(colorPicker.value, "picker");
+  });
+  nameInput.addEventListener("input", updateName);
+  logoInput.addEventListener("input", updateLogo);
+  updateName();
+  updateLogo();
+  if (/^#[0-9a-f]{6}$/i.test(colorText.value.trim())) updateColor(colorText.value.trim(), "text");
+})();
+</script>
+{% endblock %}

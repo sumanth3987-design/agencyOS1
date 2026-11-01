@@ -15,26 +15,45 @@
     body { background-color: #09090b; font-family: 'Plus Jakarta Sans', sans-serif; color: #f4f4f5; }
     .portal-card { background: #121215; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 18px; }
     .portal-card:hover { border-color: rgba(255, 255, 255, 0.16); }
+    .agency-action { background-color: var(--agency-primary); color: var(--agency-on-primary); }
+    .agency-action:hover { filter: brightness(.92); }
   </style>
+  {% if project.package == 'Starter Retainer' %}
+  <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+  {% endif %}
 </head>
-<body class="bg-zinc-950 text-zinc-100 min-h-screen p-6 sm:p-10 max-w-5xl mx-auto selection:bg-indigo-500 selection:text-white space-y-6">
+<body class="bg-zinc-950 text-zinc-100 min-h-screen p-6 sm:p-10 max-w-5xl mx-auto selection:bg-indigo-500 selection:text-white space-y-6" style="--agency-primary: {{ agency_settings.primary_color }}; --agency-on-primary: {{ agency_settings.primary_contrast }};">
 
+  {% include "includes/agency_brand.html" %}
   <!-- Top Action Toolbar -->
-  <div class="flex items-center justify-between pb-6 border-b border-zinc-800/80">
+  <div class="flex flex-col gap-3 border-b border-zinc-800/80 pb-6 sm:flex-row sm:items-center sm:justify-between">
     <a href="{{ url_for('customer.dashboard') }}" class="text-xs font-mono text-indigo-400 hover:text-indigo-300 transition flex items-center gap-1.5">
       <i data-lucide="arrow-left" class="w-3.5 h-3.5"></i>
       <span>Return to Workspace</span>
     </a>
 
-    <div class="flex items-center gap-3">
+    <div class="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
+      {% include "includes/client_notification_center.html" %}
       <!-- 1-Click Printable GST Invoice -->
       <a href="{{ url_for('customer.view_invoice', project_id=project.id) }}" target="_blank" class="px-3.5 py-1.5 rounded-xl bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-zinc-300 text-xs font-bold transition flex items-center gap-1.5">
         <i data-lucide="receipt" class="w-3.5 h-3.5 text-indigo-400"></i>
         <span>GST Invoice (PDF)</span>
       </a>
 
+      {% if sow_signed %}
+      <a href="{{ url_for('customer.download_sow_pdf', project_id=project.id) }}" class="agency-action px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow">
+        <i data-lucide="file-text" class="w-3.5 h-3.5"></i>
+        <span>Download Signed SOW (PDF)</span>
+      </a>
+      {% else %}
+      <a href="{{ url_for('customer.project_contract', project_id=project.id) }}" class="agency-action px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5">
+        <i data-lucide="file-text" class="w-3.5 h-3.5"></i>
+        <span>Review &amp; Sign SOW</span>
+      </a>
+      {% endif %}
+
       <!-- Instant WhatsApp Agency Ping -->
-      <a href="https://wa.me/919876543210?text=Hi%20AgencyOS,%20checking%20status%20for%20Project%20%23{{ project.id }}" target="_blank" class="px-3.5 py-1.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 text-emerald-400 font-bold text-xs flex items-center gap-1.5 transition">
+      <a href="https://wa.me/{{ agency_settings.whatsapp_support_number|replace('+', '') }}?text=Hi%20{{ agency_settings.agency_name|urlencode }},%20checking%20status%20for%20Project%20%23{{ project.id }}" target="_blank" rel="noopener noreferrer" class="px-3.5 py-1.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 text-emerald-400 font-bold text-xs flex items-center gap-1.5 transition">
         <i data-lucide="message-square" class="w-3.5 h-3.5"></i>
         <span>WhatsApp Lead</span>
       </a>
@@ -73,23 +92,154 @@
     </span>
   </div>
 
+  {% if project.package == 'Starter Retainer' %}
+  <section class="portal-card overflow-hidden border-l-2 border-l-[var(--agency-primary)]" aria-labelledby="starter-retainer-title">
+    <div class="grid gap-6 p-5 sm:p-6 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
+      <div class="min-w-0">
+        <div class="flex flex-wrap items-center gap-2">
+          <span class="rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-300">Monthly retainer</span>
+          <span class="text-[10px] font-mono uppercase tracking-wider text-zinc-500">Recurring e-Mandate</span>
+        </div>
+        <h2 id="starter-retainer-title" class="mt-3 text-lg font-bold tracking-tight text-white">Starter SEO Retainer</h2>
+        <p class="mt-1 max-w-2xl text-xs leading-relaxed text-zinc-400">Authorize a monthly debit of <strong class="text-zinc-200">₹14,999</strong> for 12 monthly cycles. Your first scheduled charge is on the first day of next month, subject to successful mandate authorization.</p>
+        <p class="mt-3 text-xs leading-relaxed text-zinc-400">Razorpay will ask you to approve an e-Mandate / UPI AutoPay. No recurring debit starts until you complete checkout authorization.</p>
+        <p id="retainer-checkout-status" class="mt-4 rounded-lg border px-3 py-2.5 text-xs leading-relaxed
+          {% if retainer_subscription_status in ['paused', 'halted'] %}border-amber-500/25 bg-amber-500/10 text-amber-200
+          {% elif retainer_subscription_status in ['active', 'resumed'] %}border-emerald-500/20 bg-emerald-500/10 text-emerald-200
+          {% else %}border-indigo-500/20 bg-indigo-500/10 text-indigo-200{% endif %}"
+          role="status" aria-live="polite">
+          {% if not retainer_subscription_status %}
+          No mandate has been created yet. Set up authorization to begin; this is not a charge.
+          {% elif retainer_subscription_status == 'initializing' %}
+          Mandate setup is being finalized. Authorization is not yet confirmed, and no charge is confirmed.
+          {% elif retainer_subscription_status == 'created' %}
+          Mandate setup is awaiting authorization. No charge is confirmed.
+          {% elif retainer_subscription_status == 'authenticated' %}
+          Your recurring mandate is authorized and awaiting activation. Authorization does not confirm a charge.
+          {% elif retainer_subscription_status == 'active' %}
+          Your recurring mandate is active. This status alone does not confirm a charge.
+          {% elif retainer_subscription_status == 'resumed' %}
+          Your recurring mandate has resumed. This status alone does not confirm a charge.
+          {% elif retainer_subscription_status == 'pending' %}
+          Your mandate is pending. No charge is confirmed; continue setup or contact your agency if needed.
+          {% elif retainer_subscription_status == 'halted' %}
+          Your mandate is halted. Please contact your agency for assistance. No charge is confirmed.
+          {% elif retainer_subscription_status == 'paused' %}
+          Your mandate is paused. Please contact your agency for assistance. No charge is confirmed.
+          {% else %}
+          Latest recorded mandate status: {{ retainer_subscription_status|title }}. This status does not confirm a charge; contact your agency if you need assistance.
+          {% endif %}
+        </p>
+      </div>
+      <div class="flex w-full flex-col gap-2 md:w-56 md:items-stretch">
+        <button id="starter-retainer-checkout" type="button" data-create-url="/subscription/create/{{ project.id }}" data-csrf-token="{{ csrf_token() }}" class="agency-action inline-flex min-h-11 w-full items-center justify-center rounded-xl px-4 py-3 text-xs font-bold shadow-lg transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--agency-primary)] disabled:cursor-not-allowed disabled:opacity-60"
+          {% if retainer_subscription_status in ['authenticated', 'active', 'resumed', 'paused'] %}disabled{% endif %}>
+          {% if not retainer_subscription_status %}Set up / continue mandate
+          {% elif retainer_subscription_status in ['authenticated', 'active', 'resumed', 'paused'] %}Mandate {{ retainer_subscription_status|title }}
+          {% else %}Continue mandate setup{% endif %}
+        </button>
+        <span class="text-center text-xs leading-relaxed text-zinc-400">Secure checkout powered by Razorpay</span>
+      </div>
+    </div>
+  </section>
+  {% endif %}
+
+  {% if current_user.is_authenticated and current_user.role|lower == 'admin' and project.status in ['Assigned', 'In Progress', 'Submitted', 'Revision'] %}
+  <section class="portal-card p-5 border-indigo-500/25" aria-labelledby="addon-form-title">
+    <div class="mb-4">
+      <h2 id="addon-form-title" class="text-sm font-bold text-white">Issue Paid Scope Add-On</h2>
+      <p class="mt-1 text-xs text-zinc-400">Create a separately invoiced change request for work outside the signed SOW.</p>
+    </div>
+    <form method="POST" action="{{ url_for('admin.create_project_addon', project_id=project.id) }}" class="grid gap-3 sm:grid-cols-[minmax(0,1fr)_180px_auto]">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label class="sr-only" for="addon-title">Add-on title</label>
+      <input id="addon-title" name="title" type="text" maxlength="200" required placeholder="e.g. Extra checkout integration" class="rounded-xl bg-zinc-950 border border-zinc-800 px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500">
+      <label class="sr-only" for="addon-amount">Add-on amount in INR</label>
+      <input id="addon-amount" name="amount" type="number" min="1" max="999999999" step="1" required placeholder="Amount (₹)" class="rounded-xl bg-zinc-950 border border-zinc-800 px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500">
+      <button type="submit" class="agency-action rounded-xl px-4 py-2 text-xs font-bold transition">Issue Add-On Invoice</button>
+    </form>
+  </section>
+  {% endif %}
+
+  {% if project.add_ons %}
+    {% for addon in project.add_ons|sort(attribute='created_at', reverse=true) %}
+    <section class="portal-card p-5 border-amber-500/30 bg-amber-500/5 flex flex-col sm:flex-row sm:items-center justify-between gap-4" aria-label="Scope add-on invoice">
+      <div>
+        <div class="flex items-center gap-2 mb-1">
+          {% if addon.status == 'Pending Payment' %}
+          <span class="h-2 w-2 rounded-full bg-amber-400 animate-pulse" aria-hidden="true"></span>
+          <span class="text-[10px] font-mono uppercase text-amber-300 font-bold">Payment required · {{ addon.invoice.invoice_number }}</span>
+          {% else %}
+          <span class="h-2 w-2 rounded-full bg-emerald-400" aria-hidden="true"></span>
+          <span class="text-[10px] font-mono uppercase text-emerald-300 font-bold">Paid change request · {{ addon.invoice.invoice_number }}</span>
+          {% endif %}
+        </div>
+        <h2 class="text-sm font-bold text-white">{{ addon.title }}</h2>
+        <p class="text-xs text-zinc-400 mt-1">Additional scope outside the original SOW.</p>
+      </div>
+      <div class="flex items-center gap-3">
+        <span class="font-mono text-lg font-bold text-white">₹{{ "{:,.2f}".format(addon.amount) }}</span>
+        {% if addon.status == 'Paid' %}
+        <span class="px-3 py-1.5 rounded-xl bg-emerald-500/10 text-emerald-400 font-bold text-xs border border-emerald-500/20 font-mono">Paid</span>
+        {% elif addon.status == 'Pending Payment' and addon.invoice.status != 'Paid' %}
+        <a href="{{ url_for('payments.payment_page', project_id=project.id, addon_id=addon.id) }}" class="agency-action px-4 py-2.5 rounded-xl font-bold text-xs shadow-lg transition whitespace-nowrap">Authorize Add-On Payment →</a>
+        {% endif %}
+      </div>
+    </section>
+    {% endfor %}
+  {% endif %}
+
   <!-- Milestone Progression Tracker (50/25/25 Architecture) -->
   <div class="portal-card p-6">
     <div class="flex items-center justify-between pb-4 border-b border-zinc-800 mb-6">
-      <h3 class="text-xs font-bold uppercase tracking-wider text-zinc-400 font-mono">Sequential Milestone Gates</h3>
-      <span class="text-xs font-mono text-zinc-500">Fixed Milestone Delivery</span>
+      <h3 class="text-xs font-bold uppercase tracking-wider text-zinc-400 font-mono">{% if project.package == 'Starter Retainer' %}Recurring Authorization &amp; Charges{% else %}Sequential Milestone Gates{% endif %}</h3>
+      <span class="text-xs font-mono text-zinc-500">{% if project.package == 'Starter Retainer' %}Mandate status is separate from captured charges{% else %}Fixed Milestone Delivery{% endif %}</span>
     </div>
 
+    {% if project.package == 'Starter Retainer' %}
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+      <section class="p-4 rounded-xl bg-zinc-900 border border-zinc-800" aria-labelledby="retainer-mandate-heading">
+        <h4 id="retainer-mandate-heading" class="font-bold text-white">Mandate authorization</h4>
+        <p class="mt-2 text-xs leading-relaxed text-zinc-400">Use the Starter Retainer panel above to set up or continue your e-Mandate / UPI AutoPay. It shows the latest saved status independently of charge records.</p>
+        <p class="mt-3 text-xs font-mono text-zinc-300">Authorization is not proof of a charge.</p>
+      </section>
+      <section class="p-4 rounded-xl bg-zinc-900 border border-zinc-800" aria-labelledby="retainer-charges-heading">
+        <h4 id="retainer-charges-heading" class="font-bold text-white">Captured charges</h4>
+        {% if retainer_charges %}
+        <ul class="mt-2 space-y-2" aria-label="Confirmed captured charges">
+          {% for charge in retainer_charges %}
+          <li class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 border-b border-zinc-800 pb-2 last:border-0 last:pb-0">
+            <span class="text-xs font-mono font-bold text-emerald-300">Captured · ₹{{ "{:,.0f}".format(charge.amount) }}</span>
+            <time class="text-xs text-zinc-400" datetime="{{ charge.charged_at.isoformat() }}">{{ charge.charged_at.strftime('%d %b %Y') }}</time>
+          </li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        <p class="mt-2 text-xs leading-relaxed text-zinc-400">No confirmed captured charges are recorded yet. Mandate authorization alone does not confirm a charge.</p>
+        {% endif %}
+      </section>
+    </div>
+    {% else %}
     <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
       <div class="p-4 rounded-xl bg-zinc-900 border border-zinc-800">
         <div class="flex items-center justify-between mb-2">
+          {% if project.package == 'Starter Retainer' %}
+          <span class="font-bold text-white">Starter Retainer</span>
+          <span class="text-emerald-400 font-mono font-bold">₹14,999 / month</span>
+          {% else %}
           <span class="font-bold text-white">Milestone 1: Advance</span>
           <span class="text-emerald-400 font-mono font-bold">50% Advance</span>
+          {% endif %}
         </div>
+        {% if project.package == 'Starter Retainer' %}
+        <p class="text-[11px] text-zinc-400">12 monthly cycles. Manage recurring authorization using the Starter Retainer panel above.</p>
+        <span class="mt-3 block font-mono text-[10px] text-zinc-400">Recurring authorization · see status above</span>
+        {% else %}
         <p class="text-[11px] text-zinc-400">Brief, specifications, and kickoff.</p>
         <span class="mt-3 block font-mono text-[10px] {% if project.status != 'Payment Pending' %}text-emerald-400{% else %}text-amber-400{% endif %}">
           {% if project.status != 'Payment Pending' %}Settled & Approved ✅{% else %}Payment Pending ⚡{% endif %}
         </span>
+        {% endif %}
       </div>
 
       <div class="p-4 rounded-xl bg-zinc-900 border {% if project.status in ['Assigned', 'In Progress', 'Submitted', 'Revision'] %}border-indigo-500/40 bg-indigo-950/20{% else %}border-zinc-800{% endif %}">
@@ -114,16 +264,18 @@
         </span>
       </div>
     </div>
+    {% endif %}
   </div>
 
   <!-- Advance Deposit Alert Card if Payment Pending -->
+  {% if project.package != 'Starter Retainer' %}
   {% if project.status == 'Payment Pending' %}
   <div class="portal-card p-6 border-rose-500/30 bg-rose-500/5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
     <div>
       <h4 class="text-sm font-bold text-white">Milestone Deposit Invoice Awaiting Authorization</h4>
       <p class="text-xs text-zinc-400 mt-1">Sprints activate immediately upon payment verification via Razorpay / UPI.</p>
     </div>
-    <a href="{{ url_for('payments.payment_page', project_id=project.id) }}" class="px-5 py-2.5 rounded-xl bg-rose-500 hover:bg-rose-600 text-white font-bold text-xs shadow-lg transition whitespace-nowrap">
+    <a href="{{ url_for('payments.payment_page', project_id=project.id) }}" class="agency-action px-5 py-2.5 rounded-xl font-bold text-xs shadow-lg transition whitespace-nowrap">
       Pay Advance Invoice (Razorpay) →
     </a>
   </div>
@@ -138,6 +290,7 @@
     </div>
     <span class="px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-mono font-bold">PAID (INR)</span>
   </div>
+  {% endif %}
   {% endif %}
 
   <!-- Active Deliverable Review Gate (2-Revision Scope Lock) -->
@@ -183,7 +336,7 @@
 
           <form method="POST" action="{{ url_for('customer.customer_approve_project', project_id=project.id) }}" class="w-full sm:w-auto">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button type="submit" class="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-zinc-950 font-bold text-xs shadow-lg transition cursor-pointer">
+            <button type="submit" class="agency-action w-full sm:w-auto px-6 py-2.5 rounded-xl font-bold text-xs shadow-lg transition cursor-pointer">
               Approve Deliverable ✅
             </button>
           </form>
@@ -325,9 +478,127 @@
   </div>
 
   <footer class="mt-12 pt-6 border-t border-zinc-900 text-center text-xs font-mono text-zinc-600">
-    AgencyOS Milestone Workspace • SAC Code 998311 • IST Timezone
+    {{ agency_settings.agency_name }} Milestone Workspace • SAC Code 998311 • IST Timezone
   </footer>
 
+  <script>
+    (function () {
+      const checkoutButton = document.getElementById('starter-retainer-checkout');
+      const statusMessage = document.getElementById('retainer-checkout-status');
+
+      if (!checkoutButton || !statusMessage) return;
+
+      const idleLabel = checkoutButton.textContent.trim();
+      let authorizationConfirmed = false;
+
+      function showStatus(message, kind) {
+        const colors = {
+          info: 'border-indigo-500/20 bg-indigo-500/10 text-indigo-200',
+          success: 'border-emerald-500/20 bg-emerald-500/10 text-emerald-200',
+          warning: 'border-amber-500/25 bg-amber-500/10 text-amber-200',
+          error: 'border-rose-500/20 bg-rose-500/10 text-rose-200'
+        };
+        statusMessage.className = 'mt-4 rounded-lg border px-3 py-2.5 text-xs leading-relaxed ' + (colors[kind] || colors.info);
+        statusMessage.textContent = message;
+        statusMessage.hidden = false;
+      }
+
+      function resetButton() {
+        checkoutButton.disabled = false;
+        checkoutButton.textContent = idleLabel;
+      }
+
+      checkoutButton.addEventListener('click', async function () {
+        if (checkoutButton.disabled) return;
+
+        if (!window.Razorpay) {
+          showStatus('Secure checkout could not be loaded. Refresh the page and try again.', 'error');
+          return;
+        }
+
+        checkoutButton.disabled = true;
+        checkoutButton.textContent = 'Preparing secure checkout…';
+        showStatus('Preparing your recurring payment authorization. No debit has been started.', 'info');
+
+        try {
+          const response = await fetch(checkoutButton.dataset.createUrl, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {
+              'Accept': 'application/json',
+              'X-CSRFToken': checkoutButton.dataset.csrfToken
+            }
+          });
+          const checkoutData = await response.json();
+
+          if (!response.ok || !checkoutData.success) {
+            throw new Error('checkout_setup_failed');
+          }
+
+          const subscriptionStatus = (checkoutData.status || '').toLowerCase();
+          const confirmedStates = {
+            authenticated: {
+              button: 'Mandate authorized',
+              message: 'Your recurring mandate has been authorized. Retainer activation is being finalized; this does not confirm a charge.'
+            },
+            active: {
+              button: 'Mandate active',
+              message: 'Your Starter Retainer mandate is active. This confirms recurring authorization only; no charge is confirmed here.'
+            },
+            resumed: {
+              button: 'Retainer resumed',
+              message: 'Your Starter Retainer mandate has resumed. This confirms recurring authorization only; no charge is confirmed here.'
+            },
+            paused: {
+              button: 'Mandate paused',
+              message: 'Your Starter Retainer mandate is paused. Please contact your agency for assistance. No charge is confirmed here.',
+              kind: 'warning'
+            }
+          };
+
+          if (confirmedStates[subscriptionStatus]) {
+            checkoutButton.disabled = true;
+            checkoutButton.textContent = confirmedStates[subscriptionStatus].button;
+            showStatus(confirmedStates[subscriptionStatus].message, confirmedStates[subscriptionStatus].kind || 'success');
+            return;
+          }
+
+          if (!checkoutData.subscription_id || !checkoutData.razorpay_key || !checkoutData.agency_name || !checkoutData.primary_color) {
+            throw new Error('checkout_setup_failed');
+          }
+
+          const checkout = new Razorpay({
+            key: checkoutData.razorpay_key,
+            subscription_id: checkoutData.subscription_id,
+            name: checkoutData.agency_name,
+            description: 'Starter SEO Retainer · ₹14,999 per month',
+            theme: { color: checkoutData.primary_color },
+            modal: {
+              ondismiss: function () {
+                if (authorizationConfirmed) return;
+                resetButton();
+                showStatus('Checkout was closed before authorization was completed. No mandate was activated. You can try again when ready.', 'info');
+              }
+            },
+            handler: function () {
+              authorizationConfirmed = true;
+              checkoutButton.textContent = 'Authorization submitted';
+              showStatus('Razorpay received your authorization. Mandate activation is pending verification; no subscription is marked active yet.', 'success');
+            }
+          });
+
+          checkout.on('payment.failed', function () {
+            resetButton();
+            showStatus('Authorization could not be completed. No subscription was activated. Please try again or contact your agency for help.', 'error');
+          });
+          checkout.open();
+        } catch (error) {
+          resetButton();
+          showStatus('We could not start secure checkout. Please try again in a moment.', 'error');
+        }
+      });
+    }());
+  </script>
   <script>if (window.lucide) lucide.createIcons();</script>
 
 <!-- Testimonial & Rating Modal (Appears when project is Completed) -->

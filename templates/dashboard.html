@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Client Workspace — AgencyOS</title>
+  <title>Client Workspace — {{ agency_settings.agency_name }}</title>
   
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -16,19 +16,24 @@
     .portal-card { background: #121215; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 20px; }
     .portal-card:hover { border-color: rgba(255, 255, 255, 0.16); }
     .spotlight-card { background: #15151a; border: 1px solid rgba(99, 102, 241, 0.25); border-radius: 20px; }
+    .agency-action { background-color: var(--agency-primary); color: var(--agency-on-primary); }
+    .agency-action:hover { filter: brightness(.92); }
   </style>
 </head>
-<body class="bg-zinc-950 text-zinc-100 min-h-screen flex flex-col selection:bg-indigo-500 selection:text-white">
+<body class="bg-zinc-950 text-zinc-100 min-h-screen flex flex-col selection:bg-indigo-500 selection:text-white" style="--agency-primary: {{ agency_settings.primary_color }}; --agency-on-primary: {{ agency_settings.primary_contrast }};">
 
   <!-- ==================== TOP FLOATING NAVBAR ==================== -->
   <header class="border-b border-zinc-800/80 bg-zinc-950/80 backdrop-blur-md sticky top-0 z-50">
     <div class="max-w-7xl mx-auto px-6 h-18 flex items-center justify-between">
       <div class="flex items-center gap-6">
-        <a href="{{ url_for('customer.dashboard') }}" class="flex items-center gap-2.5">
-          <div class="h-9 w-9 rounded-xl bg-linear-to-tr from-indigo-600 via-indigo-500 to-violet-500 flex items-center justify-center font-bold text-white shadow-lg shadow-indigo-500/20">
-            AO
-          </div>
-          <span class="font-extrabold text-base tracking-tight text-white">AgencyOS<span class="text-indigo-400">.</span></span>
+        <a href="{{ url_for('customer.dashboard') }}" class="flex min-w-0 items-center gap-2.5 rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white">
+          {% if agency_settings.logo_url %}
+          <img src="{{ agency_settings.logo_url }}" alt="{{ agency_settings.agency_name }} logo" onerror="this.hidden=true; this.nextElementSibling.hidden=false; this.nextElementSibling.classList.remove('hidden');" class="h-9 w-9 rounded-xl border border-zinc-700 bg-zinc-900 object-contain p-1">
+          <span class="hidden h-9 w-9 shrink-0 items-center justify-center rounded-xl text-xs font-extrabold shadow-lg" style="background-color: var(--agency-primary); color: var(--agency-on-primary);" aria-hidden="true">{{ agency_settings.agency_name[:2]|upper }}</span>
+          {% else %}
+          <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-xs font-extrabold shadow-lg" style="background-color: var(--agency-primary); color: var(--agency-on-primary);">{{ agency_settings.agency_name[:2]|upper }}</span>
+          {% endif %}
+          <span class="truncate font-extrabold text-base tracking-tight text-white">{{ agency_settings.agency_name }}<span class="ml-1 inline-block h-1.5 w-1.5 rounded-full align-middle" style="background-color: var(--agency-primary)" aria-hidden="true"></span></span>
         </a>
 
         <!-- Segmented Navigation Tabs -->
@@ -48,7 +53,8 @@
 
       <!-- Quick Actions -->
       <div class="flex items-center gap-4">
-        <a href="https://wa.me/919876543210" target="_blank" class="hidden sm:flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-bold hover:bg-emerald-500/20 transition">
+        {% include "includes/client_notification_center.html" %}
+        <a href="https://wa.me/{{ agency_settings.whatsapp_support_number|replace('+', '') }}" target="_blank" rel="noopener noreferrer" class="hidden sm:flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-bold hover:bg-emerald-500/20 transition">
           <i data-lucide="message-square" class="w-3.5 h-3.5"></i>
           <span>WhatsApp Lead</span>
         </a>
@@ -96,7 +102,7 @@
       </div>
 
       <div class="flex items-center gap-3">
-        <a href="{{ url_for('customer.start_project', service_slug='website-development') }}" class="px-5 py-2.5 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-bold text-xs shadow-xl transition flex items-center gap-2 shrink-0">
+        <a href="{{ url_for('customer.start_project', service_slug='website-development') }}" class="agency-action px-5 py-2.5 rounded-xl font-bold text-xs shadow-xl transition flex items-center gap-2 shrink-0">
           <i data-lucide="plus" class="w-4 h-4"></i>
           <span>Commission New Project</span>
         </a>
@@ -151,7 +157,7 @@
           <p class="text-xs text-zinc-300 mt-1">Package: <strong class="text-white">{{ active_spotlight.package }}</strong> • Status: <span class="text-indigo-400 font-mono font-bold">{{ active_spotlight.status }}</span></p>
         </div>
 
-        <a href="{{ url_for('customer.project_details', project_id=active_spotlight.id) }}" class="px-5 py-2.5 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-bold text-xs shadow-lg transition flex items-center gap-2 self-start md:self-auto shrink-0">
+        <a href="{{ url_for('customer.project_details', project_id=active_spotlight.id) }}" class="agency-action px-5 py-2.5 rounded-xl font-bold text-xs shadow-lg transition flex items-center gap-2 self-start md:self-auto shrink-0">
           <span>Open Interactive Workspace</span>
           <i data-lucide="arrow-right" class="w-4 h-4"></i>
         </a>
@@ -245,7 +251,7 @@
             <div class="py-12 text-center text-xs text-zinc-500 font-mono">
               <i data-lucide="folder-plus" class="w-8 h-8 text-zinc-600 mx-auto mb-3"></i>
               <p>No active projects commissioned yet.</p>
-              <a href="{{ url_for('customer.start_project', service_slug='website-development') }}" class="mt-4 inline-block px-4 py-2 rounded-xl bg-white text-zinc-950 font-bold">Commission First Sprint</a>
+              <a href="{{ url_for('customer.start_project', service_slug='website-development') }}" class="agency-action mt-4 inline-block px-4 py-2 rounded-xl font-bold">Commission First Sprint</a>
             </div>
             {% endfor %}
           </div>
@@ -338,7 +344,7 @@
             <div>
               <input type="text" name="message" required placeholder="Type a note to your agency lead..." class="w-full p-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-white placeholder-zinc-500 focus:outline-none focus:border-indigo-500">
             </div>
-            <button type="submit" class="w-full py-2.5 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-bold transition cursor-pointer">
+            <button type="submit" class="agency-action w-full py-2.5 rounded-xl font-bold transition cursor-pointer">
               Send Direct Note ⚡
             </button>
             {% else %}
@@ -351,7 +357,7 @@
         <div class="portal-card p-6">
           <div class="flex items-center justify-between pb-3 border-b border-zinc-800 mb-4">
             <h3 class="text-sm font-bold text-white">Brand & Strategy Vault</h3>
-            <a href="{{ url_for('customer.customer_profile') }}" class="text-[11px] text-indigo-400 hover:underline">Edit Context</a>
+            <a href="{{ url_for('customer.customer_profile') }}" class="text-[11px] text-[var(--agency-primary)] hover:underline">Edit Context</a>
           </div>
 
           <div class="space-y-3 text-xs">
@@ -361,7 +367,7 @@
             </div>
             <div>
               <span class="text-[10px] font-mono uppercase text-zinc-500 block">Official Website</span>
-              <a href="{{ profile.website }}" target="_blank" class="text-indigo-400 hover:underline truncate block">{{ profile.website or 'Not specified' }}</a>
+              <a href="{{ profile.website }}" target="_blank" class="text-[var(--agency-primary)] hover:underline truncate block">{{ profile.website or 'Not specified' }}</a>
             </div>
             <div>
               <span class="text-[10px] font-mono uppercase text-zinc-500 block">WhatsApp Notification Target</span>
@@ -378,7 +384,7 @@
         <div class="portal-card p-6">
           <div class="flex items-center justify-between pb-3 border-b border-zinc-800 mb-4">
             <h3 class="text-sm font-bold text-white">Registered Businesses</h3>
-            <a href="{{ url_for('customer.add_business') }}" class="text-[11px] text-indigo-400 hover:underline">+ Add</a>
+            <a href="{{ url_for('customer.add_business') }}" class="text-[11px] text-[var(--agency-primary)] hover:underline">+ Add</a>
           </div>
 
           <div class="space-y-2 text-xs">
@@ -401,7 +407,7 @@
   </main>
 
   <footer class="border-t border-zinc-900 py-6 text-center text-xs font-mono text-zinc-600">
-    AgencyOS Client Portal • GST 100% Tax Invoiced (SAC 998311) • IST Operational
+    {{ agency_settings.agency_name }} Client Portal • GST 100% Tax Invoiced (SAC 998311) • IST Operational
   </footer>
 
   <script>if (window.lucide) lucide.createIcons();</script>

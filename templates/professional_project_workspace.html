@@ -16,8 +16,9 @@
     .pro-card:hover { border-color: rgba(255, 255, 255, 0.16); }
   </style>
 </head>
-<body class="bg-zinc-950 text-zinc-100 min-h-screen p-6 sm:p-10 max-w-5xl mx-auto selection:bg-indigo-500 selection:text-white space-y-6">
+<body class="bg-zinc-950 text-zinc-100 min-h-screen p-6 sm:p-10 max-w-5xl mx-auto selection:bg-indigo-500 selection:text-white space-y-6" style="--agency-primary: {{ agency_settings.primary_color }}; --agency-on-primary: {{ agency_settings.primary_contrast }};">
 
+  {% include "includes/agency_brand.html" %}
   <!-- Top Breadcrumb & Action Toolbar -->
   <div class="flex items-center justify-between pb-6 border-b border-zinc-800/80">
     <a href="/professional/dashboard" class="text-xs font-mono text-indigo-400 hover:underline flex items-center gap-1.5">
@@ -151,7 +152,7 @@
             <textarea name="completion_notes" rows="4" required placeholder="Explain what was built, testing credentials, or architecture notes..." class="w-full p-3.5 rounded-xl bg-zinc-950 border border-zinc-800 text-white focus:outline-none focus:border-indigo-500"></textarea>
           </div>
 
-          <button type="submit" class="w-full py-3.5 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-bold text-xs shadow-xl transition cursor-pointer">
+          <button type="submit" class="w-full py-3.5 rounded-xl font-bold text-xs shadow-xl transition cursor-pointer {% if current_user.role|lower == 'admin' %}bg-white hover:bg-zinc-200 text-zinc-950{% else %}hover:brightness-110{% endif %}" {% if current_user.role|lower != 'admin' %}style="background-color: var(--agency-primary); color: var(--agency-on-primary)"{% endif %}>
             Submit Deliverable for Sign-Off 🚀
           </button>
         </form>
@@ -231,7 +232,7 @@
           <form method="POST" action="{{ url_for('professional.send_workspace_message', project_id=project.id) }}" class="flex gap-2 text-xs relative">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="text" name="message" required autocomplete="off" placeholder="Type a message to Admin/Client..." class="flex-1 p-3.5 pl-4 pr-24 rounded-xl bg-zinc-950 border border-zinc-800 text-white placeholder-zinc-500 focus:outline-none focus:border-sky-500 shadow-inner">
-            <button type="submit" class="absolute right-2 top-2 bottom-2 px-5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white font-bold transition flex items-center justify-center cursor-pointer">
+            <button type="submit" class="absolute right-2 top-2 bottom-2 px-5 rounded-lg font-bold transition flex items-center justify-center cursor-pointer {% if current_user.role|lower == 'admin' %}bg-sky-600 hover:bg-sky-500 text-white{% else %}hover:brightness-110{% endif %}" {% if current_user.role|lower != 'admin' %}style="background-color: var(--agency-primary); color: var(--agency-on-primary)"{% endif %}>
               <i data-lucide="send" class="w-3.5 h-3.5"></i>
             </button>
           </form>

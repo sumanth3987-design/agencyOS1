@@ -2,7 +2,8 @@
 
 import os
 from datetime import datetime
-from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
+from urllib.parse import urlsplit
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, send_file
 from flask_login import login_required, current_user
 from app.extensions import db
 
@@ -10,9 +11,11 @@ from app.extensions import db
 from app.models import (
     User, CustomerProfile, Business, Project, Payment,
     ProfessionalProjectApplication, ProjectDelivery, ChatMessage, Invoice, Milestone,
-    get_ist_now, PACKAGE_PRICES, calculate_customer_profile_completion, get_latest_project_delivery
+    RazorpaySubscription, SubscriptionCharge, get_ist_now, PACKAGE_PRICES,
+    calculate_customer_profile_completion, get_latest_project_delivery
 )
 from app.utils.project_uploads import save_project_upload
+from app.services.pdf_generator import extract_sow_signature, generate_sow_pdf
 
 customer_bp = Blueprint("customer", __name__)
 
@@ -134,6 +137,22 @@ def project_details(project_id):
     revision_count = ProjectDelivery.query.filter_by(project_id=project.id, status="Revision").count()
     revisions_remaining = max(0, 2 - revision_count)
     payment = Payment.query.filter_by(project_id=project.id).order_by(Payment.created_at.desc()).first()
+    retainer_subscription_status = None
+    retainer_charges = []
+    if project.package == "Starter Retainer":
+        retainer_subscription = (
+            RazorpaySubscription.query.filter_by(project_id=project.id)
+            .order_by(RazorpaySubscription.id.desc())
+            .first()
+        )
+        if retainer_subscription is not None:
+            retainer_subscription_status = retainer_subscription.status.lower()
+            retainer_charges = (
+                SubscriptionCharge.query.join(RazorpaySubscription)
+                .filter(RazorpaySubscription.project_id == project.id)
+                .order_by(SubscriptionCharge.charged_at.desc())
+                .all()
+            )
 
     return render_template(
         "customer_project_details.html",
@@ -143,7 +162,10 @@ def project_details(project_id):
         deliveries=deliveries,
         messages=messages,
         revision_count=revision_count,
-        revisions_remaining=revisions_remaining
+        revisions_remaining=revisions_remaining,
+        sow_signed=extract_sow_signature(project.requirements) is not None,
+        retainer_subscription_status=retainer_subscription_status,
+        retainer_charges=retainer_charges,
     )
 
 
@@ -203,18 +225,45 @@ def view_invoice(project_id):
         flash("Unauthorized access to invoice.", "danger")
         return redirect(url_for("customer.dashboard"))
 
+    invoice_id = request.args.get("invoice_id", type=int)
+    if invoice_id is not None:
+        invoice_record = Invoice.query.filter_by(
+            id=invoice_id,
+            project_id=pid,
+            customer_id=project.customer_id,
+        ).first_or_404()
+    else:
+        invoice_record = (
+            Invoice.query.filter_by(
+                project_id=pid,
+                customer_id=project.customer_id,
+            )
+            .order_by(Invoice.id.desc())
+            .first()
+        )
+
     customer = project.customer
     profile = customer.customer_profile if customer else None
 
-    gross_amount = PACKAGE_PRICES.get(project.package, 48000)
+    gross_amount = (
+        invoice_record.gross_amount
+        if invoice_record
+        else PACKAGE_PRICES.get(project.package, 48000)
+    )
     base_amount = round(gross_amount / 1.18, 2)
     tax_total = round(gross_amount - base_amount, 2)
     cgst_amount = round(tax_total / 2, 2)
     sgst_amount = round(tax_total / 2, 2)
+    is_retainer_invoice = bool(
+        invoice_record
+        and SubscriptionCharge.query.filter_by(invoice_id=invoice_record.id).first()
+    )
 
     return render_template(
         "invoice.html",
         project=project,
+        invoice_record=invoice_record,
+        is_retainer_invoice=is_retainer_invoice,
         customer=customer,
         profile=profile,
         gross_amount=gross_amount,
@@ -222,8 +271,45 @@ def view_invoice(project_id):
         tax_total=tax_total,
         cgst_amount=cgst_amount,
         sgst_amount=sgst_amount,
-        invoice_number=f"INV-2026-{project.id:04d}",
-        invoice_date=project.created_at.strftime("%d %b %Y") if getattr(project, "created_at", None) else "01 Nov 2026"
+        invoice_number=(
+            invoice_record.invoice_number
+            if invoice_record
+            else f"INV-2026-{project.id:04d}"
+        ),
+        invoice_date=(
+            invoice_record.created_at.strftime("%d %b %Y")
+            if invoice_record and invoice_record.created_at
+            else (
+                project.created_at.strftime("%d %b %Y")
+                if getattr(project, "created_at", None)
+                else "01 Nov 2026"
+            )
+        )
+    )
+
+
+@customer_bp.route("/project/<int:project_id>/sow-pdf")
+@login_required
+def download_sow_pdf(project_id):
+    project = Project.query.get_or_404(project_id)
+    user_role = getattr(current_user, "role", "").lower()
+    if user_role != "admin" and project.customer_id != current_user.id:
+        flash("Unauthorized access to agreement.", "danger")
+        return redirect(url_for("customer.dashboard"))
+
+    signature = extract_sow_signature(project.requirements)
+    if signature is None:
+        flash("Sign the SOW before downloading the signed agreement.", "warning")
+        return redirect(url_for("customer.project_contract", project_id=project.id))
+
+    pdf_buffer = generate_sow_pdf(
+        project, project.customer, project.business, signature
+    )
+    return send_file(
+        pdf_buffer,
+        as_attachment=True,
+        download_name=f"AgencyOS_SOW_Project_{project.id}.pdf",
+        mimetype="application/pdf",
     )
 
 
@@ -261,8 +347,19 @@ def project_contract(project_id):
     business = project.business
 
     if request.method == "POST":
+        if extract_sow_signature(project.requirements):
+            flash("This SOW has already been digitally signed.", "warning")
+            return redirect(url_for("customer.project_details", project_id=project.id))
+
+        if request.form.get("agreed_terms") != "on":
+            flash("You must accept the SOW terms before signing.", "warning")
+            return redirect(url_for("customer.project_contract", project_id=project.id))
+
         signer_name = request.form.get("signer_name", "").strip()
         signer_title = request.form.get("signer_title", "").strip()
+        if not signer_name or not signer_title:
+            flash("Enter the signer's full name and title before signing.", "warning")
+            return redirect(url_for("customer.project_contract", project_id=project.id))
 
         # Record signature audit log
         signature_entry = f" [Signed by: {signer_name} ({signer_title}) from IP: {request.remote_addr} on {get_ist_now().strftime('%d %b %Y %H:%M IST')}]"
@@ -494,11 +591,130 @@ def customer_profile():
 def start_project(service_slug="website-development"):
     businesses = Business.query.filter_by(customer_id=current_user.id).all()
     if request.method == "POST":
-        service = request.form.get("service", "Website Design & Development")
-        package = request.form.get("package", "Milestone Growth")
-        reqs = request.form.get("brief", "").strip() or request.form.get("requirements", "").strip()
-        b_id = request.form.get("business_id", type=int)
-        target_business_id = b_id if b_id else (businesses[0].id if businesses else None)
+        allowed_services = {
+            "Website Design & Development",
+            "SEO",
+            "Custom Web Application",
+        }
+        service = request.form.get("service", "Website Design & Development").strip()
+        package = request.form.get("package", "Basic Website").strip()
+        brief = (
+            request.form.get("brief", "").strip()
+            or request.form.get("requirements", "").strip()
+        )
+        if service not in allowed_services:
+            flash("Select a valid service category.", "warning")
+            return redirect(url_for("customer.start_project", service_slug=service_slug))
+        if package not in PACKAGE_PRICES:
+            flash("Select a valid project package.", "warning")
+            return redirect(url_for("customer.start_project", service_slug=service_slug))
+        if not brief or len(brief) > 10000:
+            flash("Enter a project brief of 10,000 characters or fewer.", "warning")
+            return redirect(url_for("customer.start_project", service_slug=service_slug))
+        if "[Signed by:" in brief:
+            flash("The project brief contains reserved signature audit text.", "warning")
+            return redirect(url_for("customer.start_project", service_slug=service_slug))
+
+        business_id_value = request.form.get("business_id", "").strip()
+        if business_id_value:
+            try:
+                business_id = int(business_id_value)
+            except ValueError:
+                flash("Select a valid business.", "warning")
+                return redirect(url_for("customer.start_project", service_slug=service_slug))
+            target_business = Business.query.filter_by(
+                id=business_id, customer_id=current_user.id
+            ).first()
+            if target_business is None:
+                flash("Select a business associated with your account.", "danger")
+                return redirect(url_for("customer.start_project", service_slug=service_slug))
+            target_business_id = target_business.id
+        else:
+            target_business_id = businesses[0].id if businesses else None
+
+        def form_text(name, max_length):
+            value = request.form.get(name, "").strip()
+            if len(value) > max_length:
+                raise ValueError(f"{name.replace('_', ' ').capitalize()} is too long.")
+            return value
+
+        try:
+            brand_name = form_text("brand_name", 200)
+            industry = form_text("industry", 120)
+            brand_colors = form_text("brand_colors", 300)
+            asset_link = form_text("asset_link", 500)
+            deadline = form_text("deadline", 80)
+            reference_sites = form_text("reference_sites", 1000)
+            target_cities = form_text("target_cities", 500)
+            target_keywords = form_text("target_keywords", 500)
+            custom_features = form_text("custom_features", 2000)
+        except ValueError as exc:
+            flash(str(exc), "warning")
+            return redirect(url_for("customer.start_project", service_slug=service_slug))
+        allowed_deadlines = {
+            "",
+            "Urgent Sprint (7 Days)",
+            "Standard Sprint (14 Days)",
+            "Monthly Retainer Cycle (30 Days)",
+        }
+        if deadline not in allowed_deadlines:
+            flash("Select a valid project timeline.", "warning")
+            return redirect(url_for("customer.start_project", service_slug=service_slug))
+        if asset_link:
+            try:
+                asset_url = urlsplit(asset_link)
+            except ValueError:
+                flash("Enter a valid HTTP or HTTPS logo/asset link.", "warning")
+                return redirect(url_for("customer.start_project", service_slug=service_slug))
+            if asset_url.scheme not in {"http", "https"} or not asset_url.netloc:
+                flash("Enter a valid HTTP or HTTPS logo/asset link.", "warning")
+                return redirect(url_for("customer.start_project", service_slug=service_slug))
+
+        allowed_features = {
+            "Razorpay / UPI Payment Gateway",
+            "WhatsApp chat",
+            "Responsive UI",
+            "SEO schema",
+            "CMS / content management",
+            "Lead capture forms",
+            "WhatsApp Click-to-Chat",
+            "Mobile-First Responsive UI",
+            "SEO Schema & Meta Tags",
+        }
+        features = [
+            feature
+            for feature in request.form.getlist("features")
+            if feature in allowed_features
+        ]
+        sections = [
+            ("Business / Brand", brand_name),
+            ("Industry", industry),
+            ("Brand Colors", brand_colors),
+            ("Logo / Asset Link", asset_link),
+            ("Target Launch Timeline", deadline),
+            ("Competitor / Reference Websites", reference_sites),
+            ("Target Cities", target_cities),
+            ("Target SEO Keywords", target_keywords),
+            ("Requested Features", ", ".join(features)),
+            ("Custom Features", custom_features),
+            ("Detailed Project Scope", brief),
+        ]
+        reqs = "\n".join(
+            f"{label}: {value}" for label, value in sections if value
+        )
+
+        existing_draft = Project.query.filter_by(
+            customer_id=current_user.id,
+            status="Payment Pending"
+        ).order_by(Project.created_at.desc()).first()
+        if existing_draft and extract_sow_signature(existing_draft.requirements):
+            flash(
+                "This project already has a signed SOW and can no longer be changed.",
+                "warning",
+            )
+            return redirect(
+                url_for("customer.project_details", project_id=existing_draft.id)
+            )
 
         try:
             attachment_url = save_project_upload(
@@ -513,11 +729,6 @@ def start_project(service_slug="website-development"):
             reqs += f"\n\nAttached Client Document: {attachment_url}"
 
         # 1. SMART RE-USE: Check if an unpaid draft project already exists for this client
-        existing_draft = Project.query.filter_by(
-            customer_id=current_user.id,
-            status="Payment Pending"
-        ).order_by(Project.created_at.desc()).first()
-
         if existing_draft:
             # Re-use existing draft instead of generating duplicate cards
             existing_draft.service = service

@@ -2,7 +2,7 @@
 <html lang="en" class="dark scroll-smooth">
 <head>
   <meta charset="UTF-8">
-  <title>Specialist Payout Settings & Profile — AgencyOS</title>
+  <title>Specialist Payout Settings & Profile — {{ agency_settings.agency_name }}</title>
   
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -14,8 +14,9 @@
     .pro-card { background: #121215; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 20px; }
   </style>
 </head>
-<body class="bg-zinc-950 text-zinc-100 min-h-screen p-6 sm:p-12 max-w-3xl mx-auto selection:bg-indigo-500 selection:text-white space-y-6">
+<body class="bg-zinc-950 text-zinc-100 min-h-screen p-6 sm:p-12 max-w-3xl mx-auto selection:bg-indigo-500 selection:text-white space-y-6" style="--agency-primary: {{ agency_settings.primary_color }}; --agency-on-primary: {{ agency_settings.primary_contrast }};">
 
+  {% include "includes/agency_brand.html" %}
   <!-- Header -->
   <a href="/professional/dashboard" class="text-xs font-mono text-indigo-400 hover:underline flex items-center gap-1.5">
     <i data-lucide="arrow-left" class="w-3.5 h-3.5"></i>
@@ -108,7 +109,7 @@
       </div>
     </div>
 
-    <button type="submit" class="w-full py-3.5 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-bold text-xs shadow-xl transition cursor-pointer">
+    <button type="submit" class="w-full py-3.5 rounded-xl font-bold text-xs shadow-xl transition cursor-pointer {% if current_user.role|lower == 'admin' %}bg-white hover:bg-zinc-200 text-zinc-950{% else %}hover:brightness-110{% endif %}" {% if current_user.role|lower != 'admin' %}style="background-color: var(--agency-primary); color: var(--agency-on-primary)"{% endif %}>
       Save Specialist Profile & Payout Credentials →
     </button>
   </form>

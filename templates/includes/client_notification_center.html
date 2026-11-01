@@ -1,0 +1,255 @@
+<style>
+  .notification-panel {
+    width: min(22rem, calc(100vw - 2rem));
+    background: #101014;
+    border: 1px solid rgba(161, 161, 170, .22);
+    box-shadow: 0 24px 70px rgba(0, 0, 0, .56), 0 0 0 1px rgba(99, 102, 241, .08);
+    animation: notification-enter 150ms ease-out;
+  }
+  .notification-panel[hidden] { display: none; }
+  .notification-row { border-left: 2px solid transparent; }
+  .notification-row.unread {
+    background: linear-gradient(90deg, rgba(99, 102, 241, .11), rgba(99, 102, 241, .025));
+    border-left-color: #818cf8;
+  }
+  .notification-row:focus-visible,
+  .notification-action:focus-visible,
+  .notification-trigger:focus-visible {
+    outline: 2px solid #a5b4fc;
+    outline-offset: 3px;
+  }
+  @keyframes notification-enter {
+    from { opacity: 0; transform: translateY(-5px) scale(.99); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .notification-panel { animation: none; }
+  }
+</style>
+
+<div
+  class="notification-center relative"
+  data-notification-center
+  data-notifications-url="{{ url_for('collaboration.get_notifications') }}"
+  data-mark-read-url="{{ url_for('collaboration.mark_notification_read', notification_id=0) }}"
+  data-clear-all-url="{{ url_for('collaboration.clear_all_notifications') }}"
+  data-csrf-token="{{ csrf_token() }}"
+>
+  <button
+    type="button"
+    class="notification-trigger relative h-10 w-10 rounded-xl border border-zinc-800 bg-zinc-900 text-zinc-300 hover:text-white hover:border-indigo-400/50 transition flex items-center justify-center"
+    aria-label="Notifications"
+    aria-haspopup="dialog"
+    aria-expanded="false"
+    aria-controls="client-notification-panel"
+    data-notification-toggle
+  >
+    <i data-lucide="bell" class="w-4 h-4" aria-hidden="true"></i>
+    <span
+      class="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-indigo-400 text-zinc-950 text-[10px] leading-[18px] font-extrabold text-center shadow-lg shadow-indigo-950/50"
+      data-notification-badge
+      aria-live="polite"
+      hidden
+    ></span>
+  </button>
+
+  <section
+    id="client-notification-panel"
+    class="notification-panel absolute right-0 top-full mt-3 z-[70] rounded-2xl overflow-hidden"
+    role="dialog"
+    aria-labelledby="client-notification-heading"
+    tabindex="-1"
+    data-notification-panel
+    hidden
+  >
+    <header class="px-4 py-3.5 border-b border-zinc-800/90 flex items-center justify-between gap-3">
+      <div>
+        <h2 id="client-notification-heading" class="text-sm font-extrabold tracking-tight text-white">Notifications</h2>
+        <p class="text-[10px] text-zinc-500 font-mono mt-0.5">CLIENT COMMAND FEED</p>
+      </div>
+      <button
+        type="button"
+        class="notification-action text-[10px] font-bold text-indigo-300 hover:text-white disabled:text-zinc-600 disabled:cursor-not-allowed transition"
+        data-notification-clear
+        disabled
+      >Clear all</button>
+    </header>
+
+    <p class="px-4 py-2 text-[11px] text-zinc-400 border-b border-zinc-800/60" data-notification-status role="status" aria-live="polite">Loading recent activity…</p>
+    <div class="max-h-[min(60vh,26rem)] overflow-y-auto overscroll-contain" data-notification-list></div>
+  </section>
+</div>
+
+<script>
+  (() => {
+    const root = document.currentScript.previousElementSibling;
+    if (!root || !root.matches("[data-notification-center]")) return;
+
+    const toggle = root.querySelector("[data-notification-toggle]");
+    const panel = root.querySelector("[data-notification-panel]");
+    const badge = root.querySelector("[data-notification-badge]");
+    const list = root.querySelector("[data-notification-list]");
+    const status = root.querySelector("[data-notification-status]");
+    const clearButton = root.querySelector("[data-notification-clear]");
+    let loading = false;
+    let busy = false;
+    let lastUnreadCount = 0;
+
+    const setStatus = (message, isError = false) => {
+      status.textContent = message;
+      status.classList.toggle("text-rose-300", isError);
+      status.classList.toggle("text-zinc-400", !isError);
+    };
+
+    const safeHref = (value) => {
+      try {
+        const url = new URL(value, window.location.origin);
+        return url.origin === window.location.origin ? url.pathname + url.search + url.hash : null;
+      } catch (_) {
+        return null;
+      }
+    };
+
+    const refresh = async () => {
+      if (loading) return;
+      loading = true;
+      try {
+        const response = await fetch(root.dataset.notificationsUrl, {
+          credentials: "same-origin",
+          headers: { Accept: "application/json" }
+        });
+        const data = await response.json();
+        if (!response.ok || !data.success) throw new Error(data.error || "Could not load notifications.");
+
+        const unreadCount = Number(data.unread_count ?? data.count ?? 0);
+        lastUnreadCount = unreadCount;
+        badge.textContent = unreadCount > 99 ? "99+" : String(unreadCount);
+        badge.hidden = unreadCount < 1;
+        toggle.setAttribute("aria-label", unreadCount ? `Notifications, ${unreadCount} unread` : "Notifications");
+
+        list.replaceChildren();
+        clearButton.disabled = unreadCount === 0 || busy;
+        if (!Array.isArray(data.notifications) || data.notifications.length === 0) {
+          setStatus("");
+          const empty = document.createElement("p");
+          empty.className = "px-5 py-9 text-center text-xs text-zinc-400";
+          empty.textContent = "You’re all caught up. New project updates will appear here.";
+          list.append(empty);
+          return;
+        }
+
+        setStatus(`${unreadCount} unread · latest ${data.notifications.length} updates`);
+        data.notifications.forEach((notification) => {
+          const href = safeHref(notification.link);
+          const row = document.createElement(href ? "a" : "div");
+          row.className = `notification-row block px-4 py-3 border-b border-zinc-800/60 hover:bg-white/[.035] transition ${notification.is_read ? "" : "unread"}`;
+          if (href) {
+            row.href = href;
+            row.dataset.notificationId = String(notification.id);
+          }
+
+          const headline = document.createElement("span");
+          headline.className = "flex items-start gap-2 text-xs font-bold text-zinc-100";
+          if (!notification.is_read) {
+            const dot = document.createElement("span");
+            dot.className = "mt-1.5 w-1.5 h-1.5 rounded-full bg-indigo-300 shrink-0";
+            dot.setAttribute("aria-hidden", "true");
+            headline.append(dot);
+          }
+          const title = document.createElement("span");
+          title.className = "min-w-0 flex-1";
+          title.textContent = notification.title || "Project update";
+          headline.append(title);
+
+          const message = document.createElement("span");
+          message.className = "block mt-1.5 pl-3.5 text-[11px] leading-relaxed text-zinc-400";
+          message.textContent = notification.message || "";
+
+          const timestamp = document.createElement("time");
+          timestamp.className = "block mt-2 pl-3.5 text-[9px] font-mono tracking-wide text-zinc-500";
+          timestamp.textContent = notification.created_at || "";
+          row.append(headline, message, timestamp);
+
+          if (href) {
+            row.addEventListener("click", async (event) => {
+              if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+              event.preventDefault();
+              if (busy) return;
+              busy = true;
+              clearButton.disabled = true;
+              try {
+                const endpoint = root.dataset.markReadUrl.replace(/0\/read$/, `${encodeURIComponent(notification.id)}/read`);
+                const response = await fetch(endpoint, {
+                  method: "POST",
+                  credentials: "same-origin",
+                  headers: { "X-CSRFToken": root.dataset.csrfToken, Accept: "application/json" }
+                });
+                const result = await response.json();
+                if (!response.ok || !result.success) throw new Error(result.error || "Could not mark this notification as read.");
+                window.location.assign(href);
+              } catch (error) {
+                busy = false;
+                setStatus(error.message || "Could not open this notification. Try again.", true);
+                clearButton.disabled = lastUnreadCount === 0;
+              }
+            });
+          }
+          list.append(row);
+        });
+      } catch (error) {
+        setStatus(error.message || "Could not load notifications.", true);
+      } finally {
+        loading = false;
+      }
+    };
+
+    const close = (restoreFocus = false) => {
+      panel.hidden = true;
+      toggle.setAttribute("aria-expanded", "false");
+      if (restoreFocus) toggle.focus();
+    };
+
+    toggle.addEventListener("click", async () => {
+      const opening = panel.hidden;
+      panel.hidden = !opening;
+      toggle.setAttribute("aria-expanded", String(opening));
+      if (opening) {
+        await refresh();
+        panel.focus();
+      }
+    });
+
+    clearButton.addEventListener("click", async () => {
+      if (busy || clearButton.disabled) return;
+      busy = true;
+      clearButton.disabled = true;
+      setStatus("Marking notifications as read…");
+      try {
+        const response = await fetch(root.dataset.clearAllUrl, {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "X-CSRFToken": root.dataset.csrfToken, Accept: "application/json" }
+        });
+        const result = await response.json();
+        if (!response.ok || !result.success) throw new Error(result.error || "Could not clear notifications.");
+        await refresh();
+      } catch (error) {
+        setStatus(error.message || "Could not clear notifications. Try again.", true);
+      } finally {
+        busy = false;
+        clearButton.disabled = lastUnreadCount === 0;
+      }
+    });
+
+    document.addEventListener("click", (event) => {
+      if (!root.contains(event.target) && !panel.hidden) close();
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && !panel.hidden) close(true);
+    });
+    refresh();
+    window.setInterval(() => {
+      if (document.visibilityState === "visible") refresh();
+    }, 45000);
+  })();
+</script>

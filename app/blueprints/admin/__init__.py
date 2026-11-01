@@ -3,21 +3,108 @@
 import csv
 import json
 import os
+import re
+import secrets
 import urllib.request
+from decimal import Decimal, InvalidOperation
 from io import StringIO
 from datetime import datetime
+from urllib.parse import urlsplit
+import ipaddress
+from sqlalchemy.exc import IntegrityError
 
-from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, Response
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, Response, current_app
 from flask_login import login_required, current_user
 from app.extensions import db, limiter
 from app.models import (
     User, CustomerProfile, Business, ProfessionalProfile, Project, Payment,
     ProfessionalProjectApplication, ProjectDelivery, get_ist_now, PACKAGE_PRICES,
     calculate_professional_profile_completion, get_latest_project_delivery,
-    Invoice, Notification
+    Invoice, Notification, ProjectAddOn, AgencySetting
 )
 
 admin_bp = Blueprint("admin", __name__)
+
+
+def _validated_agency_settings(form):
+    values = {
+        "agency_name": form.get("agency_name", "").strip(),
+        "primary_color": form.get("primary_color", "").strip(),
+        "logo_url": form.get("logo_url", "").strip(),
+        "whatsapp_support_number": form.get("whatsapp_support_number", "").strip(),
+    }
+    errors = {}
+
+    if not values["agency_name"]:
+        errors["agency_name"] = "Enter an agency name."
+    elif len(values["agency_name"]) > 120:
+        errors["agency_name"] = "Use 120 characters or fewer."
+
+    if not re.fullmatch(r"#[0-9a-fA-F]{6}", values["primary_color"]):
+        errors["primary_color"] = "Enter a six-digit hex color, such as #6366f1."
+
+    if values["logo_url"]:
+        logo = values["logo_url"]
+        try:
+            parsed = urlsplit(logo)
+            host = parsed.hostname
+            if (
+                len(logo) > 500
+                or parsed.scheme.lower() not in ("http", "https")
+                or not parsed.netloc
+                or not host
+                or parsed.username is not None
+                or parsed.password is not None
+                or any(char.isspace() or ord(char) < 32 for char in logo)
+            ):
+                raise ValueError
+            try:
+                ipaddress.ip_address(host)
+            except ValueError:
+                ascii_host = host.encode("idna").decode("ascii")
+                labels = ascii_host.rstrip(".").split(".")
+                if not labels or any(
+                    not re.fullmatch(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?", label)
+                    for label in labels
+                ):
+                    raise ValueError
+            if parsed.port is not None and not 1 <= parsed.port <= 65535:
+                raise ValueError
+        except (ValueError, UnicodeError):
+            errors["logo_url"] = "Use a valid HTTP or HTTPS URL with a host and no credentials."
+
+    phone = values["whatsapp_support_number"]
+    digits = phone[1:] if phone.startswith("+") else phone
+    if not re.fullmatch(r"\d{8,15}", digits):
+        errors["whatsapp_support_number"] = (
+            "Enter 8–15 digits, with an optional leading +."
+        )
+
+    return values, errors
+
+
+def _agency_settings_form_values(settings, submitted=None):
+    defaults = {
+        "agency_name": "AgencyOS",
+        "primary_color": "#6366f1",
+        "logo_url": "",
+        "whatsapp_support_number": "+919876543210",
+    }
+    if settings:
+        defaults.update({
+            "agency_name": settings.agency_name,
+            "primary_color": settings.primary_color,
+            "logo_url": settings.logo_url or "",
+            "whatsapp_support_number": settings.whatsapp_support_number,
+        })
+    if submitted is not None:
+        defaults.update(submitted)
+    return defaults
+
+
+def _apply_agency_settings(settings, values):
+    for key, value in values.items():
+        setattr(settings, key, (value or None) if key == "logo_url" else value)
 
 
 # =========================================================
@@ -86,6 +173,65 @@ def admin_dashboard():
         pagination=pagination,
         current_status=status_filter,
         search_query=search_query
+    )
+
+
+@admin_bp.route("/admin/settings", methods=["GET", "POST"])
+@login_required
+def agency_settings():
+    if getattr(current_user, "role", "").lower() != "admin":
+        flash("Admin access required.", "danger")
+        return redirect(url_for("customer.dashboard"))
+
+    settings = db.session.get(AgencySetting, 1)
+    errors = {}
+    form_values = _agency_settings_form_values(settings)
+
+    if request.method == "POST":
+        form_values, errors = _validated_agency_settings(request.form)
+        color_picker_value = (
+            form_values["primary_color"]
+            if re.fullmatch(r"#[0-9a-fA-F]{6}", form_values["primary_color"])
+            else (
+                settings.primary_color
+                if settings and re.fullmatch(r"#[0-9a-fA-F]{6}", settings.primary_color or "")
+                else "#6366f1"
+            )
+        )
+        if errors:
+            return render_template(
+                "admin_settings.html",
+                form_values=form_values,
+                errors=errors,
+                color_picker_value=color_picker_value,
+            ), 400
+
+        try:
+            if settings is None:
+                settings = AgencySetting(id=1)
+                db.session.add(settings)
+            _apply_agency_settings(settings, form_values)
+            db.session.commit()
+        except IntegrityError:
+            db.session.rollback()
+            settings = db.session.get(AgencySetting, 1)
+            if settings is None:
+                raise
+            _apply_agency_settings(settings, form_values)
+            db.session.commit()
+
+        flash("Agency branding settings saved.", "success")
+        return redirect(url_for("admin.agency_settings"))
+
+    return render_template(
+        "admin_settings.html",
+        form_values=form_values,
+        errors=errors,
+        color_picker_value=(
+            settings.primary_color
+            if settings and re.fullmatch(r"#[0-9a-fA-F]{6}", settings.primary_color or "")
+            else "#6366f1"
+        ),
     )
 
 
@@ -244,6 +390,47 @@ def admin_project_management():
     return render_template("admin_project_management.html", projects=projects)
 
 
+@admin_bp.route(
+    "/admin/project/<int:project_id>/send-reminder", methods=["POST"]
+)
+@login_required
+def send_admin_reminder(project_id):
+    if getattr(current_user, "role", "").lower() != "admin":
+        flash("Admin access required.", "danger")
+        return redirect(url_for("customer.dashboard"))
+
+    project = Project.query.get_or_404(project_id)
+    if project.status == "Payment Pending":
+        from app.services.reminders import send_payment_reminder
+
+        sent = send_payment_reminder(project.id, force=True)
+        reminder_type = "payment"
+    elif project.status == "Submitted":
+        from app.services.reminders import send_review_reminder
+
+        sent = send_review_reminder(project.id, force=True)
+        reminder_type = "review"
+    else:
+        flash(
+            "This project is not awaiting payment or client review.",
+            "info",
+        )
+        return redirect(url_for("admin.admin_project_management"))
+
+    if sent:
+        flash(
+            f"{reminder_type.title()} reminder sent for Project #{project.id}.",
+            "success",
+        )
+    else:
+        flash(
+            "Reminder could not be sent. Check the client email, APP_BASE_URL, "
+            "and email delivery configuration.",
+            "warning",
+        )
+    return redirect(url_for("admin.admin_project_management"))
+
+
 # =========================================================
 # QUALITY REVIEW GATE
 # =========================================================
@@ -372,6 +559,79 @@ def admin_mark_paid(project_id):
     db.session.commit()
     flash(f"Project #{project.id} marked as Paid via Offline Bank Settlement.", "success")
     return redirect(request.referrer or url_for("admin.admin_dashboard"))
+
+
+@admin_bp.route("/admin/project/<int:project_id>/add-on", methods=["POST"])
+@login_required
+def create_project_addon(project_id):
+    if getattr(current_user, "role", "").lower() != "admin":
+        flash("Admin access required.", "danger")
+        return redirect(url_for("customer.dashboard"))
+
+    project = Project.query.get_or_404(project_id)
+    if project.status not in {"Assigned", "In Progress", "Submitted", "Revision"}:
+        flash("Paid scope add-ons can only be issued for active projects.", "warning")
+        return redirect(url_for("customer.project_details", project_id=project.id))
+
+    title = request.form.get("title", "").strip()
+    raw_amount = request.form.get("amount", "").strip()
+    try:
+        amount = Decimal(raw_amount)
+    except (InvalidOperation, ValueError):
+        amount = Decimal("0")
+
+    if (
+        not title
+        or len(title) > 200
+        or not amount.is_finite()
+        or amount <= 0
+        or amount != amount.to_integral_value()
+        or amount > Decimal("999999999")
+    ):
+        flash(
+            "Enter a title (up to 200 characters) and a positive whole-rupee amount.",
+            "warning",
+        )
+        return redirect(url_for("customer.project_details", project_id=project.id))
+
+    gross_amount = int(amount)
+    tax_amount = int(
+        (amount - amount / Decimal("1.18")).quantize(Decimal("1"))
+    )
+    invoice = Invoice(
+        invoice_number=f"ADDON-{project.id}-{secrets.token_hex(4).upper()}",
+        project_id=project.id,
+        customer_id=project.customer_id,
+        gross_amount=gross_amount,
+        talent_payout=0,
+        agency_profit=gross_amount - tax_amount,
+        tax_amount=tax_amount,
+        status="Pending",
+        payout_status="Pending Approval",
+    )
+
+    try:
+        db.session.add(invoice)
+        db.session.flush()
+        addon = ProjectAddOn(
+            project_id=project.id,
+            invoice_id=invoice.id,
+            title=title,
+            amount=gross_amount,
+            status="Pending Payment",
+        )
+        db.session.add(addon)
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception(
+            "Failed to create a scope add-on for project #%s", project.id
+        )
+        flash("Could not issue the paid scope add-on. Please try again.", "danger")
+        return redirect(url_for("customer.project_details", project_id=project.id))
+
+    flash(f"Paid scope add-on '{title}' issued to the client.", "success")
+    return redirect(url_for("customer.project_details", project_id=project.id))
 
 
 @admin_bp.route("/admin/project/<int:project_id>/unassign", methods=["POST"])

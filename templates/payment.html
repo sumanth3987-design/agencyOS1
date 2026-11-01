@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Authorize Milestone Payment — AgencyOS</title>
+  <title>Authorize Milestone Payment — {{ agency_settings.agency_name }}</title>
   
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -15,25 +15,33 @@
   <style>
     body { background-color: #09090b; font-family: 'Plus Jakarta Sans', sans-serif; color: #f4f4f5; }
     .checkout-card { background: #121215; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 20px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7); }
+    #payBtn { background-color: var(--agency-primary); color: var(--agency-on-primary); }
+    #payBtn:hover:not(:disabled) { filter: brightness(.92); }
+    #payBtn:focus-visible { outline: 2px solid #ffffff; outline-offset: 3px; box-shadow: 0 0 0 5px var(--agency-primary); }
+    #payBtn:disabled { opacity: .65; cursor: wait; }
+    @media (max-width: 480px) {
+      .checkout-card { padding: 1rem !important; border-radius: 16px; }
+      .checkout-card > .flex.items-center.justify-between.pb-6 { align-items: flex-start; flex-wrap: wrap; gap: .75rem; }
+      .checkout-card > .flex.items-center.justify-between.pb-6 > div { flex-basis: 100%; }
+      .checkout-card [aria-label="Agency identity"] { margin-bottom: .25rem; }
+      .checkout-card .py-6 .p-4 .flex.justify-between { align-items: flex-start; gap: .75rem; }
+      .checkout-card .py-6 .p-4 .flex.justify-between > :last-child { text-align: right; }
+      .checkout-card .py-6 .p-4 .items-baseline { align-items: flex-start; gap: .5rem; }
+      .checkout-card .py-6 .p-4 .text-2xl { font-size: 1.25rem; }
+      .checkout-card .py-6 > div:nth-child(3) { align-items: flex-start; }
+      .checkout-card > .mt-6.text-center { flex-wrap: wrap; gap: .35rem .65rem; }
+    }
   </style>
 </head>
-<body class="bg-zinc-950 text-zinc-100 min-h-screen flex items-center justify-center p-6 selection:bg-indigo-500 selection:text-white">
+<body class="bg-zinc-950 text-zinc-100 min-h-screen flex items-center justify-center p-6 selection:bg-[var(--agency-primary)] selection:text-[var(--agency-on-primary)]" style="--agency-primary: {{ agency_settings.primary_color }}; --agency-on-primary: {{ agency_settings.primary_contrast }};">
 
   <div class="checkout-card max-w-lg w-full p-8 relative overflow-hidden">
     <!-- Ambient Accent Line -->
-    <div class="absolute inset-x-0 -top-px h-px bg-linear-to-r from-transparent via-indigo-500/60 to-transparent"></div>
+    <div class="absolute inset-x-0 -top-px h-px" style="background: linear-gradient(to right, transparent, var(--agency-primary), transparent); opacity: .6;"></div>
 
     <!-- Header -->
     <div class="flex items-center justify-between pb-6 border-b border-zinc-800">
-      <div class="flex items-center gap-3">
-        <div class="h-10 w-10 rounded-xl bg-linear-to-tr from-indigo-600 via-indigo-500 to-violet-500 flex items-center justify-center font-bold text-white shadow-lg shadow-indigo-500/20">
-          AO
-        </div>
-        <div>
-          <span class="font-extrabold text-white text-base tracking-tight block">AgencyOS Checkout</span>
-          <span class="text-[10px] font-mono text-zinc-500">Official Indian Payment Rail</span>
-        </div>
-      </div>
+      <div class="min-w-0 flex-1">{% include "includes/agency_brand.html" %}</div>
 
       <span class="px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-mono font-bold">
         SAC 998311
@@ -49,15 +57,26 @@
     <!-- Milestone Context & Financial Breakdown -->
     <div class="py-6 space-y-4">
       <div>
-        <span class="text-xs font-mono uppercase text-indigo-400 font-bold block mb-1">Milestone Invoice #{{ project.id }}</span>
+        {% if addon %}
+        <span class="text-xs font-mono uppercase text-amber-400 font-bold block mb-1">Change Request Invoice {{ addon.invoice.invoice_number }}</span>
+        <h2 class="text-xl font-bold text-white tracking-tight">{{ addon.title }}</h2>
+        <p class="text-xs text-zinc-400 mt-1">Additional scope for project #{{ project.id }}</p>
+        {% else %}
+        <span class="text-xs font-mono uppercase text-[var(--agency-primary)] font-bold block mb-1">Milestone Invoice #{{ project.id }}</span>
         <h2 class="text-xl font-bold text-white tracking-tight">{{ project.service }}</h2>
         <p class="text-xs text-zinc-400 mt-1">Package: <strong class="text-zinc-200">{{ project.package }}</strong> • 50% Kickoff Advance Deposit</p>
+        {% endif %}
       </div>
 
       <!-- Financial GST Breakdown Card -->
       {% set gross_val = (amount / 100)|round(2) if amount else (payment.amount if payment and payment.amount else 48000) %}
+      {% if addon %}
+      {% set tax_val = addon.invoice.tax_amount %}
+      {% set base_val = gross_val - tax_val %}
+      {% else %}
       {% set base_val = (gross_val / 1.18)|round(2) %}
       {% set tax_val = (gross_val - base_val)|round(2) %}
+      {% endif %}
       
       <div class="p-4 rounded-xl bg-zinc-950 border border-zinc-800 space-y-2 text-xs">
         <div class="flex justify-between text-zinc-400">
@@ -82,9 +101,9 @@
     </div>
 
     <!-- Primary Action: Real Razorpay Checkout Launcher -->
-    <button type="button" id="payBtn" onclick="launchRazorpayCheckout()" class="w-full py-3.5 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-bold text-sm shadow-xl transition flex items-center justify-center gap-2 cursor-pointer">
-      <i data-lucide="shield-check" class="w-4 h-4 text-emerald-600"></i>
-      <span id="btnText">Pay Deposit with Razorpay / UPI (₹{{ gross_val }})</span>
+    <button type="button" id="payBtn" onclick="launchRazorpayCheckout()" class="w-full py-3.5 rounded-xl font-bold text-sm shadow-xl transition flex items-center justify-center gap-2 cursor-pointer">
+      <i data-lucide="shield-check" class="w-4 h-4"></i>
+      <span id="btnText">{% if addon %}Authorize Add-On with Razorpay / UPI{% else %}Pay Deposit with Razorpay / UPI{% endif %} (₹{{ gross_val }})</span>
     </button>
 
     <!-- Return Link -->
@@ -128,7 +147,8 @@
           headers: {
             "Content-Type": "application/json",
             "X-CSRFToken": "{{ csrf_token() }}"
-          }
+          },
+          body: JSON.stringify({% if addon %}{ addon_id: {{ addon.id }} }{% else %}{}{% endif %})
         });
 
         const orderData = await orderRes.json();
@@ -141,8 +161,9 @@
           key: orderData.key_id,
           amount: orderData.amount,
           currency: orderData.currency || "INR",
-          name: "AgencyOS",
-          description: "Advance Deposit for Project #{{ project.id }}",
+          name: {{ agency_settings.agency_name|tojson }},
+          image: {{ agency_settings.logo_url|tojson }},
+          description: {% if addon %}{{ addon.title|tojson }}{% else %}"Advance Deposit for Project #{{ project.id }}"{% endif %},
           order_id: orderData.order_id,
           handler: async function (response) {
             btnText.textContent = "Verifying payment with bank...";
@@ -163,7 +184,7 @@
 
               const verifyData = await verifyRes.json();
               if (verifyRes.ok && verifyData.success) {
-                // Success: Redirect directly into project details
+                // Success: Return to the updated project workspace.
                 window.location.href = "{{ url_for('customer.project_details', project_id=project.id) }}";
               } else {
                 throw new Error(verifyData.message || "Payment verification failed.");
@@ -177,17 +198,17 @@
           modal: {
             ondismiss: function () {
               btn.disabled = false;
-              btnText.textContent = "Pay Deposit with Razorpay / UPI (₹{{ gross_val }})";
+              btnText.textContent = "{% if addon %}Authorize Add-On{% else %}Pay Deposit{% endif %} with Razorpay / UPI (₹{{ gross_val }})";
             }
           },
-          theme: { color: "#4f46e5" }
+          theme: { color: {{ agency_settings.primary_color|tojson }} }
         };
 
         const rzp = new Razorpay(options);
         rzp.open();
       } catch (err) {
         btn.disabled = false;
-        btnText.textContent = "Pay Deposit with Razorpay / UPI (₹{{ gross_val }})";
+        btnText.textContent = "{% if addon %}Authorize Add-On{% else %}Pay Deposit{% endif %} with Razorpay / UPI (₹{{ gross_val }})";
         showError(err.message);
       }
     }

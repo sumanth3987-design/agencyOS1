@@ -2,9 +2,12 @@
 
 import os
 import logging
+import re
 from logging.handlers import RotatingFileHandler
 from flask import Flask, url_for, request, jsonify, flash, session, redirect, send_from_directory
 from werkzeug.routing import BuildError
+from types import SimpleNamespace
+from urllib.parse import urlsplit
 from app.config import (
     config_by_name,
     resolve_app_base_url,
@@ -167,11 +170,28 @@ def create_app(config_name="default", config_overrides=None):
     def load_user(user_id):
         return User.query.get(int(user_id))
 
+    @app.cli.command("send-reminders")
+    def send_reminders_command():
+        """Send due payment and deliverable review reminders."""
+        from click import ClickException
+        from app.services.reminders import run_due_reminders
+
+        summary = run_due_reminders()
+        print(
+            "Reminder run complete: "
+            f"{summary['payment_sent']} payment, "
+            f"{summary['review_sent']} review, "
+            f"{summary['failed']} failed."
+        )
+        if summary["failed"]:
+            raise ClickException("Some reminders could not be sent; inspect application logs.")
+
     # Register Blueprints
     from app.blueprints.auth import auth_bp
     from app.blueprints.customer import customer_bp
     from app.blueprints.professional import professional_bp
     from app.blueprints.admin import admin_bp
+    from app.blueprints.collaboration import collaboration_bp
     from app.blueprints.payments import payments_bp
     from app.blueprints.api import api_bp
     from app.routes.public import public_bp
@@ -180,6 +200,7 @@ def create_app(config_name="default", config_overrides=None):
     app.register_blueprint(customer_bp)
     app.register_blueprint(professional_bp)
     app.register_blueprint(admin_bp)
+    app.register_blueprint(collaboration_bp)
     app.register_blueprint(payments_bp)
     app.register_blueprint(api_bp)
     app.register_blueprint(public_bp)
@@ -199,6 +220,63 @@ def create_app(config_name="default", config_overrides=None):
             return None
 
     app.url_build_error_handlers.append(resolve_bare_endpoint)
+
+    @app.context_processor
+    def inject_agency_settings():
+        from app.models import AgencySetting
+
+        defaults = {
+            "agency_name": "AgencyOS",
+            "primary_color": "#6366f1",
+            "logo_url": None,
+            "whatsapp_support_number": "+919876543210",
+        }
+        settings = db.session.get(AgencySetting, 1)
+        if settings is not None:
+            name = (settings.agency_name or "").strip()
+            color = settings.primary_color or ""
+            logo_url = settings.logo_url or ""
+            phone = settings.whatsapp_support_number or ""
+            if name and len(name) <= 120:
+                defaults["agency_name"] = name
+            if re.fullmatch(r"#[0-9a-fA-F]{6}", color):
+                defaults["primary_color"] = color
+            if logo_url:
+                try:
+                    parsed = urlsplit(logo_url)
+                    host = parsed.hostname
+                    if (
+                        parsed.scheme.lower() in ("http", "https")
+                        and parsed.netloc
+                        and host
+                        and parsed.username is None
+                        and parsed.password is None
+                        and not any(char.isspace() or ord(char) < 32 for char in logo_url)
+                    ):
+                        parsed.port
+                        defaults["logo_url"] = logo_url
+                except ValueError:
+                    pass
+            if re.fullmatch(r"\+?\d{8,15}", phone):
+                defaults["whatsapp_support_number"] = phone
+
+        channels = (
+            int(defaults["primary_color"][index:index + 2], 16) / 255
+            for index in (1, 3, 5)
+        )
+        linear_channels = tuple(
+            channel / 12.92
+            if channel <= 0.04045
+            else ((channel + 0.055) / 1.055) ** 2.4
+            for channel in channels
+        )
+        luminance = (
+            0.2126 * linear_channels[0]
+            + 0.7152 * linear_channels[1]
+            + 0.0722 * linear_channels[2]
+        )
+        defaults["primary_contrast"] = "#09090b" if luminance > 0.179 else "#ffffff"
+        return {"agency_settings": SimpleNamespace(**defaults)}
 
     # Register CLI commands
     from app.cli import create_admin_command

@@ -3,15 +3,16 @@
 <html lang="en" class="dark">
 <head>
   <meta charset="UTF-8">
-  <title>My Businesses — AgencyOS</title>
+  <title>My Businesses — {{ agency_settings.agency_name }}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <script src="https://cdn.tailwindcss.com"></script>
   <style>body { background-color: #09090b; font-family: 'Plus Jakarta Sans', sans-serif; }</style>
 </head>
-<body class="bg-[#09090b] text-zinc-100 min-h-screen p-6 sm:p-12 max-w-4xl mx-auto space-y-6">
+<body class="bg-[#09090b] text-zinc-100 min-h-screen p-6 sm:p-12 max-w-4xl mx-auto space-y-6" style="--agency-primary: {{ agency_settings.primary_color }}; --agency-on-primary: {{ agency_settings.primary_contrast }};">
 
-  <a href="{{ url_for('customer.dashboard') }}" class="text-xs font-mono text-indigo-400 hover:underline">← Return to Workspace</a>
+  {% include "includes/agency_brand.html" %}
+  <a href="{{ url_for('customer.dashboard') }}" class="text-xs font-mono text-[var(--agency-primary)] hover:underline">← Return to Workspace</a>
 
   <!-- Flash Messages -->
   {% with messages = get_flashed_messages(with_categories=true) %}
@@ -43,7 +44,7 @@
         <h3 class="text-sm font-bold text-white">{{ b.name }}</h3>
         <p class="text-xs text-zinc-400 mt-1">{{ b.business_type or 'Local Business' }} • {{ b.location or 'India' }}</p>
         {% if b.website %}
-          <a href="{{ b.website }}" target="_blank" class="text-[11px] text-indigo-400 hover:underline mt-1 block truncate">{{ b.website }}</a>
+          <a href="{{ b.website }}" target="_blank" class="text-[11px] text-[var(--agency-primary)] hover:underline mt-1 block truncate">{{ b.website }}</a>
         {% endif %}
       </div>
 
