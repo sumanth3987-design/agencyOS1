@@ -1,19 +1,68 @@
+<!-- Save this directly into: templates/businesses.html -->
 <!DOCTYPE html>
-<html lang="en" class="dark"><head><meta charset="UTF-8"><title>My Businesses — AgencyOS</title><script src="https://cdn.tailwindcss.com"></script></head>
-<body class="bg-[#09090b] text-zinc-100 font-sans min-h-screen p-6 sm:p-12 max-w-4xl mx-auto">
-  <a href="{{ url_for('dashboard') }}" class="text-xs font-mono text-indigo-400 hover:underline">← Return to Workspace</a>
-  <div class="flex items-center justify-between pb-6 border-b border-zinc-800 mt-6">
-    <h1 class="text-2xl font-extrabold text-white">My Registered Businesses</h1>
-    <a href="{{ url_for('add_business') }}" class="px-4 py-2 rounded-xl bg-white text-zinc-950 font-bold text-xs">+ Add Business</a>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <title>My Businesses — AgencyOS</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>body { background-color: #09090b; font-family: 'Plus Jakarta Sans', sans-serif; }</style>
+</head>
+<body class="bg-[#09090b] text-zinc-100 min-h-screen p-6 sm:p-12 max-w-4xl mx-auto space-y-6">
+
+  <a href="{{ url_for('customer.dashboard') }}" class="text-xs font-mono text-indigo-400 hover:underline">← Return to Workspace</a>
+
+  <!-- Flash Messages -->
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      <div class="space-y-2">
+        {% for category, message in messages %}
+          <div class="p-3 rounded-xl border text-xs {% if category == 'success' %}bg-emerald-500/10 border-emerald-500/20 text-emerald-300{% else %}bg-zinc-800 border-zinc-700 text-zinc-200{% endif %}">
+            {{ message }}
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  {% endwith %}
+
+  <div class="flex items-center justify-between pb-6 border-b border-zinc-800">
+    <div>
+      <h1 class="text-2xl font-extrabold text-white">Registered Business Profiles</h1>
+      <p class="text-xs text-zinc-400 mt-1">Associate these profiles with commissioned sprint packages.</p>
+    </div>
+    <a href="{{ url_for('customer.add_business') }}" class="px-4 py-2 rounded-xl bg-white text-zinc-950 font-bold text-xs hover:bg-zinc-200 transition">
+      + Add Business
+    </a>
   </div>
-  <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-8">
+
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
     {% for b in businesses %}
-    <div class="p-5 rounded-2xl bg-[#121215] border border-zinc-800">
-      <h3 class="text-sm font-bold text-white">{{ b.name }}</h3>
-      <p class="text-xs text-zinc-400 mt-1">{{ b.business_type or 'Local Business' }} • {{ b.location or 'India' }}</p>
+    <div class="p-5 rounded-2xl bg-[#121215] border border-zinc-800 flex flex-col justify-between space-y-4">
+      <div>
+        <h3 class="text-sm font-bold text-white">{{ b.name }}</h3>
+        <p class="text-xs text-zinc-400 mt-1">{{ b.business_type or 'Local Business' }} • {{ b.location or 'India' }}</p>
+        {% if b.website %}
+          <a href="{{ b.website }}" target="_blank" class="text-[11px] text-indigo-400 hover:underline mt-1 block truncate">{{ b.website }}</a>
+        {% endif %}
+      </div>
+
+      <div class="pt-3 border-t border-zinc-800/80 flex items-center justify-end gap-2 text-xs">
+        <a href="{{ url_for('customer.edit_business', business_id=b.id) }}" class="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-white font-semibold transition">
+          Edit
+        </a>
+        <form method="POST" action="{{ url_for('customer.delete_business', business_id=b.id) }}" onsubmit="return confirm('Delete this business?');">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="px-3 py-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 font-semibold transition cursor-pointer">
+            Delete
+          </button>
+        </form>
+      </div>
     </div>
     {% else %}
-    <p class="text-xs text-zinc-500 col-span-2 py-8 text-center">No businesses added yet. Commission your first project to set up a business profile.</p>
+    <p class="text-xs text-zinc-500 col-span-2 py-10 text-center">No businesses added yet. Click "+ Add Business" to register your first brand.</p>
     {% endfor %}
   </div>
-</body></html>
+
+</body>
+</html>
