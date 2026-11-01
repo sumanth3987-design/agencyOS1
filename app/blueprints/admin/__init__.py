@@ -21,14 +21,14 @@ admin_bp = Blueprint("admin", __name__)
 
 
 # =========================================================
-# ADMIN EXECUTIVE DASHBOARD (PAGINATION & METRICS)
+# ADMIN EXECUTIVE DASHBOARD
 # =========================================================
 
 @admin_bp.route("/admin/dashboard")
 @admin_bp.route("/admin")
 @login_required
 def admin_dashboard():
-    if current_user.role != "admin":
+    if getattr(current_user, "role", "").lower() != "admin":
         flash("Admin access required.", "danger")
         return redirect(url_for("customer.dashboard"))
 
@@ -90,28 +90,36 @@ def admin_dashboard():
 
 
 # =========================================================
-# ADMIN CUSTOMERS / CLIENT CRM
+# ADMIN PROJECT DIRECT INSPECTION ROUTE
+# =========================================================
+
+@admin_bp.route("/admin/project/<int:project_id>")
+@login_required
+def admin_project_view(project_id):
+    if getattr(current_user, "role", "").lower() != "admin":
+        flash("Admin access required.", "danger")
+        return redirect(url_for("customer.dashboard"))
+
+    # Direct redirect into the unified project workspace with Admin privileges
+    return redirect(url_for("customer.project_details", project_id=project_id))
+
+
+# =========================================================
+# ADMIN CLIENT CRM
 # =========================================================
 
 @admin_bp.route("/admin/customers")
 @login_required
 def admin_customers():
-    if current_user.role != "admin":
+    if getattr(current_user, "role", "").lower() != "admin":
         flash("Admin access required.", "danger")
         return redirect(url_for("customer.dashboard"))
 
     customers = User.query.filter(User.role.in_(["customer", "client"])).order_by(User.created_at.desc()).all()
     all_projects = Project.query.order_by(Project.created_at.desc()).all()
 
-    customer_profiles = {}
-    customer_projects = {c.id: [] for c in customers}
-
-    for c in customers:
-        customer_profiles[c.id] = CustomerProfile.query.filter_by(user_id=c.id).first()
-
-    for p in all_projects:
-        if p.customer_id in customer_projects:
-            customer_projects[p.customer_id].append(p)
+    customer_profiles = {c.id: CustomerProfile.query.filter_by(user_id=c.id).first() for c in customers}
+    customer_projects = {c.id: [p for p in all_projects if p.customer_id == c.id] for c in customers}
 
     return render_template(
         "admin_customers.html",
@@ -122,13 +130,13 @@ def admin_customers():
 
 
 # =========================================================
-# ADMIN PROFESSIONALS / SPECIALISTS
+# SPECIALIST TALENT MANAGEMENT & VERIFICATION
 # =========================================================
 
 @admin_bp.route("/admin/professionals")
 @login_required
 def admin_professionals():
-    if current_user.role != "admin":
+    if getattr(current_user, "role", "").lower() != "admin":
         flash("Admin access required.", "danger")
         return redirect(url_for("customer.dashboard"))
 
@@ -145,7 +153,7 @@ def admin_professionals():
 @admin_bp.route("/admin/professionals/<int:profile_id>/verify", methods=["POST"])
 @login_required
 def verify_professional(profile_id):
-    if current_user.role != "admin":
+    if getattr(current_user, "role", "").lower() != "admin":
         flash("Admin access required.", "danger")
         return redirect(url_for("customer.dashboard"))
 
@@ -161,7 +169,7 @@ def verify_professional(profile_id):
 @admin_bp.route("/admin/professionals/<int:profile_id>/reject", methods=["POST"])
 @login_required
 def reject_professional(profile_id):
-    if current_user.role != "admin":
+    if getattr(current_user, "role", "").lower() != "admin":
         flash("Admin access required.", "danger")
         return redirect(url_for("customer.dashboard"))
 
@@ -174,13 +182,13 @@ def reject_professional(profile_id):
 
 
 # =========================================================
-# TALENT APPLICATIONS
+# TALENT APPLICATION ASSIGNMENTS
 # =========================================================
 
 @admin_bp.route("/admin/applications")
 @login_required
 def admin_applications():
-    if current_user.role != "admin":
+    if getattr(current_user, "role", "").lower() != "admin":
         flash("Admin access required.", "danger")
         return redirect(url_for("customer.dashboard"))
 
@@ -194,7 +202,7 @@ def admin_applications():
 @admin_bp.route("/admin/applications/<int:application_id>/assign", methods=["POST"])
 @login_required
 def assign_professional(application_id):
-    if current_user.role != "admin":
+    if getattr(current_user, "role", "").lower() != "admin":
         flash("Admin access required.", "danger")
         return redirect(url_for("customer.dashboard"))
 
@@ -217,18 +225,18 @@ def assign_professional(application_id):
         o.status = "Not Selected"
 
     db.session.commit()
-    flash("Specialist successfully assigned to project.", "success")
+    flash("Specialist successfully assigned to project sprint.", "success")
     return redirect(url_for("admin.admin_applications"))
 
 
 # =========================================================
-# PROJECT MANAGEMENT & KANBAN
+# PIPELINES & KANBAN
 # =========================================================
 
 @admin_bp.route("/admin/project-management")
 @login_required
 def admin_project_management():
-    if current_user.role != "admin":
+    if getattr(current_user, "role", "").lower() != "admin":
         flash("Admin access required.", "danger")
         return redirect(url_for("customer.dashboard"))
 
@@ -237,33 +245,25 @@ def admin_project_management():
 
 
 # =========================================================
-# PROJECT REVIEW GATE
+# QUALITY REVIEW GATE
 # =========================================================
 
 @admin_bp.route("/admin/project-review")
 @login_required
 def admin_project_review():
-    if current_user.role != "admin":
+    if getattr(current_user, "role", "").lower() != "admin":
         flash("Admin access required.", "danger")
         return redirect(url_for("customer.dashboard"))
 
     projects = Project.query.order_by(Project.created_at.desc()).all()
-    project_deliveries = {}
-    project_applications = {}
-
-    for p in projects:
-        latest = (
-            ProjectDelivery.query
-            .filter_by(project_id=p.id)
-            .order_by(ProjectDelivery.submission_number.desc())
-            .first()
-        )
-        project_deliveries[p.id] = latest
-
-        assigned_app = ProfessionalProjectApplication.query.filter_by(
-            project_id=p.id, status="Assigned"
-        ).first()
-        project_applications[p.id] = assigned_app
+    project_deliveries = {
+        p.id: ProjectDelivery.query.filter_by(project_id=p.id).order_by(ProjectDelivery.submission_number.desc()).first()
+        for p in projects
+    }
+    project_applications = {
+        p.id: ProfessionalProjectApplication.query.filter_by(project_id=p.id, status="Assigned").first()
+        for p in projects
+    }
 
     return render_template(
         "admin_project_review.html",
@@ -276,7 +276,7 @@ def admin_project_review():
 @admin_bp.route("/admin/project/<int:project_id>/revision", methods=["POST"])
 @login_required
 def request_project_revision(project_id):
-    if current_user.role != "admin":
+    if getattr(current_user, "role", "").lower() != "admin":
         flash("Admin access required.", "danger")
         return redirect(url_for("customer.dashboard"))
 
@@ -304,7 +304,7 @@ def request_project_revision(project_id):
 @admin_bp.route("/admin/project/<int:project_id>/approve", methods=["POST"])
 @login_required
 def approve_project(project_id):
-    if current_user.role != "admin":
+    if getattr(current_user, "role", "").lower() != "admin":
         flash("Admin access required.", "danger")
         return redirect(url_for("customer.dashboard"))
 
@@ -323,13 +323,61 @@ def approve_project(project_id):
 
 
 # =========================================================
-# UNASSIGN & DELETE ACTIONS
+# MANUAL OFFLINE PAYMENT SETTLEMENT & MANAGEMENT
 # =========================================================
+
+@admin_bp.route("/admin/project/<int:project_id>/mark-paid", methods=["POST"])
+@login_required
+def admin_mark_paid(project_id):
+    if getattr(current_user, "role", "").lower() != "admin":
+        flash("Admin access required.", "danger")
+        return redirect(url_for("customer.dashboard"))
+
+    project = Project.query.get_or_404(project_id)
+    amount = PACKAGE_PRICES.get(project.package, 48000)
+
+    payment = Payment.query.filter_by(project_id=project.id).first()
+    if not payment:
+        payment = Payment(
+            project_id=project.id,
+            customer_id=project.customer_id,
+            razorpay_order_id=f"offline_order_{project.id}",
+            razorpay_payment_id=f"offline_bank_transfer_{project.id}",
+            amount=amount,
+            status="Paid",
+            paid_at=get_ist_now()
+        )
+        db.session.add(payment)
+    else:
+        payment.status = "Paid"
+        payment.paid_at = get_ist_now()
+
+    project.status = "Pending Assignment"
+
+    # Ensure invoice exists
+    invoice = Invoice.query.filter_by(project_id=project.id).first()
+    if not invoice:
+        db.session.add(Invoice(
+            invoice_number=f"INV-2026-{project.id:04d}",
+            project_id=project.id,
+            customer_id=project.customer_id,
+            gross_amount=amount,
+            tax_amount=int(amount - (amount / 1.18)),
+            status="Paid",
+            payout_status="Pending Approval"
+        ))
+    else:
+        invoice.status = "Paid"
+
+    db.session.commit()
+    flash(f"Project #{project.id} marked as Paid via Offline Bank Settlement.", "success")
+    return redirect(request.referrer or url_for("admin.admin_dashboard"))
+
 
 @admin_bp.route("/admin/project/<int:project_id>/unassign", methods=["POST"])
 @login_required
 def unassign_professional(project_id):
-    if current_user.role != "admin":
+    if getattr(current_user, "role", "").lower() != "admin":
         flash("Admin access required.", "danger")
         return redirect(url_for("customer.dashboard"))
 
@@ -350,7 +398,7 @@ def unassign_professional(project_id):
 @admin_bp.route("/admin/project/<int:project_id>/delete", methods=["POST"])
 @login_required
 def delete_project(project_id):
-    if current_user.role != "admin":
+    if getattr(current_user, "role", "").lower() != "admin":
         flash("Admin access required.", "danger")
         return redirect(url_for("customer.dashboard"))
 
@@ -368,32 +416,13 @@ def delete_project(project_id):
 
 
 # =========================================================
-# TRANSACTIONS, BROADCASTS & CSV EXPORTS
+# TRANSACTIONS, EXPORTS & AI SOW
 # =========================================================
-
-@admin_bp.route("/admin/users/<int:user_id>/toggle-status", methods=["POST"])
-@login_required
-def toggle_user_status(user_id):
-    if current_user.role != "admin":
-        flash("Admin access required.", "danger")
-        return redirect(url_for("customer.dashboard"))
-
-    user = User.query.get_or_404(user_id)
-    if user.id == current_user.id:
-        flash("You cannot block your own superadmin account.", "warning")
-        return redirect(request.referrer or url_for("admin.admin_customers"))
-
-    user.session_version = getattr(user, "session_version", 0) + 1
-    db.session.commit()
-
-    flash(f"User {user.email} session has been invalidated.", "success")
-    return redirect(request.referrer or url_for("admin.admin_customers"))
-
 
 @admin_bp.route("/admin/transactions")
 @login_required
 def admin_transactions():
-    if current_user.role != "admin":
+    if getattr(current_user, "role", "").lower() != "admin":
         flash("Admin access required.", "danger")
         return redirect(url_for("customer.dashboard"))
 
@@ -412,7 +441,7 @@ def admin_transactions():
 @admin_bp.route("/admin/notifications/broadcast", methods=["POST"])
 @login_required
 def broadcast_notification():
-    if current_user.role != "admin":
+    if getattr(current_user, "role", "").lower() != "admin":
         flash("Admin access required.", "danger")
         return redirect(url_for("customer.dashboard"))
 
@@ -440,14 +469,14 @@ def broadcast_notification():
         ))
 
     db.session.commit()
-    flash(f"Broadcast sent successfully to {len(recipients)} {target_role} recipient(s).", "success")
+    flash(f"Broadcast sent successfully to {len(recipients)} recipient(s).", "success")
     return redirect(request.referrer or url_for("admin.admin_dashboard"))
 
 
 @admin_bp.route("/admin/reports/export/<string:report_type>")
 @login_required
 def export_reports(report_type):
-    if current_user.role != "admin":
+    if getattr(current_user, "role", "").lower() != "admin":
         flash("Admin access required.", "danger")
         return redirect(url_for("customer.dashboard"))
 
@@ -456,42 +485,30 @@ def export_reports(report_type):
     writer = csv.writer(si)
 
     if report_type == "revenue":
-        writer.writerow([
-            "Invoice #", "Payment Status", "Razorpay Payment ID", "Razorpay Order ID",
-            "Payment Date", "Project ID", "Gross Invoiced (INR)", "Base Taxable Value (INR)",
-            "GST (18%) (INR)"
-        ])
+        writer.writerow(["Invoice #", "Payment Status", "Razorpay Payment ID", "Date", "Gross (INR)", "Taxable Value (INR)", "GST (INR)"])
         payments = Payment.query.order_by(Payment.created_at.desc()).all()
         for p in payments:
             gross = p.amount or 0
             base_val = round(gross / 1.18, 2) if gross > 0 else 0
             tax_val = round(gross - base_val, 2)
-            writer.writerow([
-                f"INV-{p.id:04d}", p.status, p.razorpay_payment_id or "—", p.razorpay_order_id or "—",
-                p.created_at.strftime("%Y-%m-%d %H:%M") if p.created_at else "—", p.project_id or "—",
-                gross, base_val, tax_val
-            ])
+            writer.writerow([f"INV-{p.id:04d}", p.status, p.razorpay_payment_id or "—", p.created_at.strftime("%Y-%m-%d") if p.created_at else "—", gross, base_val, tax_val])
         filename = f"AgencyOS_Revenue_{datetime.now().strftime('%Y%m%d_%H%M')}.csv"
     else:
-        writer.writerow(["Customer ID", "Name", "Email", "Role", "Created At"])
-        users = User.query.filter(User.role.in_(["customer", "client"])).all()
+        writer.writerow(["User ID", "Name", "Email", "Role", "Joined Date"])
+        users = User.query.all()
         for u in users:
-            writer.writerow([u.id, getattr(u, "name", getattr(u, "full_name", "Client")), u.email, u.role, u.created_at.strftime("%Y-%m-%d") if u.created_at else "—"])
-        filename = f"AgencyOS_Clients_{datetime.now().strftime('%Y%m%d_%H%M')}.csv"
+            writer.writerow([u.id, getattr(u, "name", getattr(u, "full_name", "User")), u.email, u.role, u.created_at.strftime("%Y-%m-%d") if u.created_at else "—"])
+        filename = f"AgencyOS_Users_{datetime.now().strftime('%Y%m%d_%H%M')}.csv"
 
     output = Response(si.getvalue(), mimetype="text/csv; charset=utf-8")
     output.headers["Content-Disposition"] = f"attachment; filename={filename}"
     return output
 
 
-# =========================================================
-# AI SCOPE OF WORK (GEMINI INTEGRATION)
-# =========================================================
-
 @admin_bp.route("/admin/ai/generate-sow", methods=["POST"])
 @login_required
 def ai_generate_sow():
-    if current_user.role != "admin":
+    if getattr(current_user, "role", "").lower() != "admin":
         return jsonify({"error": "Admin access required"}), 403
 
     client_name = request.form.get("client_name", "Valued Client").strip()
@@ -503,18 +520,16 @@ def ai_generate_sow():
 
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
-        fallback_sow = f"""### Scope of Work: {service_type}\n**Client:** {client_name}\n**Project Brief:** {notes}\n\n#### Milestone 1: Strategic Discovery & Architecture (50% Advance)\n- Wireframes, architecture, and technology stack.\n\n#### Milestone 2: Core Development & Quality Assurance (25%)\n- Production implementation and Razorpay checkout testing.\n\n#### Milestone 3: Production Handover & Deployment (25%)\n- Domain connection, SSL certification, and deployment.\n"""
+        fallback_sow = f"### Scope of Work: {service_type}\n**Client:** {client_name}\n**Brief:** {notes}\n\n#### Milestone 1: Strategic Discovery (50% Advance)\n#### Milestone 2: Production Development (25%)\n#### Milestone 3: Handover & Live Launch (25%)\n"
         return jsonify({"sow": fallback_sow})
 
     try:
         url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
-        prompt = f"Create a 3-milestone Scope of Work (SOW) for {client_name} for {service_type}: {notes}"
+        prompt = f"Create a structured 3-milestone proposal (50/25/25 split) for {client_name} for {service_type}: {notes}"
         req_data = json.dumps({"contents": [{"parts": [{"text": prompt}]}]}).encode("utf-8")
         req = urllib.request.Request(url, data=req_data, headers={"Content-Type": "application/json"})
-        
         with urllib.request.urlopen(req, timeout=15) as response:
             res_body = json.loads(response.read().decode("utf-8"))
-            generated_text = res_body["candidates"][0]["content"]["parts"][0]["text"]
-            return jsonify({"sow": generated_text})
+            return jsonify({"sow": res_body["candidates"][0]["content"]["parts"][0]["text"]})
     except Exception as e:
         return jsonify({"error": f"AI service error: {str(e)}"}), 500

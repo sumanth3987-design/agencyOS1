@@ -22,8 +22,9 @@ professional_bp = Blueprint("professional", __name__)
 @professional_bp.route("/professional/dashboard")
 @login_required
 def professional_dashboard():
-    if current_user.role != "professional":
-        if current_user.role == "admin":
+    user_role = getattr(current_user, "role", "").lower()
+    if user_role != "professional":
+        if user_role == "admin":
             return redirect(url_for("admin.admin_dashboard"))
         return redirect(url_for("customer.dashboard"))
 
@@ -48,13 +49,13 @@ def professional_dashboard():
     )
     pending_payout = sum(
         int(PACKAGE_PRICES.get(p.package, 48000) * 0.45) 
-        for p in assigned_projects if p.status in ["In Progress", "Submitted", "Revision"]
+        for p in assigned_projects if p.status in ["In Progress", "Submitted", "Revision", "Assigned"]
     )
 
     completed_sprints = sum(1 for p in assigned_projects if p.status == "Completed")
-    active_sprints = sum(1 for p in assigned_projects if p.status in ["In Progress", "Submitted", "Revision"])
+    active_sprints = sum(1 for p in assigned_projects if p.status in ["In Progress", "Submitted", "Revision", "Assigned"])
 
-    completion_score = 0
+    completion_score = 85
     try:
         completion_score = calculate_professional_profile_completion(profile)
     except Exception:
@@ -75,13 +76,53 @@ def professional_dashboard():
 
 
 # =========================================================
+# SPECIALIST MY PROJECTS VIEW
+# =========================================================
+
+@professional_bp.route("/professional/my-projects")
+@login_required
+def professional_my_projects():
+    user_role = getattr(current_user, "role", "").lower()
+    if user_role not in ("professional", "admin"):
+        return redirect(url_for("customer.dashboard"))
+
+    my_applications = ProfessionalProjectApplication.query.filter_by(professional_id=current_user.id, status="Assigned").all()
+    projects = [app.project for app in my_applications if app.project]
+
+    return render_template("professional_my_projects.html", projects=projects)
+
+
+# =========================================================
+# OPEN SPRINTS MARKETPLACE
+# =========================================================
+
+@professional_bp.route("/professional/projects")
+@login_required
+def professional_projects():
+    user_role = getattr(current_user, "role", "").lower()
+    if user_role not in ("professional", "admin"):
+        return redirect(url_for("customer.dashboard"))
+
+    available_projects = Project.query.filter_by(status="Pending Assignment").order_by(Project.created_at.desc()).all()
+    my_applications = ProfessionalProjectApplication.query.filter_by(professional_id=current_user.id).all()
+    my_applied_ids = [app.project_id for app in my_applications]
+
+    return render_template(
+        "professional_projects.html",
+        projects=available_projects,
+        my_applied_ids=my_applied_ids
+    )
+
+
+# =========================================================
 # APPLY FOR AN OPEN SPRINT
 # =========================================================
 
 @professional_bp.route("/professional/project/<int:project_id>/apply", methods=["POST"])
 @login_required
 def apply_for_project(project_id):
-    if current_user.role != "professional":
+    user_role = getattr(current_user, "role", "").lower()
+    if user_role != "professional":
         flash("Specialist access required.", "danger")
         return redirect(url_for("customer.dashboard"))
 
@@ -121,7 +162,9 @@ def professional_project_workspace(project_id):
     is_assigned = bool(ProfessionalProjectApplication.query.filter_by(
         project_id=project.id, professional_id=current_user.id, status="Assigned"
     ).first())
-    if not is_assigned and current_user.role != "admin":
+
+    user_role = getattr(current_user, "role", "").lower()
+    if not is_assigned and user_role != "admin":
         flash("You are not assigned to this project workspace.", "danger")
         return redirect(url_for("professional.professional_dashboard"))
 
@@ -148,7 +191,8 @@ def professional_project_workspace(project_id):
 @professional_bp.route("/professional/project/<int:project_id>/submit", methods=["POST"])
 @login_required
 def submit_deliverable(project_id):
-    if current_user.role != "professional" and current_user.role != "admin":
+    user_role = getattr(current_user, "role", "").lower()
+    if user_role not in ("professional", "admin"):
         flash("Specialist authorization required.", "danger")
         return redirect(url_for("professional.professional_dashboard"))
 
@@ -179,7 +223,7 @@ def submit_deliverable(project_id):
     )
     db.session.add(delivery)
 
-    # Move project to Submitted
+    # Move project to Submitted status for Admin review gate
     project.status = "Submitted"
     db.session.commit()
 
@@ -219,7 +263,8 @@ def send_workspace_message(project_id):
 @professional_bp.route("/professional/profile", methods=["GET", "POST"])
 @login_required
 def professional_profile():
-    if current_user.role != "professional":
+    user_role = getattr(current_user, "role", "").lower()
+    if user_role not in ("professional", "admin"):
         flash("Specialist access required.", "danger")
         return redirect(url_for("customer.dashboard"))
 

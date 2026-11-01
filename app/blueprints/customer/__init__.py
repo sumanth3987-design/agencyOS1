@@ -19,11 +19,13 @@ customer_bp = Blueprint("customer", __name__)
 # =========================================================
 # CLIENT DASHBOARD (MAIN WORKSPACE)
 # =========================================================
+
 @customer_bp.route("/dashboard")
 @login_required
 def dashboard():
-    if current_user.role != "customer":
-        if current_user.role == "admin":
+    user_role = getattr(current_user, "role", "").lower()
+    if user_role not in ("customer", "client"):
+        if user_role == "admin":
             return redirect(url_for("admin.admin_dashboard"))
         return redirect(url_for("professional.professional_dashboard"))
 
@@ -31,14 +33,14 @@ def dashboard():
     profile = CustomerProfile.query.filter_by(user_id=current_user.id).first()
     businesses = Business.query.filter_by(customer_id=current_user.id).all()
     
-    # Load recent discussion notes across customer's projects
+    # Load recent discussion notes
     project_ids = [p.id for p in projects]
     try:
         recent_messages = ChatMessage.query.filter(ChatMessage.project_id.in_(project_ids)).order_by(ChatMessage.created_at.desc()).limit(6).all() if project_ids else []
     except Exception:
         recent_messages = []
 
-    profile_completion = 0
+    profile_completion = 85
     if profile:
         try:
             profile_completion = calculate_customer_profile_completion(profile)
@@ -54,8 +56,9 @@ def dashboard():
         profile_completion=profile_completion
     )
 
+
 # =========================================================
-# DASHBOARD QUICK MESSAGING (DIRECT TO AGENCY LEAD)
+# DASHBOARD QUICK MESSAGING
 # =========================================================
 
 @customer_bp.route("/dashboard/quick-message", methods=["POST"])
@@ -90,8 +93,9 @@ def dashboard_quick_message():
 
     return redirect(url_for("customer.dashboard"))
 
+
 # =========================================================
-# PROJECT DETAILS (HANDLES /project/5 AND /project/5-)
+# PROJECT DETAILS & WORKSPACE
 # =========================================================
 
 @customer_bp.route("/project/<project_id>")
@@ -110,8 +114,9 @@ def project_details(project_id):
         flash(f"Project #{pid} not found in database.", "warning")
         return redirect(url_for("customer.dashboard"))
 
-    # Security check: Ensure customers only view their own projects
-    if current_user.role == "customer" and project.customer_id != current_user.id:
+    # Security check: Allow project customer or Admin
+    user_role = getattr(current_user, "role", "").lower()
+    if user_role not in ("admin",) and project.customer_id != current_user.id:
         flash("Unauthorized access to project.", "danger")
         return redirect(url_for("customer.dashboard"))
 
@@ -122,7 +127,6 @@ def project_details(project_id):
 
     deliveries = ProjectDelivery.query.filter_by(project_id=project.id).order_by(ProjectDelivery.submission_number.asc()).all()
     
-    # Safe retrieval of chat messages
     try:
         messages = ChatMessage.query.filter_by(project_id=project.id).order_by(ChatMessage.created_at.asc()).all()
     except Exception:
@@ -131,9 +135,12 @@ def project_details(project_id):
     revision_count = ProjectDelivery.query.filter_by(project_id=project.id, status="Revision").count()
     revisions_remaining = max(0, 2 - revision_count)
 
+    payment = Payment.query.filter_by(project_id=project.id).order_by(Payment.created_at.desc()).first()
+
     return render_template(
         "customer_project_details.html",
         project=project,
+        payment=payment,
         latest_delivery=latest_delivery,
         deliveries=deliveries,
         messages=messages,
@@ -143,7 +150,7 @@ def project_details(project_id):
 
 
 # =========================================================
-# IN-PROJECT DISCUSSION NOTE / MESSAGE POST
+# IN-PROJECT CHAT NOTE
 # =========================================================
 
 @customer_bp.route("/project/<project_id>/message", methods=["POST"])
@@ -154,7 +161,8 @@ def send_project_message(project_id):
     pid = int(clean_id)
 
     project = Project.query.get_or_404(pid)
-    if current_user.role == "customer" and project.customer_id != current_user.id:
+    user_role = getattr(current_user, "role", "").lower()
+    if user_role not in ("admin",) and project.customer_id != current_user.id:
         flash("Unauthorized action.", "danger")
         return redirect(url_for("customer.dashboard"))
 
@@ -181,75 +189,6 @@ def send_project_message(project_id):
 
 
 # =========================================================
-# PAYMENT CONFIRMATION / ADVANCE UNLOCK
-# =========================================================
-
-@customer_bp.route("/payment/<project_id>/confirm", methods=["GET", "POST"])
-@customer_bp.route("/payment/<int:project_id>/confirm", methods=["GET", "POST"])
-@login_required
-def confirm_payment(project_id):
-    clean_id = str(project_id).strip().rstrip("-/")
-    pid = int(clean_id)
-    project = Project.query.get_or_404(pid)
-
-    if current_user.role == "customer" and project.customer_id != current_user.id:
-        flash("Unauthorized access.", "danger")
-        return redirect(url_for("customer.dashboard"))
-
-    # 1. Update Project Status to Active/In Progress
-    project.status = "In Progress"
-
-    # 2. Update Payment Record to Paid
-    payment = Payment.query.filter_by(project_id=project.id).first()
-    pkg_amount = PACKAGE_PRICES.get(project.package, 48000)
-
-    if not payment:
-        payment = Payment(
-            project_id=project.id,
-            customer_id=project.customer_id,
-            razorpay_order_id=f"order_{project.id}_{int(datetime.now().timestamp())}",
-            razorpay_payment_id=f"pay_{project.id}_{int(datetime.now().timestamp())}",
-            amount=pkg_amount,
-            status="Paid",
-            paid_at=get_ist_now()
-        )
-        db.session.add(payment)
-    else:
-        payment.status = "Paid"
-        payment.paid_at = get_ist_now()
-        if not payment.razorpay_payment_id:
-            payment.razorpay_payment_id = f"pay_{project.id}_{int(datetime.now().timestamp())}"
-
-    # 3. Create or Update GST Tax Invoice
-    invoice = Invoice.query.filter_by(project_id=project.id).first()
-    if not invoice:
-        invoice = Invoice(
-            invoice_number=f"INV-2026-{project.id:04d}",
-            project_id=project.id,
-            customer_id=project.customer_id,
-            gross_amount=pkg_amount,
-            talent_payout=int(pkg_amount * 0.45),
-            agency_profit=int(pkg_amount * 0.55),
-            tax_amount=int(pkg_amount - (pkg_amount / 1.18)),
-            status="Paid",
-            payout_status="Pending Approval"
-        )
-        db.session.add(invoice)
-    else:
-        invoice.status = "Paid"
-
-    # 4. Fund linked milestones
-    try:
-        Milestone.query.filter_by(project_id=project.id, status="pending").update({"status": "funded"}, synchronize_session=False)
-    except Exception:
-        pass
-
-    db.session.commit()
-    flash("Advance payment authorized! Milestone 1 unlocked and active.", "success")
-    return redirect(url_for("customer.project_details", project_id=pid))
-
-
-# =========================================================
 # PRINTABLE GST TAX INVOICE (SAC 998311)
 # =========================================================
 
@@ -261,7 +200,8 @@ def view_invoice(project_id):
     pid = int(clean_id)
     project = Project.query.get_or_404(pid)
 
-    if current_user.role == "customer" and project.customer_id != current_user.id:
+    user_role = getattr(current_user, "role", "").lower()
+    if user_role not in ("admin",) and project.customer_id != current_user.id:
         flash("Unauthorized access to invoice.", "danger")
         return redirect(url_for("customer.dashboard"))
 
@@ -285,8 +225,27 @@ def view_invoice(project_id):
         cgst_amount=cgst_amount,
         sgst_amount=sgst_amount,
         invoice_number=f"INV-2026-{project.id:04d}",
-        invoice_date=project.created_at.strftime("%d %b %Y") if getattr(project, "created_at", None) else "31 Oct 2026"
+        invoice_date=project.created_at.strftime("%d %b %Y") if getattr(project, "created_at", None) else "01 Nov 2026"
     )
+
+
+# =========================================================
+# CLIENT INVOICES / BILLING LEDGER
+# =========================================================
+
+@customer_bp.route("/invoices")
+@login_required
+def invoices_list():
+    user_role = getattr(current_user, "role", "").lower()
+    if user_role not in ("customer", "client", "admin"):
+        return redirect(url_for("customer.dashboard"))
+
+    if user_role == "admin":
+        invoices = Invoice.query.order_by(Invoice.id.desc()).all()
+    else:
+        invoices = Invoice.query.filter_by(customer_id=current_user.id).order_by(Invoice.id.desc()).all()
+
+    return render_template("admin_transactions.html" if user_role == "admin" else "dashboard.html", invoices=invoices)
 
 
 # =========================================================
@@ -301,7 +260,8 @@ def customer_approve_project(project_id):
     pid = int(clean_id)
     project = Project.query.get_or_404(pid)
 
-    if current_user.role == "customer" and project.customer_id != current_user.id:
+    user_role = getattr(current_user, "role", "").lower()
+    if user_role not in ("admin",) and project.customer_id != current_user.id:
         flash("Unauthorized action.", "danger")
         return redirect(url_for("customer.dashboard"))
 
@@ -313,7 +273,6 @@ def customer_approve_project(project_id):
     project.status = "Completed"
     project.revision_comment = None
 
-    # Release milestones
     try:
         Milestone.query.filter_by(project_id=project.id).update({
             "status": "released",
@@ -323,7 +282,6 @@ def customer_approve_project(project_id):
         pass
 
     db.session.commit()
-
     flash("Milestone deliverable approved! Project marked as Completed.", "success")
     return redirect(url_for("customer.project_details", project_id=pid))
 
@@ -336,7 +294,8 @@ def customer_request_revision(project_id):
     pid = int(clean_id)
     project = Project.query.get_or_404(pid)
 
-    if current_user.role == "customer" and project.customer_id != current_user.id:
+    user_role = getattr(current_user, "role", "").lower()
+    if user_role not in ("admin",) and project.customer_id != current_user.id:
         flash("Unauthorized action.", "danger")
         return redirect(url_for("customer.dashboard"))
 
@@ -361,7 +320,7 @@ def customer_request_revision(project_id):
 
 
 # =========================================================
-# PROFILES, BUSINESSES & START PROJECT
+# BUSINESSES MANAGEMENT (ADD, EDIT, DELETE)
 # =========================================================
 
 @customer_bp.route("/businesses")
@@ -389,6 +348,37 @@ def add_business():
 
     return render_template("add_business.html")
 
+
+@customer_bp.route("/business/<int:business_id>/edit", methods=["GET", "POST"])
+@login_required
+def edit_business(business_id):
+    business = Business.query.filter_by(id=business_id, customer_id=current_user.id).first_or_404()
+
+    if request.method == "POST":
+        business.name = request.form.get("name", business.name).strip()
+        business.business_type = request.form.get("business_type", business.business_type).strip()
+        business.location = request.form.get("location", business.location).strip()
+        business.website = request.form.get("website", business.website).strip()
+        db.session.commit()
+        flash("Business profile updated successfully!", "success")
+        return redirect(url_for("customer.businesses"))
+
+    return render_template("edit_business.html", business=business)
+
+
+@customer_bp.route("/business/<int:business_id>/delete", methods=["POST"])
+@login_required
+def delete_business(business_id):
+    business = Business.query.filter_by(id=business_id, customer_id=current_user.id).first_or_404()
+    db.session.delete(business)
+    db.session.commit()
+    flash(f"Business '{business.name}' removed.", "success")
+    return redirect(url_for("customer.businesses"))
+
+
+# =========================================================
+# CUSTOMER PROFILE & START PROJECT
+# =========================================================
 
 @customer_bp.route("/customer/profile", methods=["GET", "POST"])
 @customer_bp.route("/profile", methods=["GET", "POST"])
@@ -422,11 +412,11 @@ def start_project(service_slug="website-development"):
         service = request.form.get("service", "Website Design & Development")
         package = request.form.get("package", "Milestone Growth")
         reqs = request.form.get("brief", "").strip() or request.form.get("requirements", "").strip()
-        b = Business.query.filter_by(customer_id=current_user.id).first()
+        b_id = request.form.get("business_id", type=int)
 
         project = Project(
             customer_id=current_user.id,
-            business_id=b.id if b else None,
+            business_id=b_id if b_id else (businesses[0].id if businesses else None),
             service=service,
             package=package,
             requirements=reqs,
