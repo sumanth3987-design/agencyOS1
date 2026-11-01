@@ -518,6 +518,8 @@ def create_payment_order(project_id):
         return jsonify({"success": False, "message": "Payment gateway unavailable."}), 503
 
     user_role = getattr(current_user, "role", "").lower()
+    if user_role not in ("customer", "client", "admin"):
+        return jsonify({"success": False, "message": "Customer access required."}), 403
     if user_role == "admin":
         project = Project.query.get(project_id)
     else:
@@ -621,13 +623,36 @@ def create_payment_order(project_id):
             "key_id": RAZORPAY_KEY_ID,
         })
 
+    if project.status not in ("Payment Pending", "Pending Assignment"):
+        return jsonify({
+            "success": False,
+            "message": "Project is not in a payable state.",
+        }), 400
+
+    existing_paid = Payment.query.filter_by(
+        project_id=project.id, status="Paid"
+    ).first()
+    if existing_paid is not None:
+        return jsonify({"success": False, "message": "Project has already been paid."}), 400
+
+    existing_created = Payment.query.filter_by(
+        project_id=project.id, status="Created"
+    ).first()
+    if existing_created is not None:
+        return jsonify({
+            "success": True,
+            "order_id": existing_created.razorpay_order_id,
+            "amount": to_minor_units(existing_created.amount),
+            "currency": existing_created.currency,
+            "key_id": RAZORPAY_KEY_ID,
+        })
     if project.package.strip().casefold() == STARTER_RETAINER_PACKAGE.casefold():
         return jsonify({
             "success": False,
             "message": "Starter Retainer payments require recurring mandate authorization.",
         }), 400
 
-    milestone_num = data.get("milestone", 1)
+    milestone_num = data.get("milestone")
     
     currency = project.currency or "INR"
     try:
@@ -640,8 +665,10 @@ def create_payment_order(project_id):
         }), 400
     if milestone_num in (2, 3):
         amount = (total_pkg * Decimal("0.25")).quantize(Decimal("0.01"))
-    else:
+    elif milestone_num == 1:
         amount = (total_pkg * Decimal("0.50")).quantize(Decimal("0.01"))
+    else:
+        amount = total_pkg
 
     amount_paise = to_minor_units(amount)
 
@@ -676,7 +703,36 @@ def create_payment_order(project_id):
         amount=amount,
         currency=currency,
     ))
-    db.session.commit()
+    try:
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        conflicting = Payment.query.filter_by(
+            razorpay_order_id=order_id
+        ).first()
+        if conflicting is not None:
+            return jsonify({
+                "success": False,
+                "message": "Payment order already exists.",
+            }), 400
+        logger.error(
+            "Razorpay order could not be reconciled",
+            extra={
+                "razorpay_order_id": order_id,
+                "project_id": project.id,
+            },
+        )
+        return jsonify({
+            "success": False,
+            "message": "Unable to create payment order.",
+        }), 400
+    except SQLAlchemyError as exc:
+        db.session.rollback()
+        logger.error("Could not save Razorpay order: %s", str(exc))
+        return jsonify({
+            "success": False,
+            "message": "Unable to create payment order.",
+        }), 500
 
     return jsonify({
         "success": True,
@@ -709,6 +765,10 @@ def verify_payment():
     razorpay_payment_id = data.get("razorpay_payment_id", "").strip()
     razorpay_signature = data.get("razorpay_signature", "").strip()
 
+    user_role = getattr(current_user, "role", "").lower()
+    if user_role not in ("customer", "client", "admin"):
+        return jsonify({"success": False, "message": "Customer access required."}), 403
+
     if not (razorpay_order_id and razorpay_payment_id and razorpay_signature):
         return jsonify({"success": False, "message": "Missing verification parameters."}), 400
 
@@ -716,9 +776,6 @@ def verify_payment():
     if not payment:
         return jsonify({"success": False, "message": "Payment record not found."}), 404
 
-    user_role = getattr(current_user, "role", "").lower()
-    if user_role not in ("customer", "client", "admin"):
-        return jsonify({"success": False, "message": "Customer access required."}), 403
     if user_role != "admin" and payment.customer_id != current_user.id:
         return jsonify({"success": False, "message": "Payment not found."}), 404
 

@@ -1,4 +1,4 @@
-from app.extensions import db, login_manager
+﻿from app.extensions import db, login_manager
 from flask_login import UserMixin, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime
@@ -91,11 +91,7 @@ class User(UserMixin, db.Model):
         default="customer"
     )
 
-    is_active = db.Column(
-        db.Boolean,
-        default=True,
-        nullable=False
-    )
+    is_active = db.Column(db.Boolean, default=True)  # type: ignore[override]
 
     created_at = db.Column(
         db.DateTime,
@@ -644,12 +640,12 @@ class ProfessionalProfile(db.Model):
         rating = metrics["average_rating"]
         if rating is not None and rating >= 4.8 and metrics["revision_count"] == 0:
             badges.append({
-                "name": "Top Rated 🌟",
+                "name": "Top Rated ðŸŒŸ",
                 "color": "bg-amber-500/10 text-amber-400 border-amber-500/20",
             })
         if metrics["early_sprints"] > 0:
             badges.append({
-                "name": "Speed Demon ⚡",
+                "name": "Speed Demon âš¡",
                 "color": "bg-indigo-500/10 text-indigo-400 border-indigo-500/20",
             })
         if (
@@ -657,12 +653,12 @@ class ProfessionalProfile(db.Model):
             and metrics["completion_rate"] == 100
         ):
             badges.append({
-                "name": "Reliable 🎯",
+                "name": "Reliable ðŸŽ¯",
                 "color": "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
             })
         if self.verification_status == "Verified":
             badges.append({
-                "name": "Verified Pro 🛡️",
+                "name": "Verified Pro ðŸ›¡ï¸",
                 "color": "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
             })
         return badges
@@ -762,6 +758,14 @@ class Payment(db.Model):
             postgresql_where=db.text('razorpay_payment_id IS NOT NULL'),
             sqlite_where=db.text('razorpay_payment_id IS NOT NULL'),
         ),
+        # Unique stripe_session_id when non-NULL (partial unique index)
+        db.Index(
+            'uq_payment_stripe_session_id_partial',
+            'stripe_session_id',
+            unique=True,
+            postgresql_where=db.text('stripe_session_id IS NOT NULL'),
+            sqlite_where=db.text('stripe_session_id IS NOT NULL'),
+        ),
         # At most one payment with status 'Created' per (project_id, customer_id)
         db.Index(
             'uq_payment_project_customer_created',
@@ -805,12 +809,12 @@ class Payment(db.Model):
 
     razorpay_order_id = db.Column(
         db.String(100),
-        nullable=False
+        nullable=True,
     )
 
     razorpay_payment_id = db.Column(
         db.String(100),
-        nullable=True
+        nullable=True,
     )
 
     gateway_payment_id = db.Column(
@@ -818,6 +822,18 @@ class Payment(db.Model):
         unique=True,
         nullable=True,
         index=True
+    )
+
+    stripe_session_id = db.Column(
+        db.String(100),
+        nullable=True,
+        index=True,
+    )
+
+    gateway_type = db.Column(
+        db.String(20),
+        default="razorpay",
+        nullable=False,
     )
 
     amount = db.Column(db.Numeric(12, 2), nullable=False)
@@ -1041,7 +1057,7 @@ services = [
         "description":
             "Professional websites for businesses, "
             "portfolios, startups and organizations.",
-        "icon": "🌐",
+        "icon": "ðŸŒ",
         "packages": [
             {
                 "id": "website-basic",
@@ -1067,7 +1083,7 @@ services = [
         "description":
             "Search engine optimization to improve "
             "website visibility and organic traffic.",
-        "icon": "📈",
+        "icon": "ðŸ“ˆ",
         "packages": [
             {
                 "id": "seo-starter",
@@ -1484,6 +1500,22 @@ class ActivityLog(db.Model):
     category = db.Column(db.String(30), default="info", nullable=False)
     created_at = db.Column(db.DateTime, default=get_ist_now, nullable=False)
 
+    def __init__(
+        self,
+        project_id: int | None = None,
+        user_id: int | None = None,
+        action: str | None = None,
+        description: str | None = None,
+        category: str | None = None,
+        **kwargs,
+    ):
+        super().__init__(**kwargs)
+        self.project_id = project_id
+        self.user_id = user_id
+        self.action = action
+        self.description = description
+        self.category = category
+
     project = db.relationship(
         "Project",
         backref=db.backref("activity_logs", cascade="all, delete-orphan", lazy=True),
@@ -1508,3 +1540,70 @@ class ActivityLog(db.Model):
         )
         db.session.add(log)
         return log
+
+
+class StripeWebhookEvent(db.Model):
+    """Idempotency ledger for Stripe webhook events.
+
+    Ensures each Stripe event is processed exactly once, preventing
+    duplicate charges or double state transitions on webhook replay.
+    """
+
+    __tablename__ = "stripe_webhook_event"
+
+    id = db.Column(db.Integer, primary_key=True)
+    event_id = db.Column(
+        db.String(100), nullable=False, unique=True, index=True
+    )
+    event_type = db.Column(db.String(100), nullable=False)
+    project_id = db.Column(
+        db.Integer, db.ForeignKey("project.id", ondelete="CASCADE"), nullable=True,
+    )
+    processed_at = db.Column(
+        db.DateTime, nullable=False, default=get_ist_now
+    )
+    payload = db.Column(db.Text, nullable=True)
+
+    def __init__(
+        self,
+        event_id: str | None = None,
+        event_type: str | None = None,
+        project_id: int | None = None,
+        payload: str | None = None,
+        **kwargs,
+    ):
+        super().__init__(**kwargs)
+        self.event_id = event_id
+        self.event_type = event_type
+        self.project_id = project_id
+        self.payload = payload
+
+    project = db.relationship("Project", backref="stripe_webhook_events")
+
+    @classmethod
+    def is_processed(cls, event_id: str) -> bool:
+        """Return True if the given Stripe event ID has already been processed."""
+        return (
+            db.session.query(cls)
+            .filter_by(event_id=event_id)
+            .first()
+            is not None
+        )
+
+    @classmethod
+    def mark_processed(
+        cls,
+        event_id: str,
+        event_type: str,
+        project_id: int | None = None,
+        payload: str | None = None,
+    ) -> "StripeWebhookEvent":
+        """Record that a Stripe event has been processed."""
+        event = cls(
+            event_id=event_id,
+            event_type=event_type,
+            project_id=project_id,
+            payload=payload,
+        )
+        db.session.add(event)
+        return event

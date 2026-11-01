@@ -344,8 +344,14 @@ class Config:
         SQLALCHEMY_DATABASE_URI = SQLALCHEMY_DATABASE_URI.replace("postgres://", "postgresql://", 1)
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
-    # Secure session/remember-me cookies.
-    SESSION_COOKIE_HTTPONLY = True
+    WIRE_BANK_NAME = os.getenv("WIRE_BANK_NAME", "HDFC Bank / Global Business Account")
+    WIRE_ACCOUNT_NAME = os.getenv("WIRE_ACCOUNT_NAME", "Agency OS Technologies")
+    WIRE_ACCOUNT_NUMBER = os.getenv("WIRE_ACCOUNT_NUMBER", "XXXX-XXXX-XXXX")
+    WIRE_SWIFT_BIC = os.getenv("WIRE_SWIFT_BIC", "HDFCINBBXXX")
+    WIRE_IBAN = os.getenv("WIRE_IBAN", "IN37HDFC0000...")
+
+
+# Secure session/remember-me cookies.
     SESSION_COOKIE_SAMESITE = "Lax"
     REMEMBER_COOKIE_HTTPONLY = True
     REMEMBER_COOKIE_SAMESITE = "Lax"
@@ -368,6 +374,11 @@ class Config:
     RAZORPAY_KEY_ID = os.getenv("RAZORPAY_KEY_ID", "rzp_test_placeholder")
 
     RAZORPAY_KEY_SECRET = os.getenv("RAZORPAY_KEY_SECRET", "placeholder_secret")
+
+    # Stripe Integration
+    STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY", "")
+    STRIPE_PUBLISHABLE_KEY = os.getenv("STRIPE_PUBLISHABLE_KEY", "")
+    STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "")
 
     # Account recovery and email verification.
     MAIL_BACKEND = os.getenv("MAIL_BACKEND", "console").strip().lower()

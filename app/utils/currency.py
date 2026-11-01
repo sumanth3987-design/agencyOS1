@@ -76,3 +76,16 @@ def format_currency(value, currency: str = "INR") -> str:
         raise ValueError("Currency amount must be finite.")
     symbol = CURRENCY_SYMBOLS[currency]
     return f"{symbol}{amount:,.2f}"
+
+
+def calculate_tax_rate(client_country: str, currency: str) -> Decimal:
+    """Return the tax rate applicable for the given currency/country context.
+
+    Domestic Indian clients (INR) are charged standard 18% GST. International
+    clients (USD, EUR, GBP) are treated as export of services under a standard
+    B2B setup and attract 0% tax (LUT). Region-specific VAT (e.g. EU VAT for
+    B2C digital goods) should be handled by a dedicated tax engine when needed.
+    """
+    if currency == "INR":
+        return Decimal("0.18")
+    return Decimal("0.00")

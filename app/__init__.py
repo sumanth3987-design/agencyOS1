@@ -195,6 +195,8 @@ def create_app(config_name="default", config_overrides=None):
     from app.blueprints.admin import admin_bp
     from app.blueprints.collaboration import collaboration_bp
     from app.blueprints.payments import payments_bp
+    from app.blueprints.payments.wire import wire_bp
+    from app.blueprints.payments.stripe import stripe_bp
     from app.blueprints.api import api_bp
     from app.routes.public import public_bp
 
@@ -204,6 +206,8 @@ def create_app(config_name="default", config_overrides=None):
     app.register_blueprint(admin_bp)
     app.register_blueprint(collaboration_bp)
     app.register_blueprint(payments_bp)
+    app.register_blueprint(wire_bp)
+    app.register_blueprint(stripe_bp)
     app.register_blueprint(api_bp)
     app.register_blueprint(public_bp)
 
