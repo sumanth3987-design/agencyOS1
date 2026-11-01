@@ -1,15 +1,17 @@
 {% extends "admin_base.html" %}
 {% block title %}Payments & Transactions Ledger — AgencyOS{% endblock %}
 {% block content %}
-<main class="max-w-7xl mx-auto px-6 py-8">
-  <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-6 border-b border-zinc-800/80 gap-4 mb-8">
+<main class="max-w-7xl mx-auto px-6 py-8 space-y-6">
+
+  <!-- Header -->
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-6 border-b border-zinc-800/80 gap-4">
     <div>
       <div class="flex items-center gap-2 mb-1">
         <span class="h-2 w-2 rounded-full bg-emerald-400"></span>
         <span class="text-xs font-mono uppercase text-emerald-400 font-bold">Financial Engine</span>
       </div>
       <h1 class="text-2xl font-extrabold text-white tracking-tight">Payments & Razorpay Ledger</h1>
-      <p class="text-xs text-zinc-400 mt-1">Track milestone payments, failed attempts, and GST-compliant invoices.</p>
+      <p class="text-xs text-zinc-400 mt-1">Live reconciliation of UPI milestone deposits and specialist payout allocations.</p>
     </div>
     
     <div class="flex items-center gap-3">
@@ -20,48 +22,65 @@
     </div>
   </div>
 
-  <!-- Financial Metric Tiles -->
-  <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+  <!-- Metric Tiles -->
+  <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
     <div class="p-6 rounded-2xl bg-[#121215] border border-zinc-800">
       <span class="text-xs font-mono uppercase text-zinc-400">Total Collected Revenue</span>
-      <div class="mt-3 font-mono text-3xl font-extrabold text-emerald-400">₹{{ total_collected }}</div>
-      <span class="mt-2 block text-[11px] text-zinc-500">Settled via Razorpay & UPI</span>
+      <div class="mt-3 font-mono text-3xl font-extrabold text-emerald-400">₹{{ "{:,.2f}".format(total_collected) }}</div>
+      <span class="mt-2 block text-[11px] text-zinc-500">Verified & Settled via Razorpay</span>
     </div>
     <div class="p-6 rounded-2xl bg-[#121215] border border-zinc-800">
       <span class="text-xs font-mono uppercase text-zinc-400">Pending Milestone Invoices</span>
-      <div class="mt-3 font-mono text-3xl font-extrabold text-amber-400">₹{{ pending_amount }}</div>
-      <span class="mt-2 block text-[11px] text-zinc-500">Awaiting client authorization</span>
+      <div class="mt-3 font-mono text-3xl font-extrabold text-amber-400">₹{{ "{:,.2f}".format(pending_amount) }}</div>
+      <span class="mt-2 block text-[11px] text-zinc-500">In draft / checkout pipeline</span>
     </div>
     <div class="p-6 rounded-2xl bg-[#121215] border border-zinc-800">
       <span class="text-xs font-mono uppercase text-zinc-400">Tax Compliance</span>
       <div class="mt-3 font-mono text-2xl font-bold text-white">SAC 998311</div>
-      <span class="mt-2 block text-[11px] text-zinc-500">18% GST (CGST/SGST/IGST ready)</span>
+      <span class="mt-2 block text-[11px] text-zinc-500">18% GST (CGST 9% + SGST 9%)</span>
     </div>
   </div>
 
+  <!-- Filter & Search Toolbar -->
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-2xl bg-[#121215] border border-zinc-800 text-xs">
+    <div class="flex items-center gap-1.5 flex-wrap">
+      <a href="{{ url_for('admin.admin_transactions', status='all') }}" class="px-3.5 py-1.5 rounded-lg font-bold transition {% if current_status == 'all' or not current_status %}bg-white text-zinc-950{% else %}bg-zinc-900 text-zinc-400 hover:text-white{% endif %}">
+        All Transactions
+      </a>
+      <a href="{{ url_for('admin.admin_transactions', status='Paid') }}" class="px-3.5 py-1.5 rounded-lg font-bold transition {% if current_status == 'Paid' %}bg-emerald-500 text-zinc-950{% else %}bg-zinc-900 text-zinc-400 hover:text-white{% endif %}">
+        Paid Only
+      </a>
+      <a href="{{ url_for('admin.admin_transactions', status='Created') }}" class="px-3.5 py-1.5 rounded-lg font-bold transition {% if current_status == 'Created' %}bg-amber-500 text-zinc-950{% else %}bg-zinc-900 text-zinc-400 hover:text-white{% endif %}">
+        Pending / Checkout
+      </a>
+    </div>
+    <span class="text-zinc-500 font-mono text-[11px]">
+      Showing {{ payments|length }} records (Deduplicated)
+    </span>
+  </div>
   <!-- Transactions Table -->
   <div class="rounded-2xl bg-[#121215] border border-zinc-800 overflow-hidden shadow-xl">
     <table class="w-full text-left text-xs">
       <thead class="bg-[#18181d] text-zinc-400 font-mono uppercase tracking-wider border-b border-zinc-800">
         <tr>
-          <th class="p-4">Payment ID / Order</th>
-          <th class="p-4">Customer</th>
+          <th class="p-4">Payment ID / Order ID</th>
+          <th class="p-4">Customer Email</th>
           <th class="p-4">Project</th>
           <th class="p-4">Amount (INR)</th>
           <th class="p-4">Status</th>
-          <th class="p-4 text-right">Timestamp</th>
+          <th class="p-4 text-right">Timestamp (IST)</th>
         </tr>
       </thead>
       <tbody class="divide-y divide-zinc-800/60 text-zinc-300">
         {% for p in payments %}
-        <tr class="hover:bg-white/2 transition">
+        <tr class="hover:bg-white/[0.02] transition">
           <td class="p-4">
-            <span class="font-mono text-indigo-400 block font-bold">{{ p.razorpay_payment_id or 'Order Created' }}</span>
+            <span class="font-mono text-indigo-400 block font-bold">{{ p.razorpay_payment_id or 'Order Initiated' }}</span>
             <span class="text-zinc-500 font-mono text-[10px]">{{ p.razorpay_order_id }}</span>
           </td>
           <td class="p-4 font-bold text-white">{{ p.customer.email if p.customer else 'Direct Client' }}</td>
           <td class="p-4 font-mono text-zinc-400">#{{ p.project_id }}</td>
-          <td class="p-4 font-mono font-bold text-white">₹{{ p.amount }}</td>
+          <td class="p-4 font-mono font-bold text-white">₹{{ "{:,.2f}".format(p.amount) }}</td>
           <td class="p-4">
             <span class="px-2.5 py-0.5 rounded text-[10px] font-mono border {% if p.status.lower() == 'paid' %}bg-emerald-500/10 text-emerald-400 border-emerald-500/20{% elif p.status.lower() in ['created', 'pending'] %}bg-amber-500/10 text-amber-400 border-amber-500/20{% else %}bg-rose-500/10 text-rose-400 border-rose-500/20{% endif %}">
               {{ p.status }}
@@ -72,10 +91,33 @@
           </td>
         </tr>
         {% else %}
-        <tr><td colspan="6" class="p-12 text-center text-zinc-500">No payment transaction records found.</td></tr>
+        <tr><td colspan="6" class="p-12 text-center text-zinc-500 font-mono">No payment records found matching this filter.</td></tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
+
+  <!-- Pagination Controls (< >) -->
+  {% if pagination and pagination.pages > 1 %}
+  <div class="flex items-center justify-between p-4 rounded-2xl bg-[#121215] border border-zinc-800 text-xs text-zinc-400">
+    <div>
+      Showing page <span class="font-bold text-white">{{ pagination.page }}</span> of <span class="font-bold text-white">{{ pagination.pages }}</span> (Total {{ pagination.total }} entries)
+    </div>
+    <div class="flex items-center gap-2">
+      {% if pagination.has_prev %}
+        <a href="{{ url_for('admin.admin_transactions', page=pagination.prev_num, status=current_status) }}" class="px-4 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 text-white font-mono transition">&lt; Prev</a>
+      {% else %}
+        <span class="px-4 py-1.5 rounded-lg bg-zinc-900/40 border border-zinc-800/40 text-zinc-600 font-mono cursor-not-allowed">&lt; Prev</span>
+      {% endif %}
+
+      {% if pagination.has_next %}
+        <a href="{{ url_for('admin.admin_transactions', page=pagination.next_num, status=current_status) }}" class="px-4 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 text-white font-mono transition">Next &gt;</a>
+      {% else %}
+        <span class="px-4 py-1.5 rounded-lg bg-zinc-900/40 border border-zinc-800/40 text-zinc-600 font-mono cursor-not-allowed">Next &gt;</span>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+
 </main>
 {% endblock %}

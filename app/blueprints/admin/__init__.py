@@ -426,15 +426,23 @@ def admin_transactions():
         flash("Admin access required.", "danger")
         return redirect(url_for("customer.dashboard"))
 
-    payments = Payment.query.order_by(Payment.created_at.desc()).all()
-    total_collected = sum(p.amount for p in payments if getattr(p, "status", "").lower() == "paid")
-    pending_amount = sum(p.amount for p in payments if getattr(p, "status", "").lower() in ["created", "pending"])
+    current_status = request.args.get("status", "all")
+
+    all_payments = Payment.query.order_by(Payment.created_at.desc()).all()
+    total_collected = sum(p.amount for p in all_payments if getattr(p, "status", "").lower() == "paid")
+    pending_amount = sum(p.amount for p in all_payments if getattr(p, "status", "").lower() in ["created", "pending"])
+
+    query = Payment.query
+    if current_status and current_status.lower() not in ("all",):
+        query = query.filter(Payment.status.ilike(current_status))
+    payments = query.order_by(Payment.created_at.desc()).all()
 
     return render_template(
         "admin_transactions.html",
         payments=payments,
         total_collected=total_collected,
-        pending_amount=pending_amount
+        pending_amount=pending_amount,
+        current_status=current_status,
     )
 
 
