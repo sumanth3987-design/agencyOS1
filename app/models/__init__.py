@@ -1131,13 +1131,13 @@ class Invoice(db.Model):
 class Review(db.Model):
     __tablename__ = 'reviews'
     id = db.Column(db.Integer, primary_key=True)
-    project_id = db.Column(db.Integer, db.ForeignKey('projects.id', ondelete='CASCADE'), nullable=False)
-    customer_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
+    project_id = db.Column(db.Integer, db.ForeignKey(Project.id, ondelete='CASCADE'), nullable=False, index=True)
+    customer_id = db.Column(db.Integer, db.ForeignKey(User.id, ondelete='CASCADE'), nullable=False, index=True)
     rating = db.Column(db.Integer, default=5, nullable=False)
-    tags = db.Column(db.String(255), nullable=True)  # e.g. "Shipped on Time, High ROI"
+    tags = db.Column(db.String(255), nullable=True)
     feedback = db.Column(db.Text, nullable=False)
     is_public = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=get_ist_now)
 
-    project = db.relationship('Project', backref=db.backref('review', uselist=False))
-    customer = db.relationship('User', backref='reviews')
+    project = db.relationship('Project', backref=db.backref('review', uselist=False), foreign_keys=[project_id])
+    customer = db.relationship('User', backref='reviews', foreign_keys=[customer_id])
