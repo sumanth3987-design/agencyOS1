@@ -226,6 +226,12 @@
                 <a href="{{ url_for('payments.payment_page', project_id=project.id) }}" class="px-3.5 py-1.5 rounded-xl bg-rose-500 text-white font-bold text-xs shadow hover:bg-rose-600 transition">
                   Pay Advance
                 </a>
+                <form method="POST" action="{{ url_for('customer.cancel_project', project_id=project.id) }}" class="inline" onsubmit="return confirm('Cancel this unpaid draft?');">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <button type="submit" class="px-2.5 py-1.5 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-rose-400 text-xs font-semibold transition cursor-pointer" title="Cancel Draft">
+                    ✕
+                  </button>
+                </form>
                 {% endif %}
                 <a href="{{ url_for('customer.view_invoice', project_id=project.id) }}" target="_blank" class="px-3.5 py-1.5 rounded-xl bg-zinc-900 border border-zinc-800 text-xs text-zinc-300 font-bold hover:text-white transition">
                   Invoice

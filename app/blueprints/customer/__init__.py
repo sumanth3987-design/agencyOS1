@@ -33,7 +33,6 @@ def dashboard():
     profile = CustomerProfile.query.filter_by(user_id=current_user.id).first()
     businesses = Business.query.filter_by(customer_id=current_user.id).all()
     
-    # Load recent discussion notes
     project_ids = [p.id for p in projects]
     try:
         recent_messages = ChatMessage.query.filter(ChatMessage.project_id.in_(project_ids)).order_by(ChatMessage.created_at.desc()).limit(6).all() if project_ids else []
@@ -114,7 +113,6 @@ def project_details(project_id):
         flash(f"Project #{pid} not found in database.", "warning")
         return redirect(url_for("customer.dashboard"))
 
-    # Security check: Allow project customer or Admin
     user_role = getattr(current_user, "role", "").lower()
     if user_role not in ("admin",) and project.customer_id != current_user.id:
         flash("Unauthorized access to project.", "danger")
@@ -134,7 +132,6 @@ def project_details(project_id):
 
     revision_count = ProjectDelivery.query.filter_by(project_id=project.id, status="Revision").count()
     revisions_remaining = max(0, 2 - revision_count)
-
     payment = Payment.query.filter_by(project_id=project.id).order_by(Payment.created_at.desc()).first()
 
     return render_template(
@@ -233,8 +230,6 @@ def view_invoice(project_id):
 # CLIENT INVOICES / BILLING LEDGER
 # =========================================================
 
-# In app/blueprints/customer/__init__.py
-
 @customer_bp.route("/invoices")
 @login_required
 def invoices_list():
@@ -245,6 +240,47 @@ def invoices_list():
         invoices = Invoice.query.filter_by(customer_id=current_user.id).order_by(Invoice.id.desc()).all()
 
     return render_template("client_invoices.html", invoices=invoices)
+
+
+# =========================================================
+# DIGITAL SOW CONTRACT & E-SIGNATURE
+# =========================================================
+
+@customer_bp.route("/project/<int:project_id>/contract", methods=["GET", "POST"])
+@login_required
+def project_contract(project_id):
+    project = Project.query.get_or_404(project_id)
+    user_role = getattr(current_user, "role", "").lower()
+
+    if user_role not in ("admin",) and project.customer_id != current_user.id:
+        flash("Unauthorized access to contract.", "danger")
+        return redirect(url_for("customer.dashboard"))
+
+    customer = project.customer
+    business = project.business
+
+    if request.method == "POST":
+        signer_name = request.form.get("signer_name", "").strip()
+        signer_title = request.form.get("signer_title", "").strip()
+
+        # Record signature audit log
+        signature_entry = f" [Signed by: {signer_name} ({signer_title}) from IP: {request.remote_addr} on {get_ist_now().strftime('%d %b %Y %H:%M IST')}]"
+        if not getattr(project, "requirements", ""):
+            project.requirements = signature_entry
+        else:
+            project.requirements = project.requirements + signature_entry
+
+        db.session.commit()
+        flash("SOW Agreement digitally signed! Please authorize the advance deposit.", "success")
+        return redirect(url_for("payments.payment_page", project_id=project.id))
+
+    return render_template(
+        "contract.html",
+        project=project,
+        customer=customer,
+        business=business
+    )
+
 
 # =========================================================
 # DELIVERABLE APPROVAL & REVISION
@@ -315,6 +351,51 @@ def customer_request_revision(project_id):
 
     flash("Revision feedback submitted. The specialist will update the work.", "success")
     return redirect(url_for("customer.project_details", project_id=pid))
+
+
+# =========================================================
+# CLIENT REVIEW & TESTIMONIAL SUBMISSION
+# =========================================================
+
+@customer_bp.route("/project/<int:project_id>/review", methods=["POST"])
+@login_required
+def submit_project_review(project_id):
+    project = Project.query.get_or_404(project_id)
+    if project.customer_id != current_user.id and getattr(current_user, "role", "").lower() != "admin":
+        flash("Unauthorized action.", "danger")
+        return redirect(url_for("customer.dashboard"))
+
+    rating = request.form.get("rating", 5, type=int)
+    tags = ", ".join(request.form.getlist("tags"))
+    feedback = request.form.get("feedback", "").strip()
+
+    if not feedback:
+        flash("Please provide a short review or feedback.", "warning")
+        return redirect(url_for("customer.project_details", project_id=project.id))
+
+    try:
+        from app.models import Review
+        existing_review = Review.query.filter_by(project_id=project.id).first()
+        if existing_review:
+            existing_review.rating = rating
+            existing_review.tags = tags
+            existing_review.feedback = feedback
+        else:
+            db.session.add(Review(
+                project_id=project.id,
+                customer_id=current_user.id,
+                rating=rating,
+                tags=tags,
+                feedback=feedback,
+                is_public=True
+            ))
+        db.session.commit()
+        flash("Thank you for your review! Your feedback helps us maintain top delivery standards.", "success")
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Could not submit review: {str(e)}", "danger")
+
+    return redirect(url_for("customer.project_details", project_id=project.id))
 
 
 # =========================================================
@@ -400,6 +481,11 @@ def customer_profile():
 
     return render_template("customer_profile.html", profile=profile)
 
+# In app/blueprints/customer/__init__.py
+
+# =========================================================
+# START PROJECT (WITH DUPLICATE DRAFT PREVENTION)
+# =========================================================
 
 @customer_bp.route("/start-project/<service_slug>", methods=["GET", "POST"])
 @customer_bp.route("/start-project", methods=["GET", "POST"])
@@ -411,10 +497,28 @@ def start_project(service_slug="website-development"):
         package = request.form.get("package", "Milestone Growth")
         reqs = request.form.get("brief", "").strip() or request.form.get("requirements", "").strip()
         b_id = request.form.get("business_id", type=int)
+        target_business_id = b_id if b_id else (businesses[0].id if businesses else None)
 
+        # 1. SMART RE-USE: Check if an unpaid draft project already exists for this client
+        existing_draft = Project.query.filter_by(
+            customer_id=current_user.id,
+            status="Payment Pending"
+        ).order_by(Project.created_at.desc()).first()
+
+        if existing_draft:
+            # Re-use existing draft instead of generating duplicate cards
+            existing_draft.service = service
+            existing_draft.package = package
+            existing_draft.requirements = reqs
+            existing_draft.business_id = target_business_id
+            db.session.commit()
+            flash(f"Updated Project #{existing_draft.id}. Please review SOW and proceed to checkout.", "info")
+            return redirect(url_for("customer.project_contract", project_id=existing_draft.id))
+
+        # 2. Otherwise create a new project
         project = Project(
             customer_id=current_user.id,
-            business_id=b_id if b_id else (businesses[0].id if businesses else None),
+            business_id=target_business_id,
             service=service,
             package=package,
             requirements=reqs,
@@ -423,49 +527,29 @@ def start_project(service_slug="website-development"):
         db.session.add(project)
         db.session.commit()
 
-        flash("Milestone project created! Please authorize advance deposit.", "success")
+        flash("Milestone project created! Please review and digitally sign the SOW Agreement.", "info")
         return redirect(url_for("customer.project_contract", project_id=project.id))
 
     return render_template("start_project.html", service_slug=service_slug, businesses=businesses)
 
-# In app/blueprints/customer/__init__.py
 
-@customer_bp.route("/project/<int:project_id>/review", methods=["POST"])
+# =========================================================
+# CANCEL UNPAID DRAFT PROJECT
+# =========================================================
+
+@customer_bp.route("/project/<int:project_id>/cancel", methods=["POST"])
 @login_required
-def submit_project_review(project_id):
-    project = Project.query.get_or_404(project_id)
-    if project.customer_id != current_user.id and current_user.role != "admin":
-        flash("Unauthorized action.", "danger")
+def cancel_project(project_id):
+    project = Project.query.filter_by(id=project_id, customer_id=current_user.id).first_or_404()
+    
+    # Only allow cancelling unpaid drafts
+    if project.status != "Payment Pending":
+        flash("Cannot cancel an active or paid project.", "warning")
         return redirect(url_for("customer.dashboard"))
 
-    rating = request.form.get("rating", 5, type=int)
-    tags = ", ".join(request.form.getlist("tags"))
-    feedback = request.form.get("feedback", "").strip()
+    Payment.query.filter_by(project_id=project.id).delete()
+    db.session.delete(project)
+    db.session.commit()
 
-    if not feedback:
-        flash("Please provide a short review or feedback.", "warning")
-        return redirect(url_for("customer.project_details", project_id=project.id))
-
-    try:
-        from app.models import Review
-        existing_review = Review.query.filter_by(project_id=project.id).first()
-        if existing_review:
-            existing_review.rating = rating
-            existing_review.tags = tags
-            existing_review.feedback = feedback
-        else:
-            db.session.add(Review(
-                project_id=project.id,
-                customer_id=current_user.id,
-                rating=rating,
-                tags=tags,
-                feedback=feedback,
-                is_public=True
-            ))
-        db.session.commit()
-        flash("Thank you for your review! Your feedback helps us maintain top delivery standards.", "success")
-    except Exception as e:
-        db.session.rollback()
-        flash(f"Could not submit review: {str(e)}", "danger")
-
-    return redirect(url_for("customer.project_details", project_id=project.id))
+    flash(f"Draft Project #{project_id} has been cancelled.", "info")
+    return redirect(url_for("customer.dashboard"))
