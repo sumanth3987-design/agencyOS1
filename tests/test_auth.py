@@ -135,6 +135,27 @@ class TestRateLimiting:
             client, email="rate-register-5@example.com"
         )
         assert response.status_code == 429
+
+
+class TestLoginRoleEnforcement:
+
+    def test_login_rejects_mismatched_role_tab(self, client):
+        _register(client, email="role-enforcement@example.com")
+
+        response = client.post(
+            "/login",
+            json={
+                "email": "role-enforcement@example.com",
+                "password": "Pass123!x",
+                "login_role": "professional",
+            },
+        )
+
+        assert response.status_code == 401
+        assert response.get_json()["success"] is False
+        assert "registered as a Customer" in response.get_json()["message"]
+
+
 class TestSessionSecurity:
 
     def test_successful_login_creates_permanent_session(self, app, client):

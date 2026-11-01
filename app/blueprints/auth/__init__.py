@@ -194,7 +194,7 @@ def register():
     return render_template("register.html")
 
 # =========================================================
-# LOGIN (SUPPORTS BOTH BROWSER COOKIES & SPA SESSIONS)
+# LOGIN (STRICT ROLE ENFORCEMENT)
 # =========================================================
 
 @auth_bp.route("/login", methods=["GET", "POST"])
@@ -226,6 +226,20 @@ def login():
             if request.is_json:
                 return jsonify({"success": False, "message": "Invalid email or password."}), 401
             flash("Invalid email or password.", "login_error")
+            return redirect(url_for("auth.login"))
+
+        user_db_role = getattr(user, "role", "").lower()
+        if user_db_role == "client":
+            user_db_role = "customer"
+
+        if user_db_role != login_role and user_db_role != "admin":
+            error_msg = (
+                f"This email is registered as a {user_db_role.title()}. "
+                "Please select the correct tab above."
+            )
+            if request.is_json:
+                return jsonify({"success": False, "message": error_msg}), 401
+            flash(error_msg, "login_error")
             return redirect(url_for("auth.login"))
 
         if (
@@ -263,11 +277,11 @@ def login():
             }), 200
 
         if user.role == "admin":
-            return redirect(url_for("admin.dashboard") if "admin.dashboard" in current_app.view_functions else url_for("admin_dashboard"))
+            return redirect(url_for("admin.admin_dashboard"))
         elif user.role == "professional":
-            return redirect(url_for("professional.dashboard") if "professional.dashboard" in current_app.view_functions else url_for("professional_dashboard"))
+            return redirect(url_for("professional.professional_dashboard"))
         else:
-            return redirect(url_for("customer.dashboard") if "customer.dashboard" in current_app.view_functions else url_for("dashboard"))
+            return redirect(url_for("customer.dashboard"))
 
     return render_template("login.html")
 
