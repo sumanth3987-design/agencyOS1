@@ -1,17 +1,19 @@
-# Save this directly into your file: app.py
+"""WSGI Application Entrypoint for AgencyOS.
+
+Initializes the application using the application factory pattern,
+exposing both 'app' and 'application' for production WSGI servers (e.g. Gunicorn).
+"""
 
 import os
 import sys
 
-# Ensure root directory is top of search path
-base_dir = os.path.dirname(os.path.abspath(__file__))
-if base_dir not in sys.path:
-    sys.path.insert(0, base_dir)
+# Ensure root directory is top of Python search path
+sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 
-# Import the running app from run.py cleanly
-import run
+from app import create_app
 
-app = run.app
+# Initialize the Flask application factory instance
+app = create_app()
 application = app
 
 if __name__ == "__main__":
@@ -20,5 +22,5 @@ if __name__ == "__main__":
     app.run(
         host=host,
         port=port,
-        debug=True
+        debug=True,
     )

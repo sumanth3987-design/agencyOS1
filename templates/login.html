@@ -5,102 +5,126 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Sign In — AgencyOS</title>
+
+  <!-- Typography: Plus Jakarta Sans & JetBrains Mono -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://unpkg.com/lucide@latest"></script>
-  <style>
-    body { background-color: #09090b; font-family: 'Plus Jakarta Sans', sans-serif; color: #f4f4f5; }
-    .auth-card { background-color: #121215; border: 1px solid rgba(255, 255, 255, 0.08); box-shadow: 0 20px 40px rgba(0,0,0,0.6); }
-    .input-field { background-color: #09090b; border: 1px solid #27272a; color: #ffffff; }
-    .input-field:focus { border-color: #6366f1; outline: none; }
-    .tab-btn { transition: all 0.15s ease; cursor: pointer; }
-    .tab-active { background-color: #ffffff !important; color: #09090b !important; font-weight: 700 !important; }
-    .tab-inactive { background-color: transparent; color: #a1a1aa; }
-    .tab-inactive:hover { color: #ffffff; }
-  </style>
+  <link rel="stylesheet" href="/static/style.css">
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace'],
+          },
+          colors: {
+            zinc: {
+              950: '#09090b',
+              900: '#101014',
+              850: '#18181b',
+              800: '#27272a',
+              700: '#3f3f46',
+            }
+          }
+        }
+      }
+    }
+  </script>
 </head>
-<body class="bg-zinc-950 text-zinc-100 min-h-screen flex items-center justify-center p-6 selection:bg-indigo-500 selection:text-white">
+<body class="bg-zinc-950 text-zinc-100 min-h-screen flex items-center justify-center p-6 selection:bg-zinc-100 selection:text-zinc-950 antialiased font-sans">
 
-  <div class="auth-card max-w-md w-full p-8 rounded-2xl relative overflow-hidden">
-    <!-- Top Indigo Accent Glow -->
-    <div class="absolute inset-x-0 -top-px h-px bg-gradient-to-r from-transparent via-indigo-500/60 to-transparent"></div>
+  <div class="w-full max-w-md border border-zinc-800 bg-zinc-900 rounded-lg p-8 shadow-2xl space-y-6">
 
-    <!-- Header -->
-    <div class="text-center mb-6">
-      <a href="/" class="inline-flex items-center gap-2 mb-3">
-        <div class="h-10 w-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center font-bold text-white shadow-lg shadow-indigo-500/20">
-          AO
+    <!-- Header Branding -->
+    <div class="text-center space-y-2">
+      <a href="/" class="inline-flex items-center gap-2 mb-1">
+        <div class="h-8 w-8 rounded bg-white text-zinc-950 font-mono font-bold text-sm flex items-center justify-center">
+          A
         </div>
       </a>
-      <h1 class="text-2xl font-extrabold text-white tracking-tight">Sign In to AgencyOS</h1>
-      <p id="roleSubtext" class="text-xs text-zinc-400 mt-1">Review active milestone deliverables, approve revisions & invoices</p>
+      <h1 class="text-2xl font-extrabold text-white tracking-tight">Access AgencyOS</h1>
+      <p id="roleSubtext" class="text-xs font-mono text-zinc-400">Review milestone gates, approve deliverables, and inspect ledger invoices.</p>
     </div>
 
-    <!-- 3-ROLE SWITCHER PILLS -->
-    <div class="bg-zinc-900 border border-zinc-800 p-1 rounded-xl grid grid-cols-3 gap-1 mb-6 text-xs font-semibold">
-      <button type="button" id="tab-customer" class="tab-btn tab-active py-2 rounded-lg flex items-center justify-center gap-1.5">
-        <i data-lucide="user" class="w-3.5 h-3.5"></i>
-        <span>Client</span>
+    <!-- 3-Role Switcher -->
+    <div class="grid grid-cols-3 gap-1 p-1 bg-zinc-950 border border-zinc-800 rounded font-mono text-xs font-semibold">
+      <button type="button" id="tab-customer" class="py-2 rounded bg-white text-zinc-950 font-bold transition cursor-pointer">
+        Client
       </button>
-      <button type="button" id="tab-professional" class="tab-btn tab-inactive py-2 rounded-lg flex items-center justify-center gap-1.5">
-        <i data-lucide="briefcase" class="w-3.5 h-3.5"></i>
-        <span>Specialist</span>
+      <button type="button" id="tab-professional" class="py-2 rounded bg-transparent text-zinc-400 hover:text-white transition cursor-pointer">
+        Specialist
       </button>
-      <button type="button" id="tab-admin" class="tab-btn tab-inactive py-2 rounded-lg flex items-center justify-center gap-1.5">
-        <i data-lucide="shield" class="w-3.5 h-3.5"></i>
-        <span>Admin</span>
+      <button type="button" id="tab-admin" class="py-2 rounded bg-transparent text-zinc-400 hover:text-white transition cursor-pointer">
+        Admin
       </button>
     </div>
 
-    <!-- Flash Messages -->
+    <!-- Flash Messages Slot -->
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}
-        <div class="mb-4 space-y-2">
+        <div class="space-y-2">
           {% for category, message in messages %}
-            <div class="p-3 rounded-xl border text-xs flex items-center justify-between {% if category == 'success' %}bg-emerald-500/10 border-emerald-500/20 text-emerald-300{% elif 'error' in category %}bg-rose-500/10 border-rose-500/20 text-rose-300{% else %}bg-zinc-800 border-zinc-700 text-zinc-200{% endif %}">
-              <span>{{ message }}</span>
-              <button type="button" onclick="this.parentElement.remove()" class="text-zinc-400 hover:text-white text-sm">×</button>
+            <div class="system-alert {{ 'system-alert-success' if category == 'success' else 'system-alert-error' }}">
+              <span class="font-mono text-xs">{{ message }}</span>
+              <button type="button" onclick="this.parentElement.remove()" class="text-zinc-400 hover:text-white ml-auto cursor-pointer">✕</button>
             </div>
           {% endfor %}
         </div>
       {% endif %}
     {% endwith %}
 
-    <!-- Form: Uses name="login_role" for backend -->
-    <form id="loginForm" method="POST" action="/login" class="space-y-4 text-xs">
+    <!-- Sign In Form -->
+    <form id="loginForm" method="POST" action="/login" class="space-y-4 font-mono text-xs">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="login_role" id="loginRoleInput" value="customer">
 
       <div>
-        <label class="block text-zinc-400 font-semibold mb-1.5">Email Address</label>
-        <input type="email" name="email" required placeholder="you@company.com" class="input-field w-full px-3.5 py-2.5 rounded-xl placeholder-zinc-600 transition">
+        <label class="block text-zinc-400 mb-1">Registered Email Address</label>
+        <input
+          type="email"
+          name="email"
+          required
+          placeholder="user@organization.com"
+          class="form-control text-xs"
+        >
       </div>
 
       <div>
-        <div class="flex items-center justify-between mb-1.5">
-          <label class="text-zinc-400 font-semibold">Password</label>
-          <a href="/forgot-password" class="text-zinc-500 hover:text-indigo-400 transition">Forgot password?</a>
+        <div class="flex items-center justify-between mb-1">
+          <label class="text-zinc-400">Password</label>
+          <a href="/forgot-password" class="text-zinc-500 hover:text-white hover:underline">Forgot password?</a>
         </div>
-        <input type="password" name="password" required placeholder="••••••••" class="input-field w-full px-3.5 py-2.5 rounded-xl placeholder-zinc-600 transition">
+        <input
+          type="password"
+          name="password"
+          required
+          placeholder="••••••••"
+          class="form-control text-xs"
+        >
       </div>
 
-      <button type="submit" id="submitBtn" class="w-full py-3 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-bold text-xs shadow-lg transition flex items-center justify-center gap-2 mt-2 cursor-pointer">
-        <span id="btnText">Sign In as Client</span>
-        <i data-lucide="arrow-right" class="w-4 h-4"></i>
+      <button type="submit" id="submitBtn" class="btn btn-primary w-full h-11 text-xs font-semibold tracking-wide cursor-pointer mt-2">
+        <span id="btnText">Sign In to Client Portal →</span>
       </button>
     </form>
 
-    <!-- Context Footer Links -->
-    <div class="mt-6 pt-6 border-t border-zinc-800/80 text-center text-xs text-zinc-500">
-      <p id="registerPrompt">Need a client account? <a href="/register" class="text-indigo-400 hover:underline font-bold">Register Business</a></p>
+    <!-- Context Footer -->
+    <div class="pt-6 border-t border-zinc-800 text-center font-mono text-xs text-zinc-500">
+      <p id="registerPrompt">
+        Need a client account? <a href="/register" class="text-white hover:underline font-bold">Register Business</a>
+      </p>
     </div>
+
   </div>
 
   <script>
     document.addEventListener("DOMContentLoaded", function () {
-      if (window.lucide) lucide.createIcons();
-
       var tabs = {
         customer: document.getElementById("tab-customer"),
         professional: document.getElementById("tab-professional"),
@@ -114,42 +138,45 @@
 
       var roleData = {
         customer: {
-          btn: "Sign In as Client",
-          sub: "Review active milestone deliverables, approve revisions & invoices",
-          prompt: 'Need a client account? <a href="/register" class="text-indigo-400 hover:underline font-bold">Register Business</a>'
+          btn: "Sign In to Client Portal →",
+          sub: "Review milestone gates, approve deliverables, and inspect ledger invoices.",
+          prompt: 'Need a client account? <a href="/register" class="text-white hover:underline font-bold">Register Business</a>'
         },
         professional: {
-          btn: "Sign In as Specialist",
-          sub: "Access assigned sprints, submit deliverables & verify UPI payouts",
-          prompt: 'Want to work with us? <a href="/register" class="text-indigo-400 hover:underline font-bold">Apply as Specialist</a>'
+          btn: "Sign In to Specialist Hub →",
+          sub: "Access assigned sprints, submit staging URLs, and track 45% allocations.",
+          prompt: 'Apply to join our network? <a href="/register" class="text-white hover:underline font-bold">Apply as Specialist</a>'
         },
         admin: {
-          btn: "Sign In as Admin",
-          sub: "Executive console, project pipelines, and GST billing controls",
-          prompt: '<span class="text-zinc-600 font-mono text-[11px]">Restricted Agency Operational Portal</span>'
+          btn: "Sign In to Command Center →",
+          sub: "Restricted administrative console: pipelines, settlements, and compliance.",
+          prompt: '<span class="text-zinc-500">Authorized Personnel Only • Node IST</span>'
         }
       };
 
       function setRole(role) {
+        if (!roleInput || !btnText || !roleSubtext || !registerPrompt) return;
         roleInput.value = role;
 
         Object.keys(tabs).forEach(function (k) {
-          tabs[k].className = "tab-btn tab-inactive py-2 rounded-lg flex items-center justify-center gap-1.5";
+          if (tabs[k]) {
+            tabs[k].className = "py-2 rounded bg-transparent text-zinc-400 hover:text-white transition cursor-pointer";
+          }
         });
 
-        tabs[role].className = "tab-btn tab-active py-2 rounded-lg flex items-center justify-center gap-1.5";
+        if (tabs[role]) {
+          tabs[role].className = "py-2 rounded bg-white text-zinc-950 font-bold transition cursor-pointer";
+        }
 
-        var c = roleData[role];
-        btnText.textContent = c.btn;
-        roleSubtext.textContent = c.sub;
-        registerPrompt.innerHTML = c.prompt;
-
-        if (window.lucide) lucide.createIcons();
+        var config = roleData[role];
+        btnText.textContent = config.btn;
+        roleSubtext.textContent = config.sub;
+        registerPrompt.innerHTML = config.prompt;
       }
 
-      tabs.customer.addEventListener("click", function () { setRole("customer"); });
-      tabs.professional.addEventListener("click", function () { setRole("professional"); });
-      tabs.admin.addEventListener("click", function () { setRole("admin"); });
+      if (tabs.customer) tabs.customer.addEventListener("click", function () { setRole("customer"); });
+      if (tabs.professional) tabs.professional.addEventListener("click", function () { setRole("professional"); });
+      if (tabs.admin) tabs.admin.addEventListener("click", function () { setRole("admin"); });
     });
   </script>
 </body>

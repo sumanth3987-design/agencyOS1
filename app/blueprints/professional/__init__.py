@@ -1,19 +1,41 @@
-# Save this directly into your file: app/blueprints/professional/__init__.py
+"""AgencyOS Specialist (Professional) Talent Blueprint.
+
+Governs specialist delivery workspaces, milestone submissions, 45% earnings
+ledger tracking, and out-of-band UPI / wire payout redemption requests.
+"""
 
 from datetime import datetime
 from decimal import Decimal
-from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
-from flask_login import login_required, current_user
-from app.extensions import db
+from flask import Blueprint, flash, jsonify, redirect, render_template, request, url_for
+from flask.typing import ResponseReturnValue
+from flask_login import current_user, login_required
+from werkzeug.utils import secure_filename
 
-# 1. IMPORT MODELS & REPOSITORY HELPERS
+from app.extensions import db
 from app.models import (
-    User, ProfessionalProfile, Project, Payment, Notification,
-    ProfessionalProjectApplication, ProjectDelivery, ChatMessage, Invoice, Milestone,
-    ActivityLog, get_ist_now, PACKAGE_PRICES, calculate_professional_profile_completion, get_latest_project_delivery
+    ActivityLog,
+    ChatMessage,
+    Invoice,
+    Milestone,
+    Notification,
+    PACKAGE_PRICES,
+    Payment,
+    ProfessionalProfile,
+    ProfessionalProjectApplication,
+    Project,
+    ProjectDelivery,
+    User,
+    calculate_professional_profile_completion,
+    get_ist_now,
+    get_latest_project_delivery,
+)
+from app.utils.currency import (
+    INTERNATIONAL_PACKAGE_PRICES,
+    compute_financial_split,
+    get_package_price,
+    sanitize_currency,
 )
 from app.utils.project_uploads import save_project_upload
-from app.utils.currency import INTERNATIONAL_PACKAGE_PRICES, get_package_price
 
 professional_bp = Blueprint("professional", __name__)
 
@@ -24,7 +46,7 @@ professional_bp = Blueprint("professional", __name__)
 
 @professional_bp.route("/professional/dashboard")
 @login_required
-def professional_dashboard():
+def professional_dashboard() -> ResponseReturnValue:
     user_role = getattr(current_user, "role", "").lower()
     if user_role != "professional":
         if user_role == "admin":
@@ -33,7 +55,8 @@ def professional_dashboard():
 
     profile = ProfessionalProfile.query.filter_by(user_id=current_user.id).first()
     if not profile:
-        profile = ProfessionalProfile(user_id=current_user.id)
+        profile = ProfessionalProfile()
+        profile.user_id = current_user.id
         db.session.add(profile)
         db.session.commit()
 
@@ -42,35 +65,40 @@ def professional_dashboard():
     assigned_projects = [app.project for app in my_applications if app.status == "Assigned" and app.project]
     my_applied_ids = [app.project_id for app in my_applications]
 
-    completed_project_ids = [
-        project.id for project in assigned_projects if project.status == "Completed"
-    ]
-    redeemable_invoices = []
+    completed_project_ids = [project.id for project in assigned_projects if project.status == "Completed"]
+    redeemable_invoices: list[Invoice] = []
     if completed_project_ids:
-        redeemable_invoices = Invoice.query.filter(
-            Invoice.project_id.in_(completed_project_ids),
-            Invoice.status.ilike("Paid"),
-            Invoice.payout_status.in_(("Pending Approval", "Requested", "Settled")),
-        ).order_by(Invoice.created_at.desc()).all()
+        redeemable_invoices = (
+            Invoice.query.filter(
+                Invoice.project_id.in_(completed_project_ids),
+                Invoice.status.ilike("Paid"),
+                Invoice.payout_status.in_(("Pending Approval", "Requested", "Processing", "Settled")),
+            )
+            .order_by(Invoice.created_at.desc())
+            .all()
+        )
 
-    # 2. Available Projects (Open Sprints to Claim)
-    available_projects = Project.query.filter_by(status="Pending Assignment").order_by(Project.created_at.desc()).all()
+    # 2. Available Projects (Open Sprints)
+    # WIDENED NET: Fetch any project not assigned or completed
+    available_projects = (
+        Project.query.filter(Project.status.in_(["Pending Assignment", "Payment Pending", "Draft"]))
+        .order_by(Project.created_at.desc())
+        .all()
+    )
 
     # 3. Financial Ledger (45% specialist share)
-    total_earned = {}
-    pending_payout = {}
+    total_earned: dict[str, Decimal] = {}
+    pending_payout: dict[str, Decimal] = {}
+
     for project in assigned_projects:
-        currency = project.currency or "INR"
-        payout = (
-            get_package_price(project.package, currency, PACKAGE_PRICES)
-            * Decimal("0.45")
-        ).quantize(Decimal("0.01"))
+        currency = sanitize_currency(project.currency)
+        gross = get_package_price(project.package, currency, PACKAGE_PRICES)
+        talent_payout, _, _ = compute_financial_split(gross, currency)
+
         if project.status == "Completed":
-            total_earned[currency] = total_earned.get(currency, Decimal("0")) + payout
+            total_earned[currency] = total_earned.get(currency, Decimal("0.00")) + talent_payout
         elif project.status in {"In Progress", "Submitted", "Revision", "Assigned"}:
-            pending_payout[currency] = (
-                pending_payout.get(currency, Decimal("0")) + payout
-            )
+            pending_payout[currency] = pending_payout.get(currency, Decimal("0.00")) + talent_payout
 
     completed_sprints = sum(1 for p in assigned_projects if p.status == "Completed")
     active_sprints = sum(1 for p in assigned_projects if p.status in ["In Progress", "Submitted", "Revision", "Assigned"])
@@ -94,7 +122,7 @@ def professional_dashboard():
         active_sprints=active_sprints,
         completion_score=completion_score,
         package_prices=PACKAGE_PRICES,
-        international_package_prices=INTERNATIONAL_PACKAGE_PRICES
+        international_package_prices=INTERNATIONAL_PACKAGE_PRICES,
     )
 
 
@@ -104,12 +132,14 @@ def professional_dashboard():
 
 @professional_bp.route("/professional/my-projects")
 @login_required
-def professional_my_projects():
+def professional_my_projects() -> ResponseReturnValue:
     user_role = getattr(current_user, "role", "").lower()
     if user_role not in ("professional", "admin"):
         return redirect(url_for("customer.dashboard"))
 
-    my_applications = ProfessionalProjectApplication.query.filter_by(professional_id=current_user.id, status="Assigned").all()
+    my_applications = ProfessionalProjectApplication.query.filter_by(
+        professional_id=current_user.id, status="Assigned"
+    ).all()
     projects = [app.project for app in my_applications if app.project]
 
     return render_template("professional_my_projects.html", projects=projects)
@@ -121,19 +151,27 @@ def professional_my_projects():
 
 @professional_bp.route("/professional/projects")
 @login_required
-def professional_projects():
+def professional_projects() -> ResponseReturnValue:
     user_role = getattr(current_user, "role", "").lower()
     if user_role not in ("professional", "admin"):
         return redirect(url_for("customer.dashboard"))
 
-    available_projects = Project.query.filter_by(status="Pending Assignment").order_by(Project.created_at.desc()).all()
-    my_applications = ProfessionalProjectApplication.query.filter_by(professional_id=current_user.id).all()
+    # WIDENED NET: Fetch any project not assigned or completed
+    available_projects = (
+        Project.query.filter(Project.status.in_(["Pending Assignment", "Payment Pending", "Draft"]))
+        .order_by(Project.created_at.desc())
+        .all()
+    )
+    
+    my_applications = ProfessionalProjectApplication.query.filter_by(
+        professional_id=current_user.id
+    ).all()
     my_applied_ids = [app.project_id for app in my_applications]
 
     return render_template(
         "professional_projects.html",
         projects=available_projects,
-        my_applied_ids=my_applied_ids
+        my_applied_ids=my_applied_ids,
     )
 
 
@@ -143,7 +181,7 @@ def professional_projects():
 
 @professional_bp.route("/professional/project/<int:project_id>/apply", methods=["POST"])
 @login_required
-def apply_for_project(project_id):
+def apply_for_project(project_id: int) -> ResponseReturnValue:
     user_role = getattr(current_user, "role", "").lower()
     if user_role != "professional":
         flash("Specialist access required.", "danger")
@@ -159,16 +197,16 @@ def apply_for_project(project_id):
         flash(f"You have already applied for Sprint #{project.id}.", "warning")
         return redirect(url_for("professional.professional_dashboard"))
 
-    app = ProfessionalProjectApplication(
-        project_id=project.id,
-        professional_id=current_user.id,
-        status="Applied",
-        created_at=get_ist_now()
-    )
+    app = ProfessionalProjectApplication()
+    app.project_id = project.id
+    app.professional_id = current_user.id
+    app.status = "Applied"
+    app.created_at = get_ist_now()
+
     db.session.add(app)
     db.session.commit()
 
-    flash(f"Application submitted for Project #{project.id}! The Agency Admin will review your profile.", "success")
+    flash(f"Application registered for Project #{project.id}. Agency administrator will review.", "success")
     return redirect(url_for("professional.professional_dashboard"))
 
 
@@ -178,30 +216,34 @@ def apply_for_project(project_id):
 
 @professional_bp.route("/professional/project/<int:project_id>/workspace")
 @login_required
-def professional_project_workspace(project_id):
+def professional_project_workspace(project_id: int) -> ResponseReturnValue:
     project = Project.query.get_or_404(project_id)
-    
-    # Access check: Assigned specialist or Admin
-    is_assigned = bool(ProfessionalProjectApplication.query.filter_by(
-        project_id=project.id, professional_id=current_user.id, status="Assigned"
-    ).first())
+
+    is_assigned = bool(
+        ProfessionalProjectApplication.query.filter_by(
+            project_id=project.id, professional_id=current_user.id, status="Assigned"
+        ).first()
+    )
 
     user_role = getattr(current_user, "role", "").lower()
     if not is_assigned and user_role != "admin":
         flash("You are not assigned to this project workspace.", "danger")
         return redirect(url_for("professional.professional_dashboard"))
 
-    deliveries = ProjectDelivery.query.filter_by(project_id=project.id).order_by(ProjectDelivery.submission_number.desc()).all()
-    messages = ChatMessage.query.filter_by(project_id=project.id).order_by(ChatMessage.created_at.asc()).all()
+    deliveries = (
+        ProjectDelivery.query.filter_by(project_id=project.id)
+        .order_by(ProjectDelivery.submission_number.desc())
+        .all()
+    )
+    messages = (
+        ChatMessage.query.filter_by(project_id=project.id)
+        .order_by(ChatMessage.created_at.asc())
+        .all()
+    )
 
-    specialist_share = (
-        get_package_price(
-            project.package,
-            project.currency or "INR",
-            PACKAGE_PRICES,
-        )
-        * Decimal("0.45")
-    ).quantize(Decimal("0.01"))
+    currency = sanitize_currency(project.currency)
+    gross = get_package_price(project.package, currency, PACKAGE_PRICES)
+    specialist_share, _, _ = compute_financial_split(gross, currency)
     revision_count = ProjectDelivery.query.filter_by(project_id=project.id, status="Revision").count()
 
     return render_template(
@@ -210,8 +252,8 @@ def professional_project_workspace(project_id):
         deliveries=deliveries,
         messages=messages,
         specialist_share=specialist_share,
-        currency=project.currency or "INR",
-        revision_count=revision_count
+        currency=currency,
+        revision_count=revision_count,
     )
 
 
@@ -221,7 +263,7 @@ def professional_project_workspace(project_id):
 
 @professional_bp.route("/professional/project/<int:project_id>/submit", methods=["POST"])
 @login_required
-def submit_deliverable(project_id):
+def submit_deliverable(project_id: int) -> ResponseReturnValue:
     user_role = getattr(current_user, "role", "").lower()
     if user_role not in ("professional", "admin"):
         flash("Specialist authorization required.", "danger")
@@ -236,7 +278,7 @@ def submit_deliverable(project_id):
     ).first():
         flash("You are not assigned to this project.", "danger")
         return redirect(url_for("professional.professional_dashboard"))
-    
+
     live_url = request.form.get("live_url", "").strip()
     preview_url = request.form.get("preview_url", "").strip()
     source_url = request.form.get("source_url", "").strip()
@@ -258,42 +300,46 @@ def submit_deliverable(project_id):
     if attachment_url:
         notes += f"\n\nAttached Deliverable File: {attachment_url}"
 
-    last_delivery = ProjectDelivery.query.filter_by(project_id=project.id).order_by(ProjectDelivery.submission_number.desc()).first()
+    last_delivery = (
+        ProjectDelivery.query.filter_by(project_id=project.id)
+        .order_by(ProjectDelivery.submission_number.desc())
+        .first()
+    )
     next_num = (last_delivery.submission_number + 1) if last_delivery else 1
 
-    delivery = ProjectDelivery(
-        project_id=project.id,
-        professional_id=current_user.id,
-        submission_number=next_num,
-        live_url=live_url,
-        preview_url=preview_url,
-        source_url=source_url,
-        completion_notes=notes,
-        status="Submitted",
-        submitted_at=get_ist_now()
-    )
+    delivery = ProjectDelivery()
+    delivery.project_id = project.id
+    delivery.professional_id = current_user.id
+    delivery.submission_number = next_num
+    delivery.live_url = live_url
+    delivery.preview_url = preview_url
+    delivery.source_url = source_url
+    delivery.completion_notes = notes
+    delivery.status = "Submitted"
+    delivery.submitted_at = get_ist_now()
+
     db.session.add(delivery)
 
-    # Move project to Submitted status for Admin review gate
     project.status = "Submitted"
     summary = notes[:60] + ("..." if len(notes) > 60 else "")
+
     ActivityLog.log_event(
-        project.id,
-        "DELIVERABLE_SUBMITTED",
-        f"Specialist submitted deliverable #{next_num}: {summary}",
-        current_user.id,
-        "accent",
+        project_id=project.id,
+        action="DELIVERABLE_SUBMITTED",
+        description=f"Specialist submitted deliverable #{next_num}: {summary}",
+        user_id=current_user.id,
+        category="accent",
     )
     if attachment_url:
         ActivityLog.log_event(
-            project.id,
-            "DOCUMENT_UPLOADED",
-            "Specialist uploaded a deliverable file.",
-            current_user.id,
-            "info",
+            project_id=project.id,
+            action="DOCUMENT_UPLOADED",
+            description="Specialist uploaded a deliverable file.",
+            user_id=current_user.id,
+            category="info",
         )
     db.session.commit()
-    # Trigger Automated WhatsApp Notification to Client
+
     try:
         from app.services.whatsapp import notify_deliverable_ready
         client_phone = getattr(project.customer.customer_profile, "phone", None) if project.customer else None
@@ -302,15 +348,15 @@ def submit_deliverable(project_id):
             preview = preview_url or live_url or "https://yourdomain.com"
             notify_deliverable_ready(project.id, project.service, preview, client_phone, client_name)
     except Exception as e:
-        flash(f"Deliverable submitted! (WhatsApp alert skipped: {str(e)})", "info")
+        flash(f"Deliverable submitted. (WhatsApp notification skipped: {str(e)})", "info")
 
-    flash(f"Milestone deliverable #{next_num} submitted! Advanced to Quality Review Gate.", "success")
+    flash(f"Milestone deliverable #{next_num} submitted to the Review Gate.", "success")
     return redirect(url_for("professional.professional_dashboard"))
 
 
 @professional_bp.route("/professional/invoice/<int:invoice_id>/redeem", methods=["POST"])
 @login_required
-def redeem_payout(invoice_id):
+def redeem_payout(invoice_id: int) -> ResponseReturnValue:
     if getattr(current_user, "role", "").lower() != "professional":
         flash("Specialist access required.", "danger")
         return redirect(url_for("customer.dashboard"))
@@ -322,7 +368,7 @@ def redeem_payout(invoice_id):
         status="Assigned",
     ).first()
     if not assigned_application:
-        flash("You are not assigned to this project's payout.", "danger")
+        flash("You are not assigned to this project's payout allocation.", "danger")
         return redirect(url_for("professional.professional_dashboard"))
 
     project = Project.query.get_or_404(invoice.project_id)
@@ -333,7 +379,7 @@ def redeem_payout(invoice_id):
     if invoice.payout_status == "Settled":
         flash("This payout has already been settled.", "info")
         return redirect(url_for("professional.professional_dashboard"))
-    if invoice.payout_status == "Requested":
+    if invoice.payout_status in {"Requested", "Processing"}:
         flash("This payout redemption is already being processed.", "info")
         return redirect(url_for("professional.professional_dashboard"))
     if invoice.payout_status != "Pending Approval":
@@ -342,22 +388,20 @@ def redeem_payout(invoice_id):
 
     admins = User.query.filter_by(role="admin").all()
     invoice.payout_status = "Requested"
-    for admin in admins:
-        db.session.add(Notification(
-            user_id=admin.id,
-            title="Payout redemption requested",
-            message=(
-                f"{current_user.name} requested a ₹{invoice.talent_payout:,.2f} "
-                f"payout for Project #{project.id}."
-            ),
-            link=url_for("admin.admin_transactions"),
-        ))
-    db.session.commit()
 
-    if admins:
-        flash("Payout redemption requested. Admin has been notified.", "success")
-    else:
-        flash("Payout requested, but no admin account is available to notify.", "warning")
+    for admin in admins:
+        notif = Notification()
+        notif.user_id = admin.id
+        notif.title = "Payout redemption requested"
+        notif.message = (
+            f"{current_user.name} requested payout for Project #{project.id} "
+            f"({invoice.talent_payout} {invoice.currency})."
+        )
+        notif.link = url_for("admin.admin_transactions")
+        db.session.add(notif)
+
+    db.session.commit()
+    flash("Payout redemption requested. Agency administrator notified.", "success")
     return redirect(url_for("professional.professional_dashboard"))
 
 
@@ -367,22 +411,22 @@ def redeem_payout(invoice_id):
 
 @professional_bp.route("/professional/project/<int:project_id>/message", methods=["POST"])
 @login_required
-def send_workspace_message(project_id):
+def send_workspace_message(project_id: int) -> ResponseReturnValue:
     text = request.form.get("message", "").strip()
     if not text:
-        flash("Note cannot be empty.", "warning")
+        flash("Message cannot be empty.", "warning")
         return redirect(url_for("professional.professional_project_workspace", project_id=project_id))
 
-    msg = ChatMessage(
-        project_id=project_id,
-        sender_id=current_user.id,
-        message=text,
-        created_at=get_ist_now()
-    )
+    msg = ChatMessage()
+    msg.project_id = project_id
+    msg.sender_id = current_user.id
+    msg.message = text
+    msg.created_at = get_ist_now()
+
     db.session.add(msg)
     db.session.commit()
 
-    flash("Note posted to project discussion thread!", "success")
+    flash("Note posted to project discussion.", "success")
     return redirect(url_for("professional.professional_project_workspace", project_id=project_id))
 
 
@@ -392,7 +436,7 @@ def send_workspace_message(project_id):
 
 @professional_bp.route("/professional/profile", methods=["GET", "POST"])
 @login_required
-def professional_profile():
+def professional_profile() -> ResponseReturnValue:
     user_role = getattr(current_user, "role", "").lower()
     if user_role not in ("professional", "admin"):
         flash("Specialist access required.", "danger")
@@ -400,7 +444,8 @@ def professional_profile():
 
     profile = ProfessionalProfile.query.filter_by(user_id=current_user.id).first()
     if not profile:
-        profile = ProfessionalProfile(user_id=current_user.id)
+        profile = ProfessionalProfile()
+        profile.user_id = current_user.id
         db.session.add(profile)
         db.session.commit()
 
@@ -417,9 +462,9 @@ def professional_profile():
         profile.portfolio = request.form.get("portfolio", "").strip()
         profile.availability = request.form.get("availability", "Available (Full-Time)").strip()
         profile.profile_completed = True
-        
+
         db.session.commit()
-        flash("UPI banking details & specialist credentials saved successfully!", "success")
+        flash("UPI banking details & specialist profile saved.", "success")
         return redirect(url_for("professional.professional_profile"))
 
     return render_template("professional_profile.html", profile=profile)

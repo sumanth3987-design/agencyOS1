@@ -1,125 +1,293 @@
+<!-- Save this directly into: templates/customer_profile.html -->
 <!DOCTYPE html>
-<html lang="en" class="dark scroll-smooth">
+<html lang="en" class="dark">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Account Profile & GST Billing Context — {{ agency_settings.agency_name }}</title>
+
+  <!-- Typography: Plus Jakarta Sans & JetBrains Mono -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://unpkg.com/lucide@latest"></script>
-  <style>
-    body { background-color: #09090b; font-family: 'Plus Jakarta Sans', sans-serif; color: #f4f4f5; }
-    .form-card { background: #121215; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 18px; }
-  </style>
+  <link rel="stylesheet" href="/static/style.css">
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace'],
+          },
+          colors: {
+            zinc: {
+              950: '#09090b',
+              900: '#101014',
+              850: '#18181b',
+              800: '#27272a',
+              700: '#3f3f46',
+            }
+          }
+        }
+      }
+    }
+  </script>
 </head>
-<body class="bg-zinc-950 text-zinc-100 min-h-screen p-6 sm:p-12 max-w-4xl mx-auto selection:bg-[var(--agency-primary)] selection:text-[var(--agency-on-primary)]" style="--agency-primary: {{ agency_settings.primary_color }}; --agency-on-primary: {{ agency_settings.primary_contrast }};">
+<body class="bg-zinc-950 text-zinc-100 min-h-screen selection:bg-zinc-100 selection:text-zinc-950 antialiased font-sans" style="--agency-primary: {{ agency_settings.primary_color }}; --agency-on-primary: {{ agency_settings.primary_contrast }};">
 
-  {% include "includes/agency_brand.html" %}
-  <!-- Header -->
-  <a href="{{ url_for('customer.dashboard') }}" class="text-xs font-mono text-[var(--agency-primary)] hover:underline flex items-center gap-1.5">
-    <i data-lucide="arrow-left" class="w-3.5 h-3.5"></i>
-    <span>Return to Workspace</span>
-  </a>
-
-  <div class="mt-6 pb-6 border-b border-zinc-800 flex items-center justify-between">
-    <div>
-      <span class="text-xs font-mono uppercase text-[var(--agency-primary)] font-bold">Client Identity & Tax Context</span>
-      <h1 class="text-3xl font-extrabold text-white mt-1">Company & Billing Profile</h1>
-      <p class="text-xs text-zinc-400 mt-1">Maintain legal company information for GST tax invoices (SAC 998311) and WhatsApp status alerts.</p>
-    </div>
-    <span class="px-3 py-1 rounded-full text-xs font-mono" style="background-color: color-mix(in srgb, var(--agency-primary) 10%, transparent); border: 1px solid color-mix(in srgb, var(--agency-primary) 20%, transparent); color: var(--agency-primary);">
-      100% Tax Compliant
-    </span>
-  </div>
-
-  <!-- Profile Form -->
-  <form method="POST" action="{{ url_for('customer.customer_profile') }}" class="mt-8 space-y-6 text-xs">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-
-    <!-- 1. Direct Contact & Communication Coordinates -->
-    <div class="form-card p-6 space-y-4">
-      <h3 class="text-sm font-bold text-white uppercase tracking-wider font-mono flex items-center gap-2">
-        <span class="h-2 w-2 rounded-full bg-emerald-400"></span>
-        <span>1. Communication & WhatsApp Coordinates</span>
-      </h3>
-      
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div>
-          <label class="block text-zinc-400 font-semibold mb-1.5">WhatsApp Number (For Milestone Updates) *</label>
-          <input type="tel" name="phone" value="{{ profile.phone or '' }}" placeholder="+91 98765 43210" class="w-full px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-white font-mono focus:outline-none focus:border-[var(--agency-primary)]">
-        </div>
-        <div>
-          <label class="block text-zinc-400 font-semibold mb-1.5">City & State (State of Supply) *</label>
-          <input type="text" name="location" value="{{ profile.location or '' }}" placeholder="e.g. Bangalore, Karnataka (29)" class="w-full px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-white focus:outline-none focus:border-[var(--agency-primary)]">
-        </div>
-      </div>
-    </div>
-
-    <!-- 2. Legal Business Identity for GST Invoicing -->
-    <div class="form-card p-6 space-y-4">
-      <h3 class="text-sm font-bold text-white uppercase tracking-wider font-mono flex items-center gap-2">
-        <span class="h-2 w-2 rounded-full bg-[var(--agency-primary)]"></span>
-        <span>2. Legal Business Identity & GST Context</span>
-      </h3>
-      
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div>
-          <label class="block text-zinc-400 font-semibold mb-1.5">Registered Legal Entity Name</label>
-          <input type="text" name="business_name" value="{{ profile.business_name or '' }}" placeholder="Legal Business Name for Tax Invoices" class="w-full px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-white focus:outline-none focus:border-[var(--agency-primary)]">
-        </div>
-        <div>
-          <label class="block text-zinc-400 font-semibold mb-1.5">Industry / Domain</label>
-          <input type="text" name="business_type" value="{{ profile.business_type or '' }}" placeholder="Retail, SaaS, Hospitality" class="w-full px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-white focus:outline-none focus:border-[var(--agency-primary)]">
-        </div>
-        <div>
-          <label class="block text-zinc-400 font-semibold mb-1.5">Official Website URL</label>
-          <input type="url" name="website" value="{{ profile.website or '' }}" placeholder="https://domain.com" class="w-full px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-white focus:outline-none focus:border-[var(--agency-primary)]">
-        </div>
-        <div>
-          <label class="block text-zinc-400 font-semibold mb-1.5">Social Profiles (Instagram / LinkedIn)</label>
-          <input type="text" name="social_links" value="{{ profile.social_links or '' }}" placeholder="instagram.com/brand" class="w-full px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-white focus:outline-none focus:border-[var(--agency-primary)]">
-        </div>
+  <!-- TOP WORKBENCH HEADER -->
+  <header class="border-b border-zinc-800 bg-zinc-950/95 sticky top-0 z-50">
+    <div class="max-w-4xl mx-auto px-6 h-16 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        {% include "includes/agency_brand.html" %}
+        <span class="font-mono text-xs text-zinc-500">/</span>
+        <span class="font-mono text-xs text-zinc-400 font-bold uppercase">Account Profile</span>
       </div>
 
+      <a href="{{ url_for('customer.dashboard') }}" class="btn btn-secondary text-xs h-8">
+        ← Return to Workspace
+      </a>
+    </div>
+  </header>
+
+  <!-- MAIN PROFILE SHELL -->
+  <main class="max-w-4xl mx-auto px-6 py-10 space-y-8">
+
+    <!-- Flash Messages Slot -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="space-y-2">
+          {% for category, message in messages %}
+            <div class="system-alert {{ 'system-alert-success' if category == 'success' else 'system-alert-error' }}">
+              <span class="font-mono text-xs">{{ message }}</span>
+              <button onclick="this.parentElement.remove()" class="text-zinc-400 hover:text-white ml-auto cursor-pointer">✕</button>
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    <!-- Top Executive Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-6 border-b border-zinc-800 gap-4">
       <div>
-        <label class="block text-zinc-400 font-semibold mb-1.5">Brief Company Description</label>
-        <textarea name="business_description" rows="2" placeholder="Describe products/services offered..." class="w-full p-3 rounded-xl bg-zinc-950 border border-zinc-800 text-white focus:outline-none focus:border-[var(--agency-primary)]">{{ profile.business_description or '' }}</textarea>
+        <div class="flex items-center gap-2 mb-1 font-mono text-xs">
+          <span class="badge badge-indigo">CLIENT PROFILE &amp; TAX VAULT</span>
+          <span class="text-zinc-600">•</span>
+          <span class="text-zinc-400">SAC 998311</span>
+        </div>
+        <h1 class="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">Organization Profile &amp; Direct Coordinates</h1>
+        <p class="text-xs font-mono text-zinc-400 mt-1">Configure direct contact channels, company credentials, GSTIN for input tax credit, and authorized signatory details.</p>
       </div>
+
+      <span class="badge badge-emerald font-mono">
+        100% Tax Compliant
+      </span>
     </div>
 
-    <!-- 3. Strategic Growth & Budget Context -->
-    <div class="form-card p-6 space-y-4">
-      <h3 class="text-sm font-bold text-white uppercase tracking-wider font-mono flex items-center gap-2">
-        <span class="h-2 w-2 rounded-full bg-purple-500"></span>
-        <span>3. Strategic Growth & Audience Context</span>
-      </h3>
+    <!-- Profile Form -->
+    <form method="POST" action="{{ url_for('customer.customer_profile') }}" class="space-y-6 font-mono text-xs">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div>
-          <label class="block text-zinc-400 font-semibold mb-1.5">Target Audience & Geography</label>
-          <input type="text" name="target_audience" value="{{ profile.target_audience or '' }}" placeholder="e.g. Urban consumers ages 20-35" class="w-full px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-white focus:outline-none focus:border-[var(--agency-primary)]">
+      <!-- 1. Direct Communication & Immediate Contact -->
+      <div class="border border-zinc-800 bg-zinc-900 rounded-lg p-6 space-y-4">
+        <div class="flex items-center justify-between pb-3 border-b border-zinc-800">
+          <h2 class="font-bold text-white uppercase tracking-wider text-sm">1. Direct Communication &amp; Dispatch Coordinates</h2>
+          <span class="badge badge-emerald">DIRECT DISPATCH</span>
         </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-zinc-400 mb-1">Primary WhatsApp Phone * (For Sprints &amp; Live Alerts)</label>
+            <input
+              type="tel"
+              name="phone"
+              value="{{ profile.phone or '' }}"
+              required
+              placeholder="+91 98765 43210"
+              class="form-control text-xs"
+            >
+          </div>
+          <div>
+            <label class="block text-zinc-400 mb-1">Secondary / Direct Calling Line (Emergency DNS/Deploy)</label>
+            <input
+              type="tel"
+              name="secondary_phone"
+              value="{{ profile.secondary_phone or '' }}"
+              placeholder="+91 98765 00000"
+              class="form-control text-xs"
+            >
+          </div>
+          <div>
+            <label class="block text-zinc-400 mb-1">Preferred Communication Mode</label>
+            <select name="preferred_channel" class="form-control text-xs">
+              <option value="WhatsApp" {% if profile.preferred_channel == 'WhatsApp' %}selected{% endif %}>WhatsApp Direct Chat (Fastest)</option>
+              <option value="Direct Call" {% if profile.preferred_channel == 'Direct Call' %}selected{% endif %}>Direct Voice Phone Call</option>
+              <option value="Google Meet" {% if profile.preferred_channel == 'Google Meet' %}selected{% endif %}>Google Meet / Scheduled Call</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-zinc-400 mb-1">Preferred Call Hours / Timezone</label>
+            <input
+              type="text"
+              name="available_hours"
+              value="{{ profile.available_hours or '' }}"
+              placeholder="e.g. 10:00 AM – 7:00 PM IST"
+              class="form-control text-xs"
+            >
+          </div>
+        </div>
+
         <div>
-          <label class="block text-zinc-400 font-semibold mb-1.5">Primary Growth Objective</label>
-          <input type="text" name="business_goals" value="{{ profile.business_goals or '' }}" placeholder="e.g. 10x Inbound inquiries / Rank #1 on Maps" class="w-full px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-white focus:outline-none focus:border-[var(--agency-primary)]">
+          <label class="block text-zinc-400 mb-1">Primary Accounts / Billing Email (For Tax Invoices)</label>
+          <input
+            type="email"
+            name="billing_email"
+            value="{{ profile.billing_email or '' }}"
+            placeholder="accounts@yourbusiness.com"
+            class="form-control text-xs"
+          >
+          <span class="text-[10px] text-zinc-500 font-sans mt-1 block">Official GST tax invoices will be dispatched here for corporate bookkeeping.</span>
         </div>
       </div>
 
-      <div>
-        <label class="block text-zinc-400 font-semibold mb-1.5">Preferred Monthly Agency Retainer Budget</label>
-        <select name="preferred_budget" class="w-full px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-white font-mono focus:outline-none focus:border-[var(--agency-primary)]">
-          <option value="₹25,000 – ₹50,000" {% if profile.preferred_budget == '₹25,000 – ₹50,000' %}selected{% endif %}>₹25,000 – ₹50,000 (Growth Tier)</option>
-          <option value="₹50,000 – ₹1,00,000" {% if profile.preferred_budget == '₹50,000 – ₹1,00,000' %}selected{% endif %}>₹50,000 – ₹1,00,000 (Scale Tier)</option>
-          <option value="₹1,00,000+" {% if profile.preferred_budget == '₹1,00,000+' %}selected{% endif %}>₹1,00,000+ (Enterprise Overhaul)</option>
-        </select>
+      <!-- 2. Legal Business Identity for Tax Invoicing -->
+      <div class="border border-zinc-800 bg-zinc-900 rounded-lg p-6 space-y-4">
+        <div class="flex items-center justify-between pb-3 border-b border-zinc-800">
+          <h2 class="font-bold text-white uppercase tracking-wider text-sm">2. Legal Identity &amp; GST Invoicing Context</h2>
+          <span class="badge badge-neutral">RULE 46 COMPLIANT</span>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-zinc-400 mb-1">Registered Entity Name * (On Official Invoices)</label>
+            <input
+              type="text"
+              name="business_name"
+              value="{{ profile.business_name or '' }}"
+              required
+              placeholder="e.g. Sumanth Real Estate Pvt Ltd"
+              class="form-control text-xs"
+            >
+          </div>
+          <div>
+            <label class="block text-zinc-400 mb-1">Client GSTIN / Corporate Tax ID (For 18% Input Tax Credit)</label>
+            <input
+              type="text"
+              name="gstin"
+              value="{{ profile.gstin or '' }}"
+              maxlength="20"
+              placeholder="e.g. 36AAAAA0000A1Z5"
+              class="form-control text-xs uppercase font-mono"
+            >
+          </div>
+          <div>
+            <label class="block text-zinc-400 mb-1">Industry / Category</label>
+            <input
+              type="text"
+              name="business_type"
+              value="{{ profile.business_type or '' }}"
+              placeholder="e.g. Real Estate, Retail, FinTech"
+              class="form-control text-xs"
+            >
+          </div>
+          <div>
+            <label class="block text-zinc-400 mb-1">Official Domain Website</label>
+            <input
+              type="url"
+              name="website"
+              value="{{ profile.website or '' }}"
+              placeholder="https://sumanthrealestate.com"
+              class="form-control text-xs"
+            >
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-zinc-400 mb-1">Registered Postal Office Address</label>
+          <textarea
+            name="billing_address"
+            rows="2"
+            placeholder="Plot / Office No., Commercial Tech Park, Road No. 1..."
+            class="w-full p-2.5 rounded bg-zinc-950 border border-zinc-800 text-white font-sans text-xs focus:outline-none focus:border-zinc-500"
+          >{{ profile.billing_address or '' }}</textarea>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-zinc-400 mb-1">Operating City &amp; State (Place of Supply) *</label>
+            <input
+              type="text"
+              name="location"
+              value="{{ profile.location or '' }}"
+              required
+              placeholder="e.g. Hyderabad, Telangana (36)"
+              class="form-control text-xs"
+            >
+          </div>
+          <div>
+            <label class="block text-zinc-400 mb-1">PIN Code / Postal Code *</label>
+            <input
+              type="text"
+              name="pincode"
+              value="{{ profile.pincode or '' }}"
+              placeholder="e.g. 500081"
+              class="form-control text-xs font-mono"
+            >
+          </div>
+        </div>
       </div>
-    </div>
 
-    <button type="submit" class="w-full py-3.5 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-bold text-xs shadow-xl transition cursor-pointer">
-      Save Complete Profile & GST Context →
-    </button>
-  </form>
+      <!-- 3. Authorized SOW Signatory Coordinates -->
+      <div class="border border-zinc-800 bg-zinc-900 rounded-lg p-6 space-y-4">
+        <div class="flex items-center justify-between pb-3 border-b border-zinc-800">
+          <h2 class="font-bold text-white uppercase tracking-wider text-sm">3. Authorized SOW Contract Signatory</h2>
+          <span class="badge badge-indigo">IT ACT 2000</span>
+        </div>
 
-  <script>if (window.lucide) lucide.createIcons();</script>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-zinc-400 mb-1">Signatory Full Legal Name</label>
+            <input
+              type="text"
+              name="signatory_name"
+              value="{{ profile.signatory_name or current_user.name }}"
+              placeholder="e.g. Sumanth Pangara"
+              class="form-control text-xs"
+            >
+          </div>
+          <div>
+            <label class="block text-zinc-400 mb-1">Designation / Corporate Title</label>
+            <input
+              type="text"
+              name="signatory_title"
+              value="{{ profile.signatory_title or 'Managing Director / Founder' }}"
+              placeholder="e.g. Managing Director / CEO"
+              class="form-control text-xs"
+            >
+          </div>
+        </div>
+      </div>
+
+      <!-- Submit Action -->
+      <div class="pt-4 flex items-center justify-between border-t border-zinc-800">
+        <span class="text-[11px] text-zinc-500 font-sans">Coordinates automatically link to your legal contracts, tax invoices, and agency lead dashboard.</span>
+        <button type="submit" class="btn btn-primary text-xs h-11 px-6 font-semibold cursor-pointer">
+          Save Complete Corporate Profile ⚡
+        </button>
+      </div>
+
+    </form>
+
+  </main>
+
+  <!-- FOOTER -->
+  <footer class="border-t border-zinc-800 bg-zinc-950 py-6 px-6 text-center text-xs font-mono text-zinc-500">
+    {{ agency_settings.agency_name }} Corporate Vault • SAC 998311 Compliant
+  </footer>
+
 </body>
 </html>

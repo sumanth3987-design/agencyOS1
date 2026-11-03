@@ -1,5 +1,8 @@
+"""Flask Command Line Interface Commands for AgencyOS."""
+
 import click
 from flask.cli import with_appcontext
+
 from app.extensions import db
 from app.models import User
 
@@ -22,18 +25,19 @@ def create_admin_command(email, password, name):
     if existing_user:
         existing_user.role = "admin"
         existing_user.set_password(password)
+        existing_user.name = name  # Ensure 'name' is synced
         existing_user.full_name = name
         db.session.commit()
         click.echo(f"Updated existing user {email} to Admin role successfully.")
         return
 
-    admin = User(
-        email=email,
-        full_name=name,
-        role="admin",
-        is_active=True,
-    )
+    admin = User()
+    admin.email = email
+    admin.name = name  # Map the CLI 'name' to the required 'name' column
+    admin.full_name = name
+    admin.role = "admin"
     admin.set_password(password)
+
     db.session.add(admin)
     db.session.commit()
     click.echo(f"Successfully created new Admin user: {email}")

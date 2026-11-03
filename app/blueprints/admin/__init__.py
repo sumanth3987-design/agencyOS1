@@ -1,40 +1,76 @@
-# Save this directly into your file: app/blueprints/admin/__init__.py
+"""AgencyOS Admin Command Center Blueprint.
+
+Governs project pipelines, specialist talent allocations, application review gates,
+offline manual settlements, broadcast notifications, and AI SOW drafting.
+"""
 
 import csv
 import json
+import logging
 import os
 import re
 import secrets
 import urllib.request
+from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from io import StringIO
-from datetime import datetime
-from urllib.parse import urlsplit
 import ipaddress
+from urllib.parse import urlsplit
+
+from flask import (
+    Blueprint,
+    Response,
+    current_app,
+    flash,
+    jsonify,
+    redirect,
+    render_template,
+    request,
+    url_for,
+)
+from flask.typing import ResponseReturnValue
+from flask_login import current_user, login_required
 from sqlalchemy.exc import IntegrityError
 
-from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, Response, current_app
-from flask_login import login_required, current_user
 from app.extensions import db, limiter
 from app.models import (
-    User, CustomerProfile, Business, ProfessionalProfile, Project, Payment,
-    ProfessionalProjectApplication, ProjectDelivery, get_ist_now, PACKAGE_PRICES,
-    calculate_professional_profile_completion, get_latest_project_delivery,
-    Invoice, Notification, ProjectAddOn, AgencySetting, ActivityLog
+    ActivityLog,
+    AgencySetting,
+    Business,
+    CustomerProfile,
+    Invoice,
+    Notification,
+    PACKAGE_PRICES,
+    Payment,
+    ProfessionalProfile,
+    ProfessionalProjectApplication,
+    Project,
+    ProjectAddOn,
+    ProjectDelivery,
+    User,
+    calculate_professional_profile_completion,
+    get_ist_now,
+    get_latest_project_delivery,
 )
-from app.utils.currency import format_currency, get_package_price
+from app.utils.currency import (
+    compute_financial_split,
+    format_currency,
+    get_package_price,
+    sanitize_currency,
+)
 
+logger = logging.getLogger(__name__)
 admin_bp = Blueprint("admin", __name__)
 
 
-def _validated_agency_settings(form):
+def _validated_agency_settings(form: dict[str, str]) -> tuple[dict[str, str], dict[str, str]]:
     values = {
         "agency_name": form.get("agency_name", "").strip(),
         "primary_color": form.get("primary_color", "").strip(),
         "logo_url": form.get("logo_url", "").strip(),
         "whatsapp_support_number": form.get("whatsapp_support_number", "").strip(),
     }
-    errors = {}
+    errors: dict[str, str] = {}
 
     if not values["agency_name"]:
         errors["agency_name"] = "Enter an agency name."
@@ -77,33 +113,31 @@ def _validated_agency_settings(form):
     phone = values["whatsapp_support_number"]
     digits = phone[1:] if phone.startswith("+") else phone
     if not re.fullmatch(r"\d{8,15}", digits):
-        errors["whatsapp_support_number"] = (
-            "Enter 8–15 digits, with an optional leading +."
-        )
+        errors["whatsapp_support_number"] = "Enter 8–15 digits, with an optional leading +."
 
     return values, errors
 
 
-def _agency_settings_form_values(settings, submitted=None):
+def _agency_settings_form_values(settings: AgencySetting | None, submitted: dict[str, str] | None = None) -> dict[str, str]:
     defaults = {
         "agency_name": "AgencyOS",
-        "primary_color": "#6366f1",
+        "primary_color": "#09090b",
         "logo_url": "",
         "whatsapp_support_number": "+919876543210",
     }
     if settings:
         defaults.update({
             "agency_name": settings.agency_name,
-            "primary_color": settings.primary_color,
+            "primary_color": settings.primary_color or "#09090b",
             "logo_url": settings.logo_url or "",
-            "whatsapp_support_number": settings.whatsapp_support_number,
+            "whatsapp_support_number": settings.whatsapp_support_number or "+919876543210",
         })
     if submitted is not None:
         defaults.update(submitted)
     return defaults
 
 
-def _apply_agency_settings(settings, values):
+def _apply_agency_settings(settings: AgencySetting, values: dict[str, str]) -> None:
     for key, value in values.items():
         setattr(settings, key, (value or None) if key == "logo_url" else value)
 
@@ -115,7 +149,7 @@ def _apply_agency_settings(settings, values):
 @admin_bp.route("/admin/dashboard")
 @admin_bp.route("/admin")
 @login_required
-def admin_dashboard():
+def admin_dashboard() -> ResponseReturnValue:
     if getattr(current_user, "role", "").lower() != "admin":
         flash("Admin access required.", "danger")
         return redirect(url_for("customer.dashboard"))
@@ -149,7 +183,7 @@ def admin_dashboard():
         query = query.filter(
             db.or_(
                 Project.service.ilike(search_term),
-                Project.requirements.ilike(search_term)
+                Project.requirements.ilike(search_term),
             )
         )
 
@@ -173,19 +207,19 @@ def admin_dashboard():
         recent_projects=recent_projects,
         pagination=pagination,
         current_status=status_filter,
-        search_query=search_query
+        search_query=search_query,
     )
 
 
 @admin_bp.route("/admin/settings", methods=["GET", "POST"])
 @login_required
-def agency_settings():
+def agency_settings() -> ResponseReturnValue:
     if getattr(current_user, "role", "").lower() != "admin":
         flash("Admin access required.", "danger")
         return redirect(url_for("customer.dashboard"))
 
     settings = db.session.get(AgencySetting, 1)
-    errors = {}
+    errors: dict[str, str] = {}
     form_values = _agency_settings_form_values(settings)
 
     if request.method == "POST":
@@ -196,7 +230,7 @@ def agency_settings():
             else (
                 settings.primary_color
                 if settings and re.fullmatch(r"#[0-9a-fA-F]{6}", settings.primary_color or "")
-                else "#6366f1"
+                else "#09090b"
             )
         )
         if errors:
@@ -209,7 +243,8 @@ def agency_settings():
 
         try:
             if settings is None:
-                settings = AgencySetting(id=1)
+                settings = AgencySetting()
+                settings.id = 1
                 db.session.add(settings)
             _apply_agency_settings(settings, form_values)
             db.session.commit()
@@ -231,7 +266,7 @@ def agency_settings():
         color_picker_value=(
             settings.primary_color
             if settings and re.fullmatch(r"#[0-9a-fA-F]{6}", settings.primary_color or "")
-            else "#6366f1"
+            else "#09090b"
         ),
     )
 
@@ -242,12 +277,11 @@ def agency_settings():
 
 @admin_bp.route("/admin/project/<int:project_id>")
 @login_required
-def admin_project_view(project_id):
+def admin_project_view(project_id: int) -> ResponseReturnValue:
     if getattr(current_user, "role", "").lower() != "admin":
         flash("Admin access required.", "danger")
         return redirect(url_for("customer.dashboard"))
 
-    # Direct redirect into the unified project workspace with Admin privileges
     return redirect(url_for("customer.project_details", project_id=project_id))
 
 
@@ -257,7 +291,7 @@ def admin_project_view(project_id):
 
 @admin_bp.route("/admin/customers")
 @login_required
-def admin_customers():
+def admin_customers() -> ResponseReturnValue:
     if getattr(current_user, "role", "").lower() != "admin":
         flash("Admin access required.", "danger")
         return redirect(url_for("customer.dashboard"))
@@ -272,7 +306,7 @@ def admin_customers():
         "admin_customers.html",
         customers=customers,
         customer_profiles=customer_profiles,
-        customer_projects=customer_projects
+        customer_projects=customer_projects,
     )
 
 
@@ -282,7 +316,7 @@ def admin_customers():
 
 @admin_bp.route("/admin/professionals")
 @login_required
-def admin_professionals():
+def admin_professionals() -> ResponseReturnValue:
     if getattr(current_user, "role", "").lower() != "admin":
         flash("Admin access required.", "danger")
         return redirect(url_for("customer.dashboard"))
@@ -301,14 +335,14 @@ def admin_professionals():
 
 @admin_bp.route("/admin/professionals/<int:profile_id>/verify", methods=["POST"])
 @login_required
-def verify_professional(profile_id):
+def verify_professional(profile_id: int) -> ResponseReturnValue:
     if getattr(current_user, "role", "").lower() != "admin":
         flash("Admin access required.", "danger")
         return redirect(url_for("customer.dashboard"))
 
     profile = ProfessionalProfile.query.get_or_404(profile_id)
     profile.verification_status = "Verified"
-    profile.verification_notes = "Verified by admin."
+    profile.verification_notes = "Verified by agency administrator."
     db.session.commit()
 
     flash("Specialist verified successfully.", "success")
@@ -317,7 +351,7 @@ def verify_professional(profile_id):
 
 @admin_bp.route("/admin/professionals/<int:profile_id>/reject", methods=["POST"])
 @login_required
-def reject_professional(profile_id):
+def reject_professional(profile_id: int) -> ResponseReturnValue:
     if getattr(current_user, "role", "").lower() != "admin":
         flash("Admin access required.", "danger")
         return redirect(url_for("customer.dashboard"))
@@ -326,17 +360,17 @@ def reject_professional(profile_id):
     profile.verification_status = "Rejected"
     db.session.commit()
 
-    flash("Specialist onboarding rejected.", "warning")
+    flash("Specialist onboarding application rejected.", "warning")
     return redirect(url_for("admin.admin_professionals"))
 
 
 # =========================================================
-# TALENT APPLICATION ASSIGNMENTS
+# TALENT APPLICATION ASSIGNMENTS (WITH SPECIALIST NOTIFICATION)
 # =========================================================
 
 @admin_bp.route("/admin/applications")
 @login_required
-def admin_applications():
+def admin_applications() -> ResponseReturnValue:
     if getattr(current_user, "role", "").lower() != "admin":
         flash("Admin access required.", "danger")
         return redirect(url_for("customer.dashboard"))
@@ -350,41 +384,58 @@ def admin_applications():
 
 @admin_bp.route("/admin/applications/<int:application_id>/assign", methods=["POST"])
 @login_required
-def assign_professional(application_id):
+def assign_professional(application_id: int) -> ResponseReturnValue:
     if getattr(current_user, "role", "").lower() != "admin":
         flash("Admin access required.", "danger")
         return redirect(url_for("customer.dashboard"))
 
-    app = ProfessionalProjectApplication.query.get_or_404(application_id)
-    project = app.project
+    app_record = ProfessionalProjectApplication.query.get_or_404(application_id)
+    project = app_record.project
 
-    if project.status != "Pending Assignment" or app.status != "Applied":
-        flash("This project or application is no longer eligible for assignment.", "warning")
+    if app_record.status != "Applied":
+        flash("This application has already been processed.", "warning")
         return redirect(url_for("admin.admin_applications"))
 
-    app.status = "Assigned"
+    app_record.status = "Assigned"
     project.status = "Assigned"
 
     other_apps = ProfessionalProjectApplication.query.filter(
         ProfessionalProjectApplication.project_id == project.id,
-        ProfessionalProjectApplication.id != app.id,
-        ProfessionalProjectApplication.status == "Applied"
+        ProfessionalProjectApplication.id != app_record.id,
+        ProfessionalProjectApplication.status == "Applied",
     ).all()
     for o in other_apps:
         o.status = "Not Selected"
 
+    ActivityLog.log_event(
+        project_id=project.id,
+        action="SPECIALIST_ASSIGNED",
+        description=f"Specialist {app_record.professional.name} assigned to project #{project.id}.",
+        user_id=current_user.id,
+        category="success",
+    )
+
+    # Dispatch notification to specialist
+    notif = Notification()
+    notif.user_id = app_record.professional_id
+    notif.title = f"Sprint Assigned: #{project.id} {project.service}"
+    notif.message = "You have been selected as the lead delivery specialist for this engagement. Open your workspace to begin."
+    notif.link = f"/professional/project/{project.id}/workspace"
+    notif.created_at = get_ist_now()
+    db.session.add(notif)
+
     db.session.commit()
-    flash("Specialist successfully assigned to project sprint.", "success")
+    flash(f"Specialist {app_record.professional.name} successfully assigned to Project #{project.id}!", "success")
     return redirect(url_for("admin.admin_applications"))
 
 
 # =========================================================
-# PIPELINES & KANBAN
+# PIPELINES & SPRINT REMINDERS
 # =========================================================
 
 @admin_bp.route("/admin/project-management")
 @login_required
-def admin_project_management():
+def admin_project_management() -> ResponseReturnValue:
     if getattr(current_user, "role", "").lower() != "admin":
         flash("Admin access required.", "danger")
         return redirect(url_for("customer.dashboard"))
@@ -393,11 +444,9 @@ def admin_project_management():
     return render_template("admin_project_management.html", projects=projects)
 
 
-@admin_bp.route(
-    "/admin/project/<int:project_id>/send-reminder", methods=["POST"]
-)
+@admin_bp.route("/admin/project/<int:project_id>/send-reminder", methods=["POST"])
 @login_required
-def send_admin_reminder(project_id):
+def send_admin_reminder(project_id: int) -> ResponseReturnValue:
     if getattr(current_user, "role", "").lower() != "admin":
         flash("Admin access required.", "danger")
         return redirect(url_for("customer.dashboard"))
@@ -405,32 +454,20 @@ def send_admin_reminder(project_id):
     project = Project.query.get_or_404(project_id)
     if project.status == "Payment Pending":
         from app.services.reminders import send_payment_reminder
-
         sent = send_payment_reminder(project.id, force=True)
         reminder_type = "payment"
     elif project.status == "Submitted":
         from app.services.reminders import send_review_reminder
-
         sent = send_review_reminder(project.id, force=True)
         reminder_type = "review"
     else:
-        flash(
-            "This project is not awaiting payment or client review.",
-            "info",
-        )
+        flash("This project is not awaiting payment or client review.", "info")
         return redirect(url_for("admin.admin_project_management"))
 
     if sent:
-        flash(
-            f"{reminder_type.title()} reminder sent for Project #{project.id}.",
-            "success",
-        )
+        flash(f"{reminder_type.title()} reminder sent for Project #{project.id}.", "success")
     else:
-        flash(
-            "Reminder could not be sent. Check the client email, APP_BASE_URL, "
-            "and email delivery configuration.",
-            "warning",
-        )
+        flash("Reminder could not be sent. Check email delivery configuration.", "warning")
     return redirect(url_for("admin.admin_project_management"))
 
 
@@ -440,7 +477,7 @@ def send_admin_reminder(project_id):
 
 @admin_bp.route("/admin/project-review")
 @login_required
-def admin_project_review():
+def admin_project_review() -> ResponseReturnValue:
     if getattr(current_user, "role", "").lower() != "admin":
         flash("Admin access required.", "danger")
         return redirect(url_for("customer.dashboard"))
@@ -459,13 +496,13 @@ def admin_project_review():
         "admin_project_review.html",
         projects=projects,
         project_deliveries=project_deliveries,
-        project_applications=project_applications
+        project_applications=project_applications,
     )
 
 
 @admin_bp.route("/admin/project/<int:project_id>/revision", methods=["POST"])
 @login_required
-def request_project_revision(project_id):
+def request_project_revision(project_id: int) -> ResponseReturnValue:
     if getattr(current_user, "role", "").lower() != "admin":
         flash("Admin access required.", "danger")
         return redirect(url_for("customer.dashboard"))
@@ -486,11 +523,11 @@ def request_project_revision(project_id):
     project.status = "Revision"
     project.revision_comment = comment
     ActivityLog.log_event(
-        project.id,
-        "REVISION_REQUESTED",
-        f"Agency requested a revision: {comment}",
-        current_user.id,
-        "warning",
+        project_id=project.id,
+        action="REVISION_REQUESTED",
+        description=f"Agency administrator requested revision: {comment}",
+        user_id=current_user.id,
+        category="warning",
     )
     db.session.commit()
 
@@ -500,7 +537,7 @@ def request_project_revision(project_id):
 
 @admin_bp.route("/admin/project/<int:project_id>/approve", methods=["POST"])
 @login_required
-def approve_project(project_id):
+def approve_project(project_id: int) -> ResponseReturnValue:
     if getattr(current_user, "role", "").lower() != "admin":
         flash("Admin access required.", "danger")
         return redirect(url_for("customer.dashboard"))
@@ -514,11 +551,11 @@ def approve_project(project_id):
     project.status = "Completed"
     project.revision_comment = None
     ActivityLog.log_event(
-        project.id,
-        "MILESTONE_APPROVED",
-        "Agency approved the milestone deliverable. Project marked Completed.",
-        current_user.id,
-        "success",
+        project_id=project.id,
+        action="MILESTONE_APPROVED",
+        description="Agency approved the milestone deliverable. Project marked Completed.",
+        user_id=current_user.id,
+        category="success",
     )
     db.session.commit()
 
@@ -532,71 +569,64 @@ def approve_project(project_id):
 
 @admin_bp.route("/admin/project/<int:project_id>/mark-paid", methods=["POST"])
 @login_required
-def admin_mark_paid(project_id):
+def admin_mark_paid(project_id: int) -> ResponseReturnValue:
     if getattr(current_user, "role", "").lower() != "admin":
         flash("Admin access required.", "danger")
         return redirect(url_for("customer.dashboard"))
 
     project = Project.query.get_or_404(project_id)
-    amount = get_package_price(
-        project.package,
-        project.currency,
-        PACKAGE_PRICES,
-    )
+    currency = sanitize_currency(project.currency)
+    amount = get_package_price(project.package, currency, PACKAGE_PRICES)
 
-    payment = Payment.query.filter_by(
-        project_id=project.id,
-        addon_id=None,
-    ).first()
+    payment = Payment.query.filter_by(project_id=project.id, addon_id=None).first()
     if not payment:
-        payment = Payment(
-            project_id=project.id,
-            customer_id=project.customer_id,
-            razorpay_order_id=f"offline_order_{project.id}",
-            razorpay_payment_id=f"offline_bank_transfer_{project.id}",
-            amount=amount,
-            currency=project.currency,
-            status="Paid",
-            paid_at=get_ist_now()
-        )
+        payment = Payment()
+        payment.project_id = project.id
+        payment.customer_id = project.customer_id
+        payment.razorpay_order_id = f"offline_order_{project.id}"
+        payment.razorpay_payment_id = f"offline_wire_{project.id}_{secrets.token_hex(2).upper()}"
+        payment.amount = amount
+        payment.currency = currency
+        payment.status = "Paid"
+        payment.paid_at = get_ist_now()
         db.session.add(payment)
     else:
         payment.amount = amount
-        payment.currency = project.currency
+        payment.currency = currency
         payment.status = "Paid"
         payment.paid_at = get_ist_now()
 
     project.status = "Pending Assignment"
     ActivityLog.log_event(
-        project.id,
-        "PAYMENT_RECEIVED",
-        f"Milestone payment of {format_currency(amount, project.currency)} recorded via offline bank settlement.",
-        current_user.id,
-        "success",
+        project_id=project.id,
+        action="PAYMENT_RECEIVED",
+        description=f"Milestone payment of {format_currency(amount, currency)} recorded via offline wire.",
+        user_id=current_user.id,
+        category="success",
     )
 
-    # Ensure invoice exists
+    talent_share, agency_share, tax_amount = compute_financial_split(amount, currency)
     invoice = Invoice.query.filter_by(project_id=project.id).first()
     if not invoice:
-        tax_amount = (
-            amount - (amount / Decimal("1.18")).quantize(Decimal("0.01"))
-        ).quantize(Decimal("0.01"))
-        talent_payout = (amount * Decimal("0.45")).quantize(Decimal("0.01"))
-        db.session.add(Invoice(
-            invoice_number=f"INV-2026-{project.id:04d}",
-            project_id=project.id,
-            customer_id=project.customer_id,
-            gross_amount=amount,
-            talent_payout=talent_payout,
-            agency_profit=amount - talent_payout,
-            tax_amount=tax_amount,
-            currency=project.currency,
-            status="Paid",
-            payout_status="Pending Approval"
-        ))
+        new_inv = Invoice()
+        new_inv.invoice_number = f"INV-2026-{project.id:04d}"
+        new_inv.project_id = project.id
+        new_inv.customer_id = project.customer_id
+        new_inv.gross_amount = amount
+        new_inv.talent_payout = talent_share
+        new_inv.agency_profit = agency_share
+        new_inv.tax_amount = tax_amount
+        new_inv.currency = currency
+        new_inv.status = "Paid"
+        new_inv.payout_status = "Pending Approval"
+        db.session.add(new_inv)
     else:
         invoice.status = "Paid"
-        invoice.currency = project.currency
+        invoice.currency = currency
+        if not invoice.talent_payout:
+            invoice.talent_payout = talent_share
+        if not invoice.agency_profit:
+            invoice.agency_profit = agency_share
 
     db.session.commit()
     flash(f"Project #{project.id} marked as Paid via Offline Bank Settlement.", "success")
@@ -605,7 +635,7 @@ def admin_mark_paid(project_id):
 
 @admin_bp.route("/admin/project/<int:project_id>/add-on", methods=["POST"])
 @login_required
-def create_project_addon(project_id):
+def create_project_addon(project_id: int) -> ResponseReturnValue:
     if getattr(current_user, "role", "").lower() != "admin":
         flash("Admin access required.", "danger")
         return redirect(url_for("customer.dashboard"))
@@ -630,57 +660,51 @@ def create_project_addon(project_id):
         or amount != amount.quantize(Decimal("0.01"))
         or amount > Decimal("999999999")
     ):
-        flash(
-            "Enter a title (up to 200 characters) and a positive amount with at most two decimal places.",
-            "warning",
-        )
+        flash("Enter a valid title and positive amount with at most two decimal places.", "warning")
         return redirect(url_for("customer.project_details", project_id=project.id))
 
+    currency = sanitize_currency(project.currency)
     gross_amount = amount.quantize(Decimal("0.01"))
-    tax_amount = (
-        gross_amount
-        - (gross_amount / Decimal("1.18")).quantize(Decimal("0.01"))
-    ).quantize(Decimal("0.01"))
-    invoice = Invoice(
-        invoice_number=f"ADDON-{project.id}-{secrets.token_hex(4).upper()}",
-        project_id=project.id,
-        customer_id=project.customer_id,
-        gross_amount=gross_amount,
-        talent_payout=0,
-        agency_profit=gross_amount - tax_amount,
-        tax_amount=tax_amount,
-        currency=project.currency,
-        status="Pending",
-        payout_status="Pending Approval",
-    )
+    _, agency_profit, tax_amount = compute_financial_split(gross_amount, currency)
+
+    invoice = Invoice()
+    invoice.invoice_number = f"ADDON-{project.id}-{secrets.token_hex(4).upper()}"
+    invoice.project_id = project.id
+    invoice.customer_id = project.customer_id
+    invoice.gross_amount = gross_amount
+    invoice.talent_payout = Decimal("0.00")
+    invoice.agency_profit = agency_profit
+    invoice.tax_amount = tax_amount
+    invoice.currency = currency
+    invoice.status = "Pending"
+    invoice.payout_status = "Pending Approval"
 
     try:
         db.session.add(invoice)
         db.session.flush()
-        addon = ProjectAddOn(
-            project_id=project.id,
-            invoice_id=invoice.id,
-            title=title,
-            amount=gross_amount,
-            status="Pending Payment",
-        )
+
+        addon = ProjectAddOn()
+        addon.project_id = project.id
+        addon.invoice_id = invoice.id
+        addon.title = title
+        addon.amount = gross_amount
+        addon.status = "Pending Payment"
+
         db.session.add(addon)
         db.session.commit()
     except Exception:
         db.session.rollback()
-        current_app.logger.exception(
-            "Failed to create a scope add-on for project #%s", project.id
-        )
-        flash("Could not issue the paid scope add-on. Please try again.", "danger")
+        current_app.logger.exception("Failed to create scope add-on for project #%s", project.id)
+        flash("Could not issue the scope add-on. Please try again.", "danger")
         return redirect(url_for("customer.project_details", project_id=project.id))
 
-    flash(f"Paid scope add-on '{title}' issued to the client.", "success")
+    flash(f"Paid scope add-on '{title}' issued to client.", "success")
     return redirect(url_for("customer.project_details", project_id=project.id))
 
 
 @admin_bp.route("/admin/project/<int:project_id>/unassign", methods=["POST"])
 @login_required
-def unassign_professional(project_id):
+def unassign_professional(project_id: int) -> ResponseReturnValue:
     if getattr(current_user, "role", "").lower() != "admin":
         flash("Admin access required.", "danger")
         return redirect(url_for("customer.dashboard"))
@@ -689,8 +713,8 @@ def unassign_professional(project_id):
     assigned_apps = ProfessionalProjectApplication.query.filter_by(
         project_id=project.id, status="Assigned"
     ).all()
-    for app in assigned_apps:
-        app.status = "Applied"
+    for app_item in assigned_apps:
+        app_item.status = "Applied"
 
     project.status = "Pending Assignment"
     db.session.commit()
@@ -701,7 +725,7 @@ def unassign_professional(project_id):
 
 @admin_bp.route("/admin/project/<int:project_id>/delete", methods=["POST"])
 @login_required
-def delete_project(project_id):
+def delete_project(project_id: int) -> ResponseReturnValue:
     if getattr(current_user, "role", "").lower() != "admin":
         flash("Admin access required.", "danger")
         return redirect(url_for("customer.dashboard"))
@@ -715,7 +739,7 @@ def delete_project(project_id):
     db.session.delete(project)
     db.session.commit()
 
-    flash(f"Project #{project_id} has been permanently deleted.", "success")
+    flash(f"Project #{project_id} permanently deleted.", "success")
     return redirect(request.referrer or url_for("admin.admin_dashboard"))
 
 
@@ -725,7 +749,7 @@ def delete_project(project_id):
 
 @admin_bp.route("/admin/transactions")
 @login_required
-def admin_transactions():
+def admin_transactions() -> ResponseReturnValue:
     if getattr(current_user, "role", "").lower() != "admin":
         flash("Admin access required.", "danger")
         return redirect(url_for("customer.dashboard"))
@@ -734,31 +758,22 @@ def admin_transactions():
     per_page = 15
     status_filter = request.args.get("status", "all")
 
-    # Base query for metrics
     all_payments = Payment.query.all()
-    total_collected = {}
-    pending_amount = {}
+    total_collected: dict[str, Decimal] = {}
+    pending_amount: dict[str, Decimal] = {}
+
     for payment in all_payments:
-        currency = payment.currency or "INR"
+        currency = sanitize_currency(payment.currency)
         status = getattr(payment, "status", "").lower()
         if status == "paid":
-            total_collected[currency] = (
-                total_collected.get(currency, Decimal("0"))
-                + Decimal(str(payment.amount or 0))
-            )
+            total_collected[currency] = total_collected.get(currency, Decimal("0")) + Decimal(str(payment.amount or 0))
         elif status in {"created", "pending"}:
-            pending_amount[currency] = (
-                pending_amount.get(currency, Decimal("0"))
-                + Decimal(str(payment.amount or 0))
-            )
+            pending_amount[currency] = pending_amount.get(currency, Decimal("0")) + Decimal(str(payment.amount or 0))
 
-    # Query with filters
     query = Payment.query
-
     if status_filter != "all":
         query = query.filter(Payment.status.ilike(status_filter))
 
-    # Paginate and order by newest first
     pagination = query.order_by(Payment.created_at.desc()).paginate(page=page, per_page=per_page, error_out=False)
     payments = pagination.items
 
@@ -768,13 +783,13 @@ def admin_transactions():
         pagination=pagination,
         current_status=status_filter,
         total_collected=total_collected,
-        pending_amount=pending_amount
+        pending_amount=pending_amount,
     )
 
 
 @admin_bp.route("/admin/invoice/<int:invoice_id>/release-payout", methods=["POST"])
 @login_required
-def release_talent_payout(invoice_id):
+def release_talent_payout(invoice_id: int) -> ResponseReturnValue:
     if getattr(current_user, "role", "").lower() != "admin":
         flash("Admin access required.", "danger")
         return redirect(url_for("customer.dashboard"))
@@ -802,17 +817,26 @@ def release_talent_payout(invoice_id):
         return redirect(url_for("admin.admin_transactions"))
 
     invoice.payout_status = "Settled"
-    invoice.payout_utr = utr_number or "UPI_INSTANT"
+    invoice.payout_utr = utr_number or "WIRE_SETTLED"
     invoice.payout_paid_at = get_ist_now()
-    db.session.commit()
 
-    flash(f"Talent payout marked as Settled! UTR logged: {invoice.payout_utr}", "success")
+    if invoice.project_id:
+        ActivityLog.log_event(
+            project_id=invoice.project_id,
+            action="PAYOUT_SETTLED",
+            description=f"Specialist payout settled. UTR: {invoice.payout_utr}",
+            user_id=current_user.id,
+            category="success",
+        )
+
+    db.session.commit()
+    flash(f"Talent payout settled. UTR logged: {invoice.payout_utr}", "success")
     return redirect(url_for("admin.admin_transactions"))
 
 
 @admin_bp.route("/admin/notifications/broadcast", methods=["POST"])
 @login_required
-def broadcast_notification():
+def broadcast_notification() -> ResponseReturnValue:
     if getattr(current_user, "role", "").lower() != "admin":
         flash("Admin access required.", "danger")
         return redirect(url_for("customer.dashboard"))
@@ -833,12 +857,12 @@ def broadcast_notification():
     )
 
     for u in recipients:
-        db.session.add(Notification(
-            user_id=u.id,
-            title=title,
-            message=message,
-            link=link
-        ))
+        notif = Notification()
+        notif.user_id = u.id
+        notif.title = title
+        notif.message = message
+        notif.link = link
+        db.session.add(notif)
 
     db.session.commit()
     flash(f"Broadcast sent successfully to {len(recipients)} recipient(s).", "success")
@@ -847,7 +871,7 @@ def broadcast_notification():
 
 @admin_bp.route("/admin/reports/export/<string:report_type>")
 @login_required
-def export_reports(report_type):
+def export_reports(report_type: str) -> ResponseReturnValue:
     if getattr(current_user, "role", "").lower() != "admin":
         flash("Admin access required.", "danger")
         return redirect(url_for("customer.dashboard"))
@@ -857,19 +881,35 @@ def export_reports(report_type):
     writer = csv.writer(si)
 
     if report_type == "revenue":
-        writer.writerow(["Invoice #", "Payment Status", "Razorpay Payment ID", "Date", "Currency", "Gross", "Taxable Value", "Tax / Tax Estimate"])
+        writer.writerow(["Invoice #", "Payment Status", "Gateway Payment ID", "Date", "Currency", "Gross", "Taxable Value", "Tax Amount"])
         payments = Payment.query.order_by(Payment.created_at.desc()).all()
         for p in payments:
+            currency = sanitize_currency(p.currency)
             gross = Decimal(str(p.amount or 0))
-            base_val = (gross / Decimal("1.18")).quantize(Decimal("0.01")) if gross > 0 else Decimal("0")
-            tax_val = gross - base_val
-            writer.writerow([f"INV-{p.id:04d}", p.status, p.razorpay_payment_id or "—", p.created_at.strftime("%Y-%m-%d") if p.created_at else "—", p.currency or "INR", gross, base_val, tax_val])
+            _, _, tax_val = compute_financial_split(gross, currency)
+            base_val = gross - tax_val
+            writer.writerow([
+                f"INV-{p.id:04d}",
+                p.status,
+                p.razorpay_payment_id or "—",
+                p.created_at.strftime("%Y-%m-%d") if p.created_at else "—",
+                currency,
+                gross,
+                base_val,
+                tax_val,
+            ])
         filename = f"AgencyOS_Revenue_{datetime.now().strftime('%Y%m%d_%H%M')}.csv"
     else:
         writer.writerow(["User ID", "Name", "Email", "Role", "Joined Date"])
         users = User.query.all()
         for u in users:
-            writer.writerow([u.id, getattr(u, "name", getattr(u, "full_name", "User")), u.email, u.role, u.created_at.strftime("%Y-%m-%d") if u.created_at else "—"])
+            writer.writerow([
+                u.id,
+                getattr(u, "name", getattr(u, "full_name", "User")),
+                u.email,
+                u.role,
+                u.created_at.strftime("%Y-%m-%d") if u.created_at else "—",
+            ])
         filename = f"AgencyOS_Users_{datetime.now().strftime('%Y%m%d_%H%M')}.csv"
 
     output = Response(si.getvalue(), mimetype="text/csv; charset=utf-8")
@@ -879,9 +919,9 @@ def export_reports(report_type):
 
 @admin_bp.route("/admin/ai/generate-sow", methods=["POST"])
 @login_required
-def ai_generate_sow():
+def ai_generate_sow() -> ResponseReturnValue:
     if getattr(current_user, "role", "").lower() != "admin":
-        return jsonify({"error": "Admin access required"}), 403
+        return jsonify({"error": "Admin access required."}), 403
 
     client_name = request.form.get("client_name", "Valued Client").strip()
     service_type = request.form.get("service_type", "Website Design & Development").strip()
@@ -892,7 +932,14 @@ def ai_generate_sow():
 
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
-        fallback_sow = f"### Scope of Work: {service_type}\n**Client:** {client_name}\n**Brief:** {notes}\n\n#### Milestone 1: Strategic Discovery (50% Advance)\n#### Milestone 2: Production Development (25%)\n#### Milestone 3: Handover & Live Launch (25%)\n"
+        fallback_sow = (
+            f"### Scope of Work: {service_type}\n"
+            f"**Client Entity:** {client_name}\n"
+            f"**Brief:** {notes}\n\n"
+            f"#### Milestone 1: Strategic Architecture & Wireframes (50% Advance)\n"
+            f"#### Milestone 2: Functional Staging & Payment Rails (25%)\n"
+            f"#### Milestone 3: DNS Production Cutover & Handover (25%)\n"
+        )
         return jsonify({"sow": fallback_sow})
 
     try:

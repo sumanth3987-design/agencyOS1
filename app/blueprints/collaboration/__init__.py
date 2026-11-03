@@ -1,19 +1,31 @@
+"""AgencyOS Collaboration, Notification & Chat Stream Blueprint.
+
+Manages real-time project messaging, file uploads, in-app bell notifications,
+and AI-assisted SOW generator endpoints.
+"""
+
 import os
 import uuid
 from datetime import datetime
 from urllib.parse import urlsplit
+
+from flask import Blueprint, flash, jsonify, redirect, request, url_for
+from flask.typing import ResponseReturnValue
+from flask_login import current_user, login_required
 from werkzeug.utils import secure_filename
-from flask import Blueprint, request, jsonify, render_template, flash, redirect, url_for
-from flask_login import login_required, current_user
+
 from app.extensions import db
-from app.models import Project, User, ChatMessage, Notification, Invoice, get_ist_now
+from app.models import ChatMessage, Invoice, Notification, PACKAGE_PRICES, Project, User, get_ist_now
+from app.utils.currency import compute_financial_split, get_package_price, sanitize_currency
 
 collaboration_bp = Blueprint("collaboration", __name__)
 
 ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "pdf", "zip", "mp4", "txt", "docx", "fig"}
 
-def allowed_file(filename):
+
+def allowed_file(filename: str) -> bool:
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
+
 
 # =========================================================
 # 1. REAL-TIME PROJECT CHAT & MESSAGING
@@ -21,11 +33,11 @@ def allowed_file(filename):
 
 @collaboration_bp.route("/api/project/<int:project_id>/messages", methods=["GET"])
 @login_required
-def get_project_messages(project_id):
+def get_project_messages(project_id: int) -> ResponseReturnValue:
     project = Project.query.get_or_404(project_id)
     is_customer = project.customer_id == current_user.id
-    is_admin = current_user.role == "admin"
-    is_professional = current_user.role == "professional"
+    is_admin = getattr(current_user, "role", "").lower() == "admin"
+    is_professional = getattr(current_user, "role", "").lower() == "professional"
 
     if not (is_customer or is_admin or is_professional):
         return jsonify({"error": "Unauthorized"}), 403
@@ -48,13 +60,14 @@ def get_project_messages(project_id):
         ]
     })
 
+
 @collaboration_bp.route(
     "/api/project/<int:project_id>/messages",
     methods=["POST"],
     endpoint="api_send_project_message",
 )
 @login_required
-def send_project_message(project_id):
+def send_project_message(project_id: int) -> ResponseReturnValue:
     project = Project.query.get_or_404(project_id)
     data = request.get_json(silent=True) or request.form
     text = (data.get("message") or "").strip()
@@ -63,23 +76,24 @@ def send_project_message(project_id):
     if not text and not attachment_url:
         return jsonify({"error": "Message content or attachment required"}), 400
 
-    msg = ChatMessage(
-        project_id=project.id,
-        sender_id=current_user.id,
-        message=text or "Sent an attachment",
-        attachment_url=attachment_url
-    )
+    msg = ChatMessage()
+    msg.project_id = project.id
+    msg.sender_id = current_user.id
+    msg.message = text or "Sent an attachment"
+    msg.attachment_url = attachment_url
+    msg.created_at = get_ist_now()
+    
     db.session.add(msg)
 
     # Send Notification to customer or admin
     recipient_id = project.customer_id if current_user.role != "customer" else None
     if recipient_id and recipient_id != current_user.id:
-        notif = Notification(
-            user_id=recipient_id,
-            title=f"New Message on {project.service}",
-            message=f"{current_user.name}: {text[:80]}",
-            link=f"/project/{project.id}"
-        )
+        notif = Notification()
+        notif.user_id = recipient_id
+        notif.title = f"New Message on {project.service}"
+        notif.message = f"{current_user.name}: {text[:80]}"
+        notif.link = f"/project/{project.id}"
+        notif.created_at = get_ist_now()
         db.session.add(notif)
 
     db.session.commit()
@@ -92,9 +106,10 @@ def send_project_message(project_id):
             "sender_role": current_user.role,
             "message": msg.message,
             "attachment_url": msg.attachment_url,
-            "created_at": msg.created_at.strftime("%I:%M %p, %d %b")
+            "created_at": msg.created_at.strftime("%I:%M %p, %d %b") if msg.created_at else ""
         }
     })
+
 
 # =========================================================
 # 2. NOTIFICATIONS ENGINE
@@ -102,15 +117,18 @@ def send_project_message(project_id):
 
 @collaboration_bp.route("/api/notifications", methods=["GET"])
 @login_required
-def get_notifications():
-    notifs = Notification.query.filter_by(user_id=current_user.id).order_by(
-        Notification.created_at.desc()
-    ).limit(10).all()
+def get_notifications() -> ResponseReturnValue:
+    notifs = (
+        Notification.query.filter_by(user_id=current_user.id)
+        .order_by(Notification.created_at.desc())
+        .limit(10)
+        .all()
+    )
     unread_count = Notification.query.filter_by(
         user_id=current_user.id, is_read=False
     ).count()
 
-    def safe_link(value):
+    def safe_link(value: str | None) -> str:
         if not value:
             return url_for("customer.dashboard")
         candidate = value.strip()
@@ -137,15 +155,16 @@ def get_notifications():
                 "message": n.message,
                 "link": safe_link(n.link),
                 "is_read": n.is_read,
-                "created_at": n.created_at.strftime("%d %b %H:%M")
+                "created_at": n.created_at.strftime("%d %b %H:%M") if n.created_at else ""
             }
             for n in notifs
         ]
     })
 
+
 @collaboration_bp.route("/api/notifications/<int:notification_id>/read", methods=["POST"])
 @login_required
-def mark_notification_read(notification_id):
+def mark_notification_read(notification_id: int) -> ResponseReturnValue:
     notif = Notification.query.filter_by(id=notification_id, user_id=current_user.id).first()
     if not notif:
         return jsonify({"success": False, "error": "Notification not found."}), 404
@@ -160,7 +179,7 @@ def mark_notification_read(notification_id):
 
 @collaboration_bp.route("/api/notifications/clear-all", methods=["POST"])
 @login_required
-def clear_all_notifications():
+def clear_all_notifications() -> ResponseReturnValue:
     try:
         updated_count = Notification.query.filter_by(
             user_id=current_user.id, is_read=False
@@ -171,22 +190,25 @@ def clear_all_notifications():
         return jsonify({"success": False, "error": "Could not clear notifications."}), 500
     return jsonify({"success": True, "updated_count": updated_count, "count": 0})
 
+
 # =========================================================
 # 3. DIRECT FILE UPLOADS (Assets, ZIPs, Design Files)
 # =========================================================
 
 @collaboration_bp.route("/api/upload", methods=["POST"])
 @login_required
-def upload_file():
+def upload_file() -> ResponseReturnValue:
     if "file" not in request.files:
         return jsonify({"error": "No file uploaded"}), 400
 
     file = request.files["file"]
-    if file.filename == "":
+    filename = file.filename
+    
+    if not file or not filename:
         return jsonify({"error": "No file selected"}), 400
 
-    if file and allowed_file(file.filename):
-        original_name = secure_filename(file.filename)
+    if allowed_file(filename):
+        original_name = secure_filename(filename)
         unique_name = f"{uuid.uuid4().hex[:12]}_{original_name}"
 
         base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -206,64 +228,26 @@ def upload_file():
 
     return jsonify({"error": "File type not permitted. Allowed: images, zip, pdf, mp4, docx"}), 400
 
+
 # =========================================================
-# 4. AUTOMATED PDF/HTML INVOICING & PROFIT MARGINS
+# 4. INVOICING FALLBACK & REDIRECT
 # =========================================================
 
-@collaboration_bp.route("/invoice/<int:project_id>", endpoint="collaboration_view_invoice")
+@collaboration_bp.route("/invoice/<int:project_id>")
 @login_required
-def view_invoice(project_id):
-    project = Project.query.get_or_404(project_id)
-    if current_user.role != "admin" and project.customer_id != current_user.id:
-        flash("Unauthorized to view this invoice.", "danger")
-        return redirect(url_for("customer.dashboard"))
+def collaboration_view_invoice(project_id: int) -> ResponseReturnValue:
+    """Fallback route to ensure legacy invoice links direct to the canonical customer endpoint."""
+    return redirect(url_for("customer.view_invoice", project_id=project_id))
 
-    invoice = Invoice.query.filter_by(project_id=project.id).first()
-    if not invoice:
-        gross = 9999
-        talent = int(gross * 0.65)
-        profit = gross - talent
-
-        invoice = Invoice(
-            invoice_number=f"INV-{datetime.now().year}-{project.id:04d}",
-            project_id=project.id,
-            customer_id=project.customer_id,
-            gross_amount=gross,
-            talent_payout=talent,
-            agency_profit=profit,
-            tax_amount=int(gross * 0.18),
-            status="Paid"
-        )
-        db.session.add(invoice)
-        db.session.commit()
-
-    return render_template(
-        "invoice.html",
-        project=project,
-        invoice=invoice,
-        customer=project.customer
-    )
 
 @collaboration_bp.route("/admin/invoices")
 @login_required
-def admin_invoices():
-    if current_user.role != "admin":
+def admin_invoices() -> ResponseReturnValue:
+    """Fallback directory route to unified transactions ledger."""
+    if getattr(current_user, "role", "").lower() != "admin":
         return redirect(url_for("customer.dashboard"))
+    return redirect(url_for("admin.admin_transactions"))
 
-    invoices = Invoice.query.order_by(Invoice.created_at.desc()).all()
-    total_gross = sum(i.gross_amount for i in invoices)
-    total_payouts = sum(i.talent_payout for i in invoices)
-    total_margin = sum(i.agency_profit for i in invoices)
-    margin_percent = round((total_margin / total_gross * 100), 1) if total_gross > 0 else 0
-
-    return render_template(
-        "admin_invoices.html",
-        invoices=invoices,
-        total_gross=total_gross,
-        total_payouts=total_payouts,
-        total_margin=total_margin,
-        margin_percent=margin_percent
-    )
 
 # =========================================================
 # 5. AI PROJECT BRIEF & SCOPE GENERATOR
@@ -271,7 +255,7 @@ def admin_invoices():
 
 @collaboration_bp.route("/api/ai/generate-scope", methods=["POST"])
 @login_required
-def ai_generate_scope():
+def ai_generate_scope() -> ResponseReturnValue:
     data = request.get_json(silent=True) or {}
     business_name = data.get("business_name", "Local Business")
     service = data.get("service", "Website Design & Development")

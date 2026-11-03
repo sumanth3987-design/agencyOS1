@@ -1,50 +1,129 @@
+<!-- Save this directly into: templates/edit_business.html -->
 <!DOCTYPE html>
 <html lang="en" class="dark">
 <head>
   <meta charset="UTF-8">
-  <title>Edit Business — {{ agency_settings.agency_name }}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Edit Business Entity — {{ agency_settings.agency_name }}</title>
+
+  <!-- Typography: Plus Jakarta Sans & JetBrains Mono -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
   <script src="https://cdn.tailwindcss.com"></script>
-  <style>body { background-color: #09090b; font-family: 'Plus Jakarta Sans', sans-serif; }</style>
+  <link rel="stylesheet" href="/static/style.css">
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace'],
+          },
+          colors: {
+            zinc: {
+              950: '#09090b',
+              900: '#101014',
+              850: '#18181b',
+              800: '#27272a',
+              700: '#3f3f46',
+            }
+          }
+        }
+      }
+    }
+  </script>
 </head>
-<body class="bg-[#09090b] text-zinc-100 min-h-screen p-6 sm:p-12 max-w-xl mx-auto space-y-6" style="--agency-primary: {{ agency_settings.primary_color }}; --agency-on-primary: {{ agency_settings.primary_contrast }};">
+<body class="bg-zinc-950 text-zinc-100 min-h-screen selection:bg-zinc-100 selection:text-zinc-950 antialiased font-sans" style="--agency-primary: {{ agency_settings.primary_color }}; --agency-on-primary: {{ agency_settings.primary_contrast }};">
 
-  {% include "includes/agency_brand.html" %}
-  <a href="{{ url_for('customer.businesses') }}" class="text-xs font-mono text-[var(--agency-primary)] hover:underline">← Cancel & Return</a>
+  <!-- TOP WORKBENCH HEADER -->
+  <header class="border-b border-zinc-800 bg-zinc-950/95 sticky top-0 z-50">
+    <div class="max-w-xl mx-auto px-6 h-16 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        {% include "includes/agency_brand.html" %}
+      </div>
+      <a href="{{ url_for('customer.businesses') }}" class="btn btn-secondary text-xs h-8">
+        ← Cancel & Return
+      </a>
+    </div>
+  </header>
 
-  <div class="pb-4 border-b border-zinc-800">
-    <h1 class="text-2xl font-extrabold text-white">Edit Business Profile</h1>
-    <p class="text-xs text-zinc-400 mt-1">Update brand information for project association.</p>
-  </div>
+  <!-- MAIN EDIT FORM SHELL -->
+  <main class="max-w-xl mx-auto px-6 py-10 space-y-6">
 
-  <form method="POST" action="{{ url_for('customer.edit_business', business_id=business.id) }}" class="space-y-4 text-xs">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-
-    <div>
-      <label class="block text-zinc-400 mb-1 font-semibold">Business Name *</label>
-      <input type="text" name="name" value="{{ business.name }}" required class="w-full p-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-white focus:outline-none focus:border-[var(--agency-primary)]">
+    <!-- Header -->
+    <div class="border-b border-zinc-800 pb-4">
+      <span class="badge badge-indigo mb-2">MODIFY PROFILE</span>
+      <h1 class="text-2xl font-extrabold text-white tracking-tight">Edit Business Details</h1>
+      <p class="text-xs font-mono text-zinc-400 mt-1">Update entity name, jurisdiction, or domain URL associated with active SOWs.</p>
     </div>
 
-    <div>
-      <label class="block text-zinc-400 mb-1 font-semibold">Industry / Business Type</label>
-      <input type="text" name="business_type" value="{{ business.business_type or '' }}" placeholder="Retail, Tech, Restaurant" class="w-full p-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-white focus:outline-none focus:border-[var(--agency-primary)]">
-    </div>
+    <form method="POST" action="{{ url_for('customer.edit_business', business_id=business.id) }}" class="space-y-4 font-mono text-xs">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
-    <div>
-      <label class="block text-zinc-400 mb-1 font-semibold">Location / Operating City</label>
-      <input type="text" name="location" value="{{ business.location or '' }}" placeholder="Mumbai, Maharashtra" class="w-full p-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-white focus:outline-none focus:border-[var(--agency-primary)]">
-    </div>
+      <div>
+        <label class="block text-zinc-400 mb-1">Business / Legal Name *</label>
+        <input
+          type="text"
+          name="name"
+          value="{{ business.name }}"
+          required
+          class="form-control text-xs"
+        >
+      </div>
 
-    <div>
-      <label class="block text-zinc-400 mb-1 font-semibold">Website URL</label>
-      <input type="url" name="website" value="{{ business.website or '' }}" placeholder="https://yourbusiness.com" class="w-full p-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-white focus:outline-none focus:border-[var(--agency-primary)]">
-    </div>
+      <div>
+        <label class="block text-zinc-400 mb-1">Industry / Category</label>
+        <input
+          type="text"
+          name="business_type"
+          value="{{ business.business_type or '' }}"
+          placeholder="Retail, SaaS, Hospitality"
+          class="form-control text-xs"
+        >
+      </div>
 
-    <button type="submit" class="w-full py-3 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-bold transition cursor-pointer">
-      Save Business Changes
-    </button>
-  </form>
+      <div>
+        <label class="block text-zinc-400 mb-1">Operating Location (City, State)</label>
+        <input
+          type="text"
+          name="location"
+          value="{{ business.location or '' }}"
+          placeholder="e.g. Mumbai, Maharashtra"
+          class="form-control text-xs"
+        >
+      </div>
+
+      <div>
+        <label class="block text-zinc-400 mb-1">Official Domain Website</label>
+        <input
+          type="url"
+          name="website"
+          value="{{ business.website or '' }}"
+          placeholder="https://apexorganization.com"
+          class="form-control text-xs"
+        >
+      </div>
+
+      <div class="pt-4 flex items-center justify-between border-t border-zinc-800">
+        <a href="{{ url_for('customer.businesses') }}" class="btn btn-subtle text-xs h-10 px-4">
+          Cancel
+        </a>
+        <button type="submit" class="btn btn-primary text-xs h-10 px-6 font-semibold cursor-pointer">
+          Save Changes ⚡
+        </button>
+      </div>
+    </form>
+
+  </main>
+
+  <!-- FOOTER -->
+  <footer class="border-t border-zinc-800 bg-zinc-950 py-6 px-6 text-center text-xs font-mono text-zinc-500">
+    {{ agency_settings.agency_name }} Corporate Vault • Multi-Tenant Configuration
+  </footer>
 
 </body>
 </html>

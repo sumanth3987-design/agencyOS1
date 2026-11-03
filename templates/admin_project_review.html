@@ -1,18 +1,23 @@
+<!-- Save this directly into: templates/admin_project_review.html -->
 {% extends "admin_base.html" %}
 {% block title %}Deliverable Review Gate — AgencyOS{% endblock %}
 {% block content %}
-<main class="max-w-7xl mx-auto px-6 py-8">
-  <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-6 border-b border-zinc-800/80 gap-4 mb-8">
+<main class="max-w-7xl mx-auto px-6 py-8 space-y-8 font-sans">
+
+  <!-- Header -->
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-6 border-b border-zinc-800 gap-4">
     <div>
-      <div class="flex items-center gap-2 mb-1">
-        <span class="h-2 w-2 rounded-full bg-amber-400"></span>
-        <span class="text-xs font-mono uppercase text-amber-400 font-bold">Internal Quality Check</span>
+      <div class="flex items-center gap-2 mb-1 font-mono text-xs">
+        <span class="badge badge-amber">QUALITY CONTROL GATE</span>
+        <span class="text-zinc-600">•</span>
+        <span class="text-zinc-400">Step 2 of 2 Inspection</span>
       </div>
       <h1 class="text-2xl font-extrabold text-white tracking-tight">Deliverable Approval Gate</h1>
-      <p class="text-xs text-zinc-400 mt-1">Review work submitted by specialists before passing to client or releasing milestone payouts.</p>
+      <p class="text-xs font-mono text-zinc-400 mt-1">Review work submitted by specialists before passing to client or releasing milestone payouts.</p>
     </div>
-    <span class="text-xs font-mono text-zinc-400 px-3.5 py-1.5 rounded-xl bg-zinc-900 border border-zinc-800">
-      {{ projects|selectattr("status", "equalto", "Submitted")|list|length }} Pending Submissions
+
+    <span class="badge badge-neutral font-mono">
+      {{ projects|selectattr("status", "equalto", "Submitted")|list|length }} Pending Gate Submissions
     </span>
   </div>
 
@@ -22,79 +27,95 @@
       {% set delivery = project_deliveries.get(project.id) %}
       {% set app = project_applications.get(project.id) %}
 
-      <div class="p-6 rounded-2xl bg-[#121215] border border-zinc-800/80 shadow-xl">
-        <div class="flex flex-col md:flex-row md:items-center justify-between pb-4 border-b border-zinc-800 gap-4">
+      <div class="border border-zinc-800 bg-zinc-900 rounded-lg p-6 space-y-4">
+        
+        <div class="flex flex-col md:flex-row md:items-center justify-between pb-4 border-b border-zinc-800 gap-4 font-mono text-xs">
           <div>
-            <div class="flex items-center gap-3">
-              <span class="font-mono text-xs font-bold text-indigo-400">#{{ project.id }}</span>
-              <h3 class="text-base font-bold text-white">{{ project.service }}</h3>
-              <span class="px-2.5 py-0.5 rounded text-[10px] font-mono border {% if project.status == 'Submitted' %}bg-purple-500/10 text-purple-400 border-purple-500/20{% else %}bg-amber-500/10 text-amber-400 border-amber-500/20{% endif %}">
+            <div class="flex items-center gap-2.5 mb-1">
+              <span class="font-bold text-white">#{{ project.id }}</span>
+              <h3 class="text-sm font-bold text-white font-sans">{{ project.service }}</h3>
+              <span class="badge {% if project.status == 'Submitted' %}badge-indigo{% else %}badge-amber{% endif %}">
                 {{ project.status }}
               </span>
             </div>
-            <p class="text-xs text-zinc-400 mt-1">
-              Customer: <strong class="text-zinc-200">{{ project.customer.name if project.customer else 'Direct' }}</strong> • 
+            <p class="text-zinc-400">
+              Client Entity: <strong class="text-zinc-200">{{ project.customer.name if project.customer else 'Direct Client' }}</strong> • 
               Assigned Specialist: <strong class="text-emerald-400">{{ app.professional.name if app and app.professional else 'Unassigned' }}</strong>
             </p>
           </div>
-          
-          <div class="text-xs font-mono text-zinc-500">
-            Package: <strong class="text-zinc-300 font-bold">{{ project.package }}</strong>
+
+          <div class="text-zinc-400">
+            Package Tier: <strong class="text-white">{{ project.package }}</strong>
           </div>
         </div>
 
-        <!-- Deliverable Links & Notes -->
-        <div class="py-5 grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-          <div class="p-4 rounded-xl bg-zinc-950 border border-zinc-800">
-            <span class="text-[10px] font-mono uppercase text-zinc-500 block mb-2">Deliverable Links</span>
+        <!-- Deliverable Links & Completion Memo -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-mono">
+          <div class="p-4 rounded border border-zinc-800 bg-zinc-950 space-y-2">
+            <span class="text-[10px] text-zinc-500 uppercase block">Production & Staging Artifacts</span>
             {% if delivery %}
-              <div class="space-y-1.5 font-mono">
-                <div>Live URL: <a href="{{ delivery.live_url }}" target="_blank" class="text-indigo-400 hover:underline">{{ delivery.live_url or 'None provided' }}</a></div>
-                <div>Preview: <a href="{{ delivery.preview_url }}" target="_blank" class="text-indigo-400 hover:underline">{{ delivery.preview_url or 'None provided' }}</a></div>
-                <div>Source Code: <a href="{{ delivery.source_url }}" target="_blank" class="text-indigo-400 hover:underline">{{ delivery.source_url or 'None provided' }}</a></div>
+              <div class="space-y-1.5">
+                <div>
+                  <span class="text-zinc-500">Live URL:</span>
+                  <a href="{{ delivery.live_url }}" target="_blank" class="text-zinc-300 hover:text-white underline truncate">{{ delivery.live_url or 'None provided' }}</a>
+                </div>
+                <div>
+                  <span class="text-zinc-500">Preview:</span>
+                  <a href="{{ delivery.preview_url }}" target="_blank" class="text-zinc-300 hover:text-white underline truncate">{{ delivery.preview_url or 'None provided' }}</a>
+                </div>
+                <div>
+                  <span class="text-zinc-500">Source Code:</span>
+                  <a href="{{ delivery.source_url }}" target="_blank" class="text-zinc-300 hover:text-white underline truncate">{{ delivery.source_url or 'None provided' }}</a>
+                </div>
               </div>
             {% else %}
               <span class="text-zinc-600">No submission files recorded yet.</span>
             {% endif %}
           </div>
 
-          <div class="p-4 rounded-xl bg-zinc-950 border border-zinc-800">
-            <span class="text-[10px] font-mono uppercase text-zinc-500 block mb-2">Specialist Notes</span>
-            <p class="text-zinc-300">{{ delivery.completion_notes if delivery and delivery.completion_notes else 'No notes provided by specialist.' }}</p>
+          <div class="p-4 rounded border border-zinc-800 bg-zinc-950 space-y-1">
+            <span class="text-[10px] text-zinc-500 uppercase block">Specialist Completion Memo</span>
+            <p class="text-zinc-300 font-sans text-xs leading-relaxed whitespace-pre-wrap">{{ delivery.completion_notes if delivery and delivery.completion_notes else 'No notes provided by specialist.' }}</p>
           </div>
         </div>
 
         <!-- Actions: Approve or Request Revision -->
-        <div class="pt-4 border-t border-zinc-800/80 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <span class="text-xs text-zinc-500">Milestone Review Step 2 of 2 (Client approval follows)</span>
+        <div class="pt-4 border-t border-zinc-800 flex flex-col sm:flex-row items-center justify-between gap-4 font-mono text-xs">
+          <span class="text-zinc-500 text-[11px]">Quality gate verification (Client sign-off follows).</span>
 
           <div class="flex items-center gap-3 w-full sm:w-auto">
-            <!-- Revision Modal Form -->
-            <form method="POST" action="/admin/project/{{ project.id }}/revision" class="flex-1 sm:flex-none flex gap-2">
+            <!-- Revision Request Form -->
+            <form method="POST" action="{{ url_for('admin.request_project_revision', project_id=project.id) }}" class="flex-1 sm:flex-none flex gap-2">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-              <input type="text" name="revision_comment" required placeholder="Reason for revision..." class="px-3 py-2 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-white placeholder-zinc-600 focus:outline-none focus:border-amber-500">
-              <button type="submit" class="px-4 py-2 rounded-xl bg-amber-500/20 text-amber-300 border border-amber-500/30 font-bold text-xs hover:bg-amber-500/30 transition whitespace-nowrap">
+              <input
+                type="text"
+                name="revision_comment"
+                required
+                placeholder="Reason for revision..."
+                class="form-control text-xs w-52 h-8"
+              >
+              <button type="submit" class="btn btn-secondary text-xs h-8 px-3 font-semibold text-amber-300 cursor-pointer">
                 Request Revision
               </button>
             </form>
 
             <!-- Approve Form -->
-            <form method="POST" action="/admin/project/{{ project.id }}/approve">
+            <form method="POST" action="{{ url_for('admin.approve_project', project_id=project.id) }}">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-              <button type="submit" class="px-5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-zinc-950 font-bold text-xs shadow-lg transition whitespace-nowrap">
-                Approve & Complete ✅
+              <button type="submit" class="btn btn-primary text-xs h-8 px-4 font-semibold cursor-pointer">
+                Approve & Complete ✓
               </button>
             </form>
           </div>
         </div>
+
       </div>
     {% else %}
-      <div class="p-12 text-center rounded-2xl bg-[#121215] border border-zinc-800">
-        <i data-lucide="check-circle" class="w-8 h-8 text-emerald-400 mx-auto mb-3"></i>
-        <h3 class="text-base font-bold text-white">Review Queue Clean</h3>
-        <p class="text-xs text-zinc-400 mt-1">There are no deliverables currently waiting for internal review.</p>
+      <div class="p-12 text-center rounded border border-zinc-800 bg-zinc-900 font-mono text-xs text-zinc-500">
+        Review Queue Clean. There are no deliverables currently awaiting internal quality review.
       </div>
     {% endfor %}
   </div>
+
 </main>
 {% endblock %}

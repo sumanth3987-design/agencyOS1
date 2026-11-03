@@ -2,127 +2,147 @@
 {% extends "admin_base.html" %}
 {% block title %}Payments & Transactions Ledger — AgencyOS{% endblock %}
 {% block content %}
-<main class="max-w-7xl mx-auto px-6 py-8 space-y-6">
+<main class="max-w-7xl mx-auto px-6 py-8 space-y-8 font-sans">
 
   <!-- Header -->
-  <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-6 border-b border-zinc-800/80 gap-4">
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-6 border-b border-zinc-800 gap-4">
     <div>
-      <div class="flex items-center gap-2 mb-1">
-        <span class="h-2 w-2 rounded-full bg-emerald-400"></span>
-        <span class="text-xs font-mono uppercase text-emerald-400 font-bold">Financial Engine</span>
+      <div class="flex items-center gap-2 mb-1 font-mono text-xs">
+        <span class="badge badge-emerald">FINANCIAL RECONCILIATION</span>
+        <span class="text-zinc-600">•</span>
+        <span class="text-zinc-400">Multi-Currency Clearance</span>
       </div>
-      <h1 class="text-2xl font-extrabold text-white tracking-tight">Payments & Razorpay Ledger</h1>
-      <p class="text-xs text-zinc-400 mt-1">Live reconciliation of UPI milestone deposits and specialist payout allocations.</p>
+      <h1 class="text-2xl font-extrabold text-white tracking-tight">Payments & Escrow Ledger</h1>
+      <p class="text-xs font-mono text-zinc-400 mt-1">Live reconciliation of gateway deposits, statutory GST/LUT allocations, and 45% specialist payouts.</p>
     </div>
-    
+
     <div class="flex items-center gap-3">
-      <a href="/admin/reports/export/revenue" class="px-4 py-2 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-bold text-xs shadow transition flex items-center gap-2">
-        <i data-lucide="download" class="w-3.5 h-3.5"></i>
-        <span>Export Financial CSV</span>
+      <a href="/admin/reports/export/revenue" class="btn btn-primary text-xs h-9 font-semibold">
+        Export Financial CSV →
       </a>
     </div>
   </div>
 
   <!-- Metric Tiles -->
-  <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-    <div class="p-6 rounded-2xl bg-[#121215] border border-zinc-800">
-      <span class="text-xs font-mono uppercase text-zinc-400">Total Collected Revenue</span>
-      <div class="mt-3 space-y-1 font-mono text-xl font-extrabold text-emerald-400">
-        {% for currency, amount in total_collected|dictsort %}<div>{{ amount|format_currency(currency) }}</div>{% else %}<div>{{ 0|format_currency('INR') }}</div>{% endfor %}
+  <div class="grid grid-cols-1 sm:grid-cols-3 border-t border-l border-zinc-800 bg-zinc-950 font-mono text-xs">
+    <div class="p-6 border-b border-r border-zinc-800">
+      <span class="text-zinc-500 uppercase block mb-1">Total Collected Escrow</span>
+      <div class="mt-2 space-y-1 font-mono text-2xl font-bold text-emerald-400">
+        {% for currency, amount in total_collected|dictsort %}
+        <div>{{ amount|format_currency(currency) }}</div>
+        {% else %}
+        <div>{{ 0|format_currency('INR') }}</div>
+        {% endfor %}
       </div>
-      <span class="mt-2 block text-[11px] text-zinc-500">Verified totals grouped by currency</span>
+      <span class="mt-2 block text-[11px] text-zinc-500">Gross funds cleared via payment rails</span>
     </div>
-    <div class="p-6 rounded-2xl bg-[#121215] border border-zinc-800">
-      <span class="text-xs font-mono uppercase text-zinc-400">Pending Milestone Invoices</span>
-      <div class="mt-3 space-y-1 font-mono text-xl font-extrabold text-amber-400">
-        {% for currency, amount in pending_amount|dictsort %}<div>{{ amount|format_currency(currency) }}</div>{% else %}<div>{{ 0|format_currency('INR') }}</div>{% endfor %}
+
+    <div class="p-6 border-b border-r border-zinc-800">
+      <span class="text-zinc-500 uppercase block mb-1">Pending Invoices</span>
+      <div class="mt-2 space-y-1 font-mono text-2xl font-bold text-amber-400">
+        {% for currency, amount in pending_amount|dictsort %}
+        <div>{{ amount|format_currency(currency) }}</div>
+        {% else %}
+        <div>{{ 0|format_currency('INR') }}</div>
+        {% endfor %}
       </div>
-      <span class="mt-2 block text-[11px] text-zinc-500">Pending totals grouped by currency</span>
+      <span class="mt-2 block text-[11px] text-zinc-500">Unsettled milestone checkouts</span>
     </div>
-    <div class="p-6 rounded-2xl bg-[#121215] border border-zinc-800">
-      <span class="text-xs font-mono uppercase text-zinc-400">Tax Compliance</span>
-      <div class="mt-3 font-mono text-2xl font-bold text-white">SAC 998311</div>
-      <span class="mt-2 block text-[11px] text-zinc-500">INR: 18% GST · Intl: 18% tax estimate</span>
+
+    <div class="p-6 border-b border-r border-zinc-800">
+      <span class="text-zinc-500 uppercase block mb-1">Tax Regime Classification</span>
+      <div class="mt-2 text-2xl font-bold text-white">SAC 998311</div>
+      <span class="mt-2 block text-[11px] text-zinc-500">INR: 18% GST (Rule 46) • Intl: 0% LUT Export</span>
     </div>
   </div>
 
   <!-- Filter & Search Toolbar -->
-  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-2xl bg-[#121215] border border-zinc-800 text-xs">
-    <div class="flex items-center gap-1.5 flex-wrap">
-      <a href="{{ url_for('admin.admin_transactions', status='all') }}" class="px-3.5 py-1.5 rounded-lg font-bold transition {% if current_status == 'all' or not current_status %}bg-white text-zinc-950{% else %}bg-zinc-900 text-zinc-400 hover:text-white{% endif %}">
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded border border-zinc-800 bg-zinc-900 font-mono text-xs">
+    <div class="flex items-center gap-2 flex-wrap">
+      <a href="{{ url_for('admin.admin_transactions', status='all') }}" class="btn {% if current_status == 'all' or not current_status %}btn-primary{% else %}btn-secondary{% endif %} text-xs h-7 px-3">
         All Transactions
       </a>
-      <a href="{{ url_for('admin.admin_transactions', status='Paid') }}" class="px-3.5 py-1.5 rounded-lg font-bold transition {% if current_status == 'Paid' %}bg-emerald-500 text-zinc-950{% else %}bg-zinc-900 text-zinc-400 hover:text-white{% endif %}">
+      <a href="{{ url_for('admin.admin_transactions', status='Paid') }}" class="btn {% if current_status == 'Paid' %}btn-primary{% else %}btn-secondary{% endif %} text-xs h-7 px-3">
         Paid Only
       </a>
-      <a href="{{ url_for('admin.admin_transactions', status='Created') }}" class="px-3.5 py-1.5 rounded-lg font-bold transition {% if current_status == 'Created' %}bg-amber-500 text-zinc-950{% else %}bg-zinc-900 text-zinc-400 hover:text-white{% endif %}">
+      <a href="{{ url_for('admin.admin_transactions', status='Created') }}" class="btn {% if current_status == 'Created' %}btn-primary{% else %}btn-secondary{% endif %} text-xs h-7 px-3">
         Pending / Checkout
       </a>
     </div>
-    <span class="text-zinc-500 font-mono text-[11px]">Showing {{ payments|length }} records</span>
+    <span class="text-zinc-400">{{ payments|length }} Records Loaded</span>
   </div>
 
   <!-- Transactions Table -->
-  <div class="rounded-2xl bg-[#121215] border border-zinc-800 overflow-hidden shadow-xl">
-    <table class="w-full text-left text-xs">
-      <thead class="bg-[#18181d] text-zinc-400 font-mono uppercase tracking-wider border-b border-zinc-800">
+  <div class="border border-zinc-800 bg-zinc-900 rounded-lg overflow-hidden">
+    <table class="data-table">
+      <thead>
         <tr>
-          <th class="p-4">Payment ID / Order ID</th>
-          <th class="p-4">Customer</th>
-          <th class="p-4">Gross / Currency</th>
-          <th class="p-4">Client Payment</th>
-          <th class="p-4">Talent Payout (45%)</th>
+          <th>Payment ID / Order ID</th>
+          <th>Customer Account</th>
+          <th>Gross Amount</th>
+          <th>Gateway Status</th>
+          <th>Specialist Payout (45%)</th>
         </tr>
       </thead>
-      <tbody class="divide-y divide-zinc-800/60 text-zinc-300">
+      <tbody class="font-mono text-xs">
         {% for p in payments %}
-        <tr class="hover:bg-white/[0.02] transition">
+        <tr>
           <!-- IDs -->
-          <td class="p-4">
-            <span class="font-mono text-indigo-400 block font-bold">{{ p.razorpay_payment_id or 'Order Initiated' }}</span>
-            <span class="text-zinc-500 font-mono text-[10px]">{{ p.razorpay_order_id }}</span>
+          <td>
+            <span class="text-white block font-bold">{{ p.razorpay_payment_id or 'Order Initiated' }}</span>
+            <span class="text-zinc-500 text-[10px]">{{ p.razorpay_order_id }}</span>
           </td>
           <!-- Customer -->
-          <td class="p-4">
-            <span class="font-bold text-white block">{{ p.customer.email if p.customer else 'Direct Client' }}</span>
-            <span class="font-mono text-zinc-500 text-[10px]">Project #{{ p.project_id }}</span>
+          <td>
+            <span class="text-zinc-200 font-sans block font-semibold">{{ p.customer.email if p.customer else 'Direct Client' }}</span>
+            <span class="text-zinc-500 text-[10px]">Project #{{ p.project_id }}</span>
           </td>
           <!-- Amount -->
-          <td class="p-4 font-mono font-bold text-white">{{ p.amount|format_currency(p.currency) }}</td>
+          <td class="font-bold text-white">
+            {{ p.amount|format_currency(p.currency) }}
+          </td>
           <!-- Client Status -->
-          <td class="p-4">
-            <span class="px-2.5 py-0.5 rounded text-[10px] font-mono border {% if p.status.lower() == 'paid' %}bg-emerald-500/10 text-emerald-400 border-emerald-500/20{% elif p.status.lower() in ['created', 'pending'] %}bg-amber-500/10 text-amber-400 border-amber-500/20{% else %}bg-rose-500/10 text-rose-400 border-rose-500/20{% endif %}">
+          <td>
+            <span class="badge {% if p.status.lower() == 'paid' %}badge-emerald{% elif p.status.lower() in ['created', 'pending'] %}badge-amber{% else %}badge-neutral{% endif %}">
               {{ p.status }}
             </span>
           </td>
-
           <!-- Specialist Payout Status -->
-          <td class="p-4">
+          <td>
             {% set inv = p.project.invoices[0] if p.project and p.project.invoices else None %}
             {% if inv and inv.talent_payout %}
               <div class="flex items-center gap-2">
-                <div class="font-mono font-bold text-zinc-200">{{ inv.talent_payout|format_currency(inv.currency) }}</div>
-                
+                <span class="font-bold text-zinc-200">{{ inv.talent_payout|format_currency(inv.currency) }}</span>
+
                 {% if inv.payout_status == 'Settled' %}
-                  <span class="px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[9px] font-mono uppercase">Settled</span>
+                  <span class="badge badge-emerald text-[9px]">SETTLED</span>
                 {% else %}
-                  {% if inv.payout_status == 'Requested' %}
-                    <span class="px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[9px] font-mono uppercase">Redemption Requested</span>
+                  {% if inv.payout_status in ['Requested', 'Processing'] %}
+                    <span class="badge badge-amber text-[9px]">{{ inv.payout_status|upper }}</span>
                   {% endif %}
-                  <!-- FIXED ONCLICK ATTRIBUTE HERE -->
-                  <button type="button" onclick="openPayoutModal('{{ inv.id }}', '{{ inv.talent_payout }}', '{{ inv.currency }}')" class="px-2 py-0.5 rounded bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-[9px] font-mono uppercase transition cursor-pointer">
-                    Release
+                  <button
+                    type="button"
+                    class="release-payout-btn btn btn-secondary text-[10px] h-6 px-2 font-mono"
+                    data-invoice-id="{{ inv.id }}"
+                    data-amount="{{ inv.talent_payout }}"
+                    data-currency="{{ inv.currency }}"
+                  >
+                    Release Wire
                   </button>
                 {% endif %}
               </div>
-              <div class="text-[9px] font-mono text-zinc-500 mt-1">UTR: {{ inv.payout_utr or 'Pending' }}</div>
+              <div class="text-[10px] text-zinc-500 mt-1">UTR: {{ inv.payout_utr or 'Unsettled' }}</div>
             {% else %}
-              <span class="text-zinc-600 text-[10px] font-mono">No assignment</span>
+              <span class="text-zinc-600 text-[10px]">No specialist assigned</span>
             {% endif %}
           </td>
         </tr>
         {% else %}
-        <tr><td colspan="5" class="p-12 text-center text-zinc-500 font-mono">No payment records found matching this filter.</td></tr>
+        <tr>
+          <td colspan="5" class="p-12 text-center text-zinc-500 font-mono text-xs">
+            No payment transactions recorded for the selected filter.
+          </td>
+        </tr>
         {% endfor %}
       </tbody>
     </table>
@@ -130,69 +150,95 @@
 
   <!-- Pagination Controls (< >) -->
   {% if pagination and pagination.pages > 1 %}
-  <div class="flex items-center justify-between p-4 rounded-2xl bg-[#121215] border border-zinc-800 text-xs text-zinc-400">
+  <div class="flex items-center justify-between p-4 rounded border border-zinc-800 bg-zinc-950 font-mono text-xs text-zinc-400">
     <div>
       Showing page <span class="font-bold text-white">{{ pagination.page }}</span> of <span class="font-bold text-white">{{ pagination.pages }}</span>
     </div>
     <div class="flex items-center gap-2">
       {% if pagination.has_prev %}
-        <a href="{{ url_for('admin.admin_transactions', page=pagination.prev_num, status=current_status) }}" class="px-4 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 text-white font-mono transition">&lt; Prev</a>
-      {% else %}
-        <span class="px-4 py-1.5 rounded-lg bg-zinc-900/40 border border-zinc-800/40 text-zinc-600 font-mono cursor-not-allowed">&lt; Prev</span>
+        <a href="{{ url_for('admin.admin_transactions', page=pagination.prev_num, status=current_status) }}" class="btn btn-secondary text-xs h-7 px-3">
+          &lt; Prev
+        </a>
       {% endif %}
-
       {% if pagination.has_next %}
-        <a href="{{ url_for('admin.admin_transactions', page=pagination.next_num, status=current_status) }}" class="px-4 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 text-white font-mono transition">Next &gt;</a>
-      {% else %}
-        <span class="px-4 py-1.5 rounded-lg bg-zinc-900/40 border border-zinc-800/40 text-zinc-600 font-mono cursor-not-allowed">Next &gt;</span>
+        <a href="{{ url_for('admin.admin_transactions', page=pagination.next_num, status=current_status) }}" class="btn btn-secondary text-xs h-7 px-3">
+          Next &gt;
+        </a>
       {% endif %}
     </div>
   </div>
   {% endif %}
+
 </main>
 
 <!-- PAYOUT RELEASE MODAL -->
-<div id="payoutModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" style="display: none;">
-  <div class="relative w-full max-w-sm p-6 bg-[#121215] border border-zinc-800 rounded-2xl shadow-2xl">
-    <div class="flex items-center justify-between pb-4 border-b border-zinc-800">
-      <h3 class="text-sm font-bold text-white flex items-center gap-2">
-        <i data-lucide="check-circle" class="w-4 h-4 text-emerald-400"></i>
-        <span>Release Specialist Payout</span>
-      </h3>
-      <button type="button" onclick="document.getElementById('payoutModal').style.display='none'" class="text-zinc-400 hover:text-white text-base cursor-pointer">×</button>
+<div id="payoutModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs hidden">
+  <div class="w-full max-w-sm p-6 bg-zinc-900 border border-zinc-800 rounded-lg shadow-2xl font-mono text-xs space-y-4">
+    <div class="flex items-center justify-between pb-3 border-b border-zinc-800">
+      <h3 class="font-bold text-white uppercase">Release Specialist Payout</h3>
+      <button type="button" id="closePayoutModalBtn" class="text-zinc-400 hover:text-white text-sm cursor-pointer">✕</button>
     </div>
 
-    <form id="payoutForm" method="POST" action="" class="space-y-4 mt-4 text-xs">
+    <form id="payoutForm" method="POST" action="" class="space-y-4">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <p class="text-zinc-400">You are about to mark a payout allocation of <strong id="modalAmountDisplay" class="text-emerald-400 font-mono">0.00</strong> as settled.</p>
-      
+      <p class="text-zinc-400 font-sans">
+        You are about to mark a payout allocation of <strong id="modalAmountDisplay" class="text-emerald-400 font-mono">0.00</strong> as settled.
+      </p>
+
       <div>
-        <label class="block text-zinc-400 font-semibold mb-1">Bank UTR / Transaction Reference (Optional)</label>
-        <input type="text" name="utr_number" placeholder="e.g. UPI Ref 30582910..." class="w-full p-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-white focus:outline-none focus:border-indigo-500 font-mono uppercase">
+        <label class="block text-zinc-400 mb-1">Bank UTR / Transaction Reference (Optional)</label>
+        <input
+          type="text"
+          name="utr_number"
+          placeholder="e.g. UPI Ref 30582910..."
+          class="form-control text-xs uppercase font-mono"
+        >
       </div>
 
       <div class="flex gap-2 pt-2">
-        <button type="submit" class="flex-1 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-zinc-950 font-bold transition cursor-pointer">Confirm Settlement</button>
-        <button type="button" onclick="document.getElementById('payoutModal').style.display='none'" class="px-4 py-2.5 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-400 cursor-pointer">Cancel</button>
+        <button type="submit" class="btn btn-primary flex-1 text-xs h-9 font-semibold cursor-pointer">
+          Confirm Settlement
+        </button>
+        <button type="button" id="cancelPayoutModalBtn" class="btn btn-secondary text-xs h-9 px-4 cursor-pointer">
+          Cancel
+        </button>
       </div>
     </form>
   </div>
 </div>
 
-<!-- FIXED SCRIPT HERE -->
 <script>
-  if (window.lucide) lucide.createIcons();
+  document.addEventListener("DOMContentLoaded", function () {
+    var modal = document.getElementById("payoutModal");
+    var form = document.getElementById("payoutForm");
+    var amountDisplay = document.getElementById("modalAmountDisplay");
+    var closeBtn = document.getElementById("closePayoutModalBtn");
+    var cancelBtn = document.getElementById("cancelPayoutModalBtn");
 
-  function openPayoutModal(invoiceId, amountStr, currency) {
-    // Safely parse the amount string back into a number to prevent JS errors
-    var amount = parseFloat(amountStr) || 0;
-    
-    document.getElementById('payoutForm').action = "/admin/invoice/" + invoiceId + "/release-payout";
-    document.getElementById('modalAmountDisplay').innerText = new Intl.NumberFormat(undefined, {
-      style: 'currency',
-      currency: currency || 'INR'
-    }).format(amount);
-    document.getElementById('payoutModal').style.display = 'flex';
-  }
+    function closeModal() {
+      if (modal) modal.classList.add("hidden");
+    }
+
+    if (closeBtn) closeBtn.addEventListener("click", closeModal);
+    if (cancelBtn) cancelBtn.addEventListener("click", closeModal);
+
+    document.querySelectorAll(".release-payout-btn").forEach(function (button) {
+      button.addEventListener("click", function () {
+        var invoiceId = this.dataset.invoiceId;
+        var amountStr = this.dataset.amount;
+        var currency = this.dataset.currency || "INR";
+        var amount = parseFloat(amountStr) || 0;
+
+        if (form) form.action = "/admin/invoice/" + encodeURIComponent(invoiceId) + "/release-payout";
+        if (amountDisplay) {
+          amountDisplay.textContent = new Intl.NumberFormat(undefined, {
+            style: "currency",
+            currency: currency
+          }).format(amount);
+        }
+        if (modal) modal.classList.remove("hidden");
+      });
+    });
+  });
 </script>
 {% endblock %}

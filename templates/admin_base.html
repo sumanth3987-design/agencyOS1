@@ -1,128 +1,111 @@
-﻿<!DOCTYPE html>
-<html lang="en" class="dark scroll-smooth">
+﻿<!-- Save this directly into: templates/admin_base.html -->
+<!DOCTYPE html>
+<html lang="en" class="dark">
 <head>
-  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{% block title %}AgencyOS — Admin Workspace{% endblock %}</title>
+
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
-  <style>body { background-color: #09090b; } .no-scrollbar::-webkit-scrollbar { display: none; }</style>
+  <link rel="stylesheet" href="/static/style.css">
+
+  <script>
+    tailwind.config = { darkMode: 'class', theme: { extend: { fontFamily: { sans: ['"Plus Jakarta Sans"', 'sans-serif'], mono: ['"JetBrains Mono"', 'monospace'], }, colors: { zinc: { 950: '#09090b', 900: '#101014', 850: '#18181b', 800: '#27272a', 700: '#3f3f46', } } } } }
+  </script>
+  <style>.no-scrollbar::-webkit-scrollbar { display: none; }</style>
   {% block extra_css %}{% endblock %}
 </head>
-<body class="bg-zinc-950 text-zinc-100 font-sans antialiased min-h-screen flex selection:bg-indigo-500 selection:text-white">
-
-  <!-- ==================== DESKTOP ICON RAIL ==================== -->
-  <aside class="hidden md:flex w-20 border-r border-zinc-800/80 bg-zinc-900/60 flex-col items-center py-6 justify-between shrink-0 sticky top-0 h-screen z-50">
-    <div class="flex flex-col items-center gap-6">
-      <a href="/" class="h-10 w-10 overflow-hidden rounded-xl flex items-center justify-center font-bold shadow-lg" title="{{ agency_settings.agency_name }} home" style="background-color: {{ agency_settings.primary_color }}; color: {{ agency_settings.primary_contrast }};">
-        {% if agency_settings.logo_url %}
-          <img src="{{ agency_settings.logo_url }}" alt="{{ agency_settings.agency_name }} logo" class="h-full w-full object-contain p-1">
-        {% else %}
-          {{ agency_settings.agency_name[:2]|upper }}
-        {% endif %}
-      </a>
-      <nav class="flex flex-col gap-3">
-        <a href="{{ url_for('admin.admin_dashboard') }}" class="p-3 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-800 transition" title="1. Executive Dashboard"><i data-lucide="layout-dashboard" class="w-5 h-5"></i></a>
-        <a href="{{ url_for('admin.admin_project_management') }}" class="p-3 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-800 transition" title="2. Pipelines & Kanban"><i data-lucide="kanban" class="w-5 h-5"></i></a>
-        <a href="{{ url_for('admin.admin_project_review') }}" class="p-3 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-800 transition" title="3. Quality Review Gate"><i data-lucide="check-circle-2" class="w-5 h-5"></i></a>
-        <a href="{{ url_for('admin.admin_customers') }}" class="p-3 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-800 transition" title="4. User Management (Clients)"><i data-lucide="users" class="w-5 h-5"></i></a>
-        <a href="{{ url_for('admin.admin_professionals') }}" class="p-3 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-800 transition" title="5. User Management (Specialists)"><i data-lucide="briefcase" class="w-5 h-5"></i></a>
-        <a href="/admin/transactions" class="p-3 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-800 transition" title="6. Payments & Ledger"><i data-lucide="receipt" class="w-5 h-5"></i></a>
-        <a href="{{ url_for('admin.agency_settings') }}" class="p-3 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-800 transition" title="7. Agency Settings" aria-label="Agency settings"><i data-lucide="settings-2" class="w-5 h-5"></i></a>
-      </nav>
-    </div>
-    <form method="POST" action="{{ url_for('logout') }}">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <button type="submit" class="p-3 rounded-xl text-zinc-400 hover:text-rose-400 hover:bg-zinc-800/80 transition cursor-pointer" title="Logout"><i data-lucide="log-out" class="w-5 h-5"></i></button>
-    </form>
-  </aside>
-
-  <!-- ==================== MAIN FULL-PAGE WRAPPER ==================== -->
-  <div class="flex-1 flex flex-col min-w-0 overflow-y-auto w-full">
-
-    <!-- 1. FULL-WIDTH TOP ANNOUNCEMENT / BROADCAST BAR -->
-    <div class="w-full bg-zinc-900/90 border-b border-zinc-800/80 px-6 sm:px-8 py-2 flex items-center justify-between text-xs">
-      <div class="flex items-center gap-2 overflow-hidden">
-        <span class="h-2 w-2 rounded-full bg-indigo-500 animate-pulse shrink-0"></span>
-        <span class="text-zinc-500 font-mono uppercase text-[10px] tracking-wider shrink-0">Live Broadcast:</span>
-        <span class="text-zinc-300 truncate font-medium">All milestone delivery gates active • Razorpay UPI instant reconciliation enabled</span>
-      </div>
-      
-    </div>
-
-    <!-- 2. EXPANSIVE FULL-WIDTH NAVBAR -->
-    <header class="h-18 border-b border-zinc-800/80 bg-zinc-950/80 backdrop-blur-md px-6 sm:px-8 flex items-center justify-between sticky top-0 z-40 w-full">
-      
-      <!-- Left: Mobile Brand + 5-Pillar Tabs -->
-      <div class="flex items-center gap-6 overflow-x-auto no-scrollbar py-2">
-        <a href="/" class="md:hidden flex items-center gap-2 font-extrabold text-white text-base">
+<body class="bg-zinc-950 text-zinc-100 font-sans antialiased overflow-hidden">
+  
+  <div class="flex h-screen w-full">
+    
+    <!-- SIDEBAR -->
+    <aside class="w-16 shrink-0 border-r border-zinc-800 bg-zinc-950 hidden md:flex flex-col items-center py-5 justify-between h-full z-50">
+      <div class="flex flex-col items-center gap-6">
+        <a href="/" class="h-8 w-8 rounded bg-white text-zinc-950 font-mono font-bold text-xs flex items-center justify-center shadow" title="Home">
           {% if agency_settings.logo_url %}
-            <img src="{{ agency_settings.logo_url }}" alt="{{ agency_settings.agency_name }} logo" class="h-7 w-7 rounded-lg object-contain">
+            <img src="{{ agency_settings.logo_url }}" class="h-full w-full object-contain p-1">
           {% else %}
-            <span class="flex h-7 w-7 items-center justify-center rounded-lg text-[10px]" style="background-color: {{ agency_settings.primary_color }}; color: {{ agency_settings.primary_contrast }};">{{ agency_settings.agency_name[:2]|upper }}</span>
+            {{ agency_settings.agency_name[:2]|upper }}
           {% endif %}
-          <span>{{ agency_settings.agency_name }}</span>
         </a>
-        
-        <div class="bg-zinc-900 border border-zinc-800 p-1 rounded-full flex items-center gap-1 text-xs font-semibold shrink-0">
-          <a href="{{ url_for('admin.admin_dashboard') }}" class="px-4 py-1.5 rounded-full {% if request.endpoint == 'admin.admin_dashboard' %}bg-white text-zinc-950 font-bold shadow{% else %}text-zinc-400 hover:text-white{% endif %} transition">Overview</a>
-          <a href="{{ url_for('admin.admin_project_management') }}" class="px-4 py-1.5 rounded-full {% if request.endpoint == 'admin.admin_project_management' %}bg-white text-zinc-950 font-bold shadow{% else %}text-zinc-400 hover:text-white{% endif %} transition">Kanban</a>
-          <a href="{{ url_for('admin.admin_project_review') }}" class="px-4 py-1.5 rounded-full {% if request.endpoint == 'admin.admin_project_review' %}bg-white text-zinc-950 font-bold shadow{% else %}text-zinc-400 hover:text-white{% endif %} transition">Review Gate</a>
-          <a href="/admin/transactions" class="px-4 py-1.5 rounded-full {% if 'transaction' in request.path %}bg-white text-zinc-950 font-bold shadow{% else %}text-zinc-400 hover:text-white{% endif %} transition">Transactions</a>
-          <a href="{{ url_for('admin.admin_customers') }}" class="px-4 py-1.5 rounded-full {% if request.endpoint == 'admin.admin_customers' %}bg-white text-zinc-950 font-bold shadow{% else %}text-zinc-400 hover:text-white{% endif %} transition">Clients</a>
-          <a href="{{ url_for('admin.admin_professionals') }}" class="px-4 py-1.5 rounded-full {% if request.endpoint == 'admin.admin_professionals' %}bg-white text-zinc-950 font-bold shadow{% else %}text-zinc-400 hover:text-white{% endif %} transition">Specialists</a>
-          <a href="{{ url_for('admin.agency_settings') }}" class="px-4 py-1.5 rounded-full {% if request.endpoint == 'admin.agency_settings' %}bg-white text-zinc-950 font-bold shadow{% else %}text-zinc-400 hover:text-white{% endif %} transition">Settings</a>
+        <nav class="flex flex-col gap-2">
+          <a href="{{ url_for('admin.admin_dashboard') }}" class="p-2.5 rounded border border-transparent {% if request.endpoint == 'admin.admin_dashboard' %}border-zinc-700 bg-zinc-900 text-white{% else %}text-zinc-400 hover:text-white hover:bg-zinc-900{% endif %} transition" title="Executive Dashboard"><i data-lucide="layout-dashboard" class="w-4 h-4"></i></a>
+          <a href="{{ url_for('admin.admin_project_management') }}" class="p-2.5 rounded border border-transparent {% if request.endpoint == 'admin.admin_project_management' %}border-zinc-700 bg-zinc-900 text-white{% else %}text-zinc-400 hover:text-white hover:bg-zinc-900{% endif %} transition" title="Pipelines & Kanban"><i data-lucide="kanban" class="w-4 h-4"></i></a>
+          <a href="{{ url_for('admin.admin_project_review') }}" class="p-2.5 rounded border border-transparent {% if request.endpoint == 'admin.admin_project_review' %}border-zinc-700 bg-zinc-900 text-white{% else %}text-zinc-400 hover:text-white hover:bg-zinc-900{% endif %} transition" title="Quality Review Gate"><i data-lucide="check-circle-2" class="w-4 h-4"></i></a>
+          <a href="{{ url_for('admin.admin_applications') }}" class="p-2.5 rounded border border-transparent {% if request.endpoint == 'admin.admin_applications' %}border-zinc-700 bg-zinc-900 text-white{% else %}text-zinc-400 hover:text-white hover:bg-zinc-900{% endif %} transition" title="Talent Applications"><i data-lucide="user-check" class="w-4 h-4"></i></a>
+          <a href="{{ url_for('admin.admin_customers') }}" class="p-2.5 rounded border border-transparent {% if request.endpoint == 'admin.admin_customers' %}border-zinc-700 bg-zinc-900 text-white{% else %}text-zinc-400 hover:text-white hover:bg-zinc-900{% endif %} transition" title="Client CRM"><i data-lucide="users" class="w-4 h-4"></i></a>
+          <a href="{{ url_for('admin.admin_professionals') }}" class="p-2.5 rounded border border-transparent {% if request.endpoint == 'admin.admin_professionals' %}border-zinc-700 bg-zinc-900 text-white{% else %}text-zinc-400 hover:text-white hover:bg-zinc-900{% endif %} transition" title="Specialists Management"><i data-lucide="briefcase" class="w-4 h-4"></i></a>
+          <a href="{{ url_for('admin.admin_transactions') }}" class="p-2.5 rounded border border-transparent {% if 'transaction' in request.path %}border-zinc-700 bg-zinc-900 text-white{% else %}text-zinc-400 hover:text-white hover:bg-zinc-900{% endif %} transition" title="Payments & Ledger"><i data-lucide="receipt" class="w-4 h-4"></i></a>
+          <a href="{{ url_for('admin.agency_settings') }}" class="p-2.5 rounded border border-transparent {% if request.endpoint == 'admin.agency_settings' %}border-zinc-700 bg-zinc-900 text-white{% else %}text-zinc-400 hover:text-white hover:bg-zinc-900{% endif %} transition" title="Agency Settings"><i data-lucide="settings-2" class="w-4 h-4"></i></a>
+        </nav>
+      </div>
+      <form method="POST" action="{{ url_for('auth.logout') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="p-2.5 rounded text-zinc-500 hover:text-red-400 hover:bg-zinc-900 transition cursor-pointer" title="Sign Out"><i data-lucide="log-out" class="w-4 h-4"></i></button>
+      </form>
+    </aside>
+
+    <!-- MAIN SCROLLABLE AREA -->
+    <div class="flex-1 flex flex-col h-full overflow-y-auto relative">
+      
+      <!-- ANNOUNCEMENT BAR -->
+      <div class="shrink-0 w-full bg-zinc-900 border-b border-zinc-800 px-6 sm:px-8 py-2 flex items-center justify-between text-xs font-mono">
+        <div class="flex items-center gap-2">
+          <span class="h-2 w-2 rounded-full bg-emerald-400"></span>
+          <span class="text-zinc-500 uppercase tracking-wider">Node Status:</span>
+          <span class="text-zinc-300">Sequential milestone gates active • SAC 998311</span>
         </div>
       </div>
 
-      <!-- Right: Clean & Spacious Actions -->
-      <div class="flex items-center gap-4 shrink-0">
-        <!-- 1-Click CSV Export Dropdown -->
-        <div class="relative group">
-          <button class="px-3.5 py-1.5 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-300 hover:text-white font-bold text-xs flex items-center gap-1.5 transition cursor-pointer">
-            <i data-lucide="download" class="w-3.5 h-3.5"></i>
-            <span>Export CSV</span>
-          </button>
-          <div class="absolute right-0 mt-2 w-48 bg-[#121215] border border-zinc-800 rounded-xl shadow-2xl p-1 hidden group-hover:block z-50 text-xs">
-            <a href="/admin/reports/export/revenue" class="block px-3 py-2 rounded-lg hover:bg-zinc-800 text-zinc-300 hover:text-white">Revenue & GST (CSV)</a>
-            <a href="/admin/reports/export/projects" class="block px-3 py-2 rounded-lg hover:bg-zinc-800 text-zinc-300 hover:text-white">Active Projects (CSV)</a>
-            <a href="/admin/reports/export/customers" class="block px-3 py-2 rounded-lg hover:bg-zinc-800 text-zinc-300 hover:text-white">Client Accounts (CSV)</a>
+      <!-- STICKY NAVBAR -->
+      <header class="shrink-0 h-16 border-b border-zinc-800 bg-zinc-950/95 sticky top-0 z-40 px-6 sm:px-8 flex items-center justify-between w-full">
+        <div class="flex items-center gap-6 overflow-x-auto no-scrollbar py-2">
+          <nav class="flex items-center gap-1 font-mono text-xs">
+            <a href="{{ url_for('admin.admin_dashboard') }}" class="px-3 py-1.5 rounded border {% if request.endpoint == 'admin.admin_dashboard' %}border-white bg-white text-zinc-950 font-bold{% else %}border-transparent text-zinc-400 hover:text-white hover:bg-zinc-900{% endif %} transition">Overview</a>
+            <a href="{{ url_for('admin.admin_project_management') }}" class="px-3 py-1.5 rounded border {% if request.endpoint == 'admin.admin_project_management' %}border-white bg-white text-zinc-950 font-bold{% else %}border-transparent text-zinc-400 hover:text-white hover:bg-zinc-900{% endif %} transition">Pipelines</a>
+            <a href="{{ url_for('admin.admin_project_review') }}" class="px-3 py-1.5 rounded border {% if request.endpoint == 'admin.admin_project_review' %}border-white bg-white text-zinc-950 font-bold{% else %}border-transparent text-zinc-400 hover:text-white hover:bg-zinc-900{% endif %} transition">Review Gate</a>
+            <a href="{{ url_for('admin.admin_applications') }}" class="px-3 py-1.5 rounded border {% if request.endpoint == 'admin.admin_applications' %}border-white bg-white text-zinc-950 font-bold{% else %}border-transparent text-zinc-400 hover:text-white hover:bg-zinc-900{% endif %} transition">Applications</a>
+            <a href="{{ url_for('admin.admin_transactions') }}" class="px-3 py-1.5 rounded border {% if 'transaction' in request.path %}border-white bg-white text-zinc-950 font-bold{% else %}border-transparent text-zinc-400 hover:text-white hover:bg-zinc-900{% endif %} transition">Ledger</a>
+            <a href="{{ url_for('admin.admin_customers') }}" class="px-3 py-1.5 rounded border {% if request.endpoint == 'admin.admin_customers' %}border-white bg-white text-zinc-950 font-bold{% else %}border-transparent text-zinc-400 hover:text-white hover:bg-zinc-900{% endif %} transition">Clients</a>
+            <a href="{{ url_for('admin.admin_professionals') }}" class="px-3 py-1.5 rounded border {% if request.endpoint == 'admin.admin_professionals' %}border-white bg-white text-zinc-950 font-bold{% else %}border-transparent text-zinc-400 hover:text-white hover:bg-zinc-900{% endif %} transition">Specialists</a>
+            <a href="{{ url_for('admin.agency_settings') }}" class="px-3 py-1.5 rounded border {% if request.endpoint == 'admin.agency_settings' %}border-white bg-white text-zinc-950 font-bold{% else %}border-transparent text-zinc-400 hover:text-white hover:bg-zinc-900{% endif %} transition">Settings</a>
+          </nav>
+        </div>
+
+        <div class="flex items-center gap-3 shrink-0">
+          <div class="h-8 w-8 rounded border border-zinc-800 bg-zinc-900 flex items-center justify-center font-mono font-bold text-xs text-white uppercase">
+            {{ current_user.name[:2] if current_user.is_authenticated and current_user.name else 'AD' }}
           </div>
         </div>
+      </header>
 
-        <div class="hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-full border border-zinc-800 bg-zinc-900/60 text-[11px] font-mono text-emerald-400">
-          <span class="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>
-          <span>IST Live</span>
-        </div>
-
-        <div class="h-8 w-8 rounded-xl bg-zinc-800 border border-zinc-700 flex items-center justify-center font-bold text-xs text-zinc-200 uppercase">
-          {{ current_user.name[:2] if current_user.is_authenticated and current_user.name else 'AD' }}
-        </div>
-      </div>
-    </header>
-
-    <!-- Flash Messages -->
-    {% with messages = get_flashed_messages(with_categories=true) %}
-      {% if messages %}
-        <div class="px-6 sm:px-8 pt-4">
-          {% for category, message in messages %}
-            <div class="p-3 rounded-xl border text-xs flex items-center justify-between {% if category == 'success' %}bg-emerald-500/10 border-emerald-500/20 text-emerald-300{% elif 'danger' in category or 'error' in category %}bg-rose-500/10 border-rose-500/20 text-rose-300{% else %}bg-zinc-800 border-zinc-700 text-zinc-200{% endif %}">
-              <span>{{ message }}</span>
-              <button onclick="this.parentElement.remove()" class="text-zinc-400 hover:text-white text-sm">×</button>
+      <!-- MAIN CONTENT INJECTION -->
+      <div class="flex-1 w-full pb-12">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+          {% if messages %}
+            <div class="px-6 sm:px-8 pt-6 space-y-2">
+              {% for category, message in messages %}
+                <div class="system-alert {{ 'system-alert-success' if category == 'success' else 'system-alert-error' }}">
+                  <span class="font-mono text-xs">{{ message }}</span>
+                  <button onclick="this.parentElement.remove()" class="text-zinc-400 hover:text-white ml-auto cursor-pointer">✕</button>
+                </div>
+              {% endfor %}
             </div>
-          {% endfor %}
-        </div>
-      {% endif %}
-    {% endwith %}
+          {% endif %}
+        {% endwith %}
 
-    <!-- Main Content Area -->
-    <div class="flex-1 w-full">
-      {% block content %}{% endblock %}
+        {% block content %}{% endblock %}
+      </div>
+
     </div>
   </div>
 
-  
-  <script>if (window.lucide) lucide.createIcons();</script>
+  <script>document.addEventListener("DOMContentLoaded", function () { if (window.lucide) { lucide.createIcons(); } });</script>
   {% block extra_js %}{% endblock %}
-</body></html>
+</body>
+</html>

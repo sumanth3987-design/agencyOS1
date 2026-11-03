@@ -1,19 +1,25 @@
+"""Flask Extensions Initialization for AgencyOS."""
+
 import logging
 import os
 
 import razorpay
-
-from flask_sqlalchemy import SQLAlchemy
-from flask_login import LoginManager
-from flask_wtf import CSRFProtect
-from flask_migrate import Migrate
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
+from flask_login import LoginManager
+from flask_migrate import Migrate
+from flask_sqlalchemy import SQLAlchemy
+from flask_wtf import CSRFProtect
 
 logger = logging.getLogger(__name__)
 
+
+class AgencyLoginManager(LoginManager):
+    login_view: str | None
+
+
 db = SQLAlchemy()
-login_manager = LoginManager()
+login_manager = AgencyLoginManager()
 login_manager.login_view = "auth.login"
 login_manager.login_message_category = "warning"
 
@@ -21,8 +27,6 @@ csrf = CSRFProtect()
 migrate = Migrate()
 
 # Shared rate limiter. Storage is configured through RATELIMIT_STORAGE_URL.
-# memory:// is suitable for local development and tests only; production
-# multi-worker deployments should use shared Redis storage.
 limiter = Limiter(
     key_func=get_remote_address,
 )

@@ -1,537 +1,244 @@
+<!-- Save this directly into: templates/start_project.html -->
 <!DOCTYPE html>
-<html lang="en" class="dark scroll-smooth">
+<html lang="en" class="dark">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Project Intake — {{ agency_settings.agency_name }}</title>
+  <title>Project Intake Wizard — {{ agency_settings.agency_name }}</title>
 
+  <!-- Typography: Plus Jakarta Sans & JetBrains Mono -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="stylesheet" href="/static/style.css">
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace'],
+          },
+          colors: {
+            zinc: {
+              950: '#09090b',
+              900: '#101014',
+              850: '#18181b',
+              800: '#27272a',
+              700: '#3f3f46',
+            }
+          }
+        }
+      }
+    }
+  </script>
 
   <style>
-    :root {
-      --bg: #09090b;
-      --panel: rgba(18, 18, 22, 0.96);
-      --border: rgba(255,255,255,0.08);
-      --border-strong: rgba(99, 102, 241, 0.45);
-      --text: #f4f4f5;
-      --muted: #a1a1aa;
-      --indigo: var(--agency-primary);
-      --green: #22c55e;
-      --purple: #a78bfa;
-      --shadow: 0 22px 60px rgba(0, 0, 0, 0.42);
-    }
-
-    * { box-sizing: border-box; }
-
-    html { scroll-behavior: smooth; }
-
-    body {
-      background:
-        radial-gradient(circle at top left, rgba(99, 102, 241, 0.14), transparent 24%),
-        radial-gradient(circle at bottom right, rgba(167, 139, 250, 0.08), transparent 28%),
-        var(--bg);
-      font-family: 'Plus Jakarta Sans', sans-serif;
-      color: var(--text);
-    }
-
-    .mono { font-family: 'JetBrains Mono', monospace; }
-
-    .shell {
-      max-width: 1100px;
-      margin: 0 auto;
-      padding: 32px 16px 60px;
-    }
-
-    .panel {
-      background: rgba(18, 18, 22, 0.96);
-      border: 1px solid var(--border);
-      box-shadow: var(--shadow);
-      border-radius: 24px;
-      overflow: hidden;
-    }
-
-    .stepper {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      align-items: stretch;
-      gap: 10px;
-      width: 100%;
-      margin-top: 18px;
-    }
-
-    .step-indicator {
-      position: relative;
-      flex: 1 1 0;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 12px 12px;
-      min-height: 64px;
-      border: 1px solid var(--border);
-      border-radius: 14px;
-      background: rgba(24, 24, 29, 0.9);
-      color: var(--text);
-      cursor: pointer;
-      text-align: left;
-      transition: all 180ms ease;
-    }
-
-    .step-indicator::before {
-      content: "";
-      position: absolute;
-      left: 12px;
-      right: 12px;
-      bottom: 0;
-      height: 2px;
-      border-radius: 999px;
-      opacity: 0;
-      background: linear-gradient(90deg, rgba(99,102,241,0.9), rgba(167,139,250,0.85));
-      transition: opacity 180ms ease;
-    }
-
-    .step-indicator[aria-current="step"] {
-      border-color: var(--border-strong);
-      background: rgba(99, 102, 241, 0.08);
-      box-shadow: inset 0 0 0 1px rgba(99, 102, 241, 0.18);
-    }
-
-    .step-indicator[aria-current="step"]::before {
-      opacity: 1;
-    }
-
-    .step-indicator[aria-current="false"], .step-indicator.complete {
-      border-color: rgba(255,255,255,0.08);
-    }
-
-    .step-index {
-      flex-shrink: 0;
-      width: 28px;
-      height: 28px;
-      border-radius: 9999px;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 11px;
-      font-weight: 700;
-      background: rgba(255,255,255,0.04);
-      border: 1px solid rgba(255,255,255,0.08);
-      color: #e4e4e7;
-    }
-
-    .step-indicator[aria-current="step"] .step-index {
-      background: linear-gradient(135deg, rgba(99,102,241,0.28), rgba(99,102,241,0.44));
-      border-color: rgba(165,180,252,0.55);
-      color: white;
-    }
-
-    .step-indicator.complete .step-index {
-      background: rgba(34,197,94,0.18);
-      border-color: rgba(34,197,94,0.45);
-      color: #86efac;
-    }
-
-    .step-copy {
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-      min-width: 0;
-      overflow: hidden;
-    }
-
-    .step-kicker {
-      display: block;
-      font-size: 9px;
-      line-height: 1.2;
-      letter-spacing: 0.16em;
-      text-transform: uppercase;
-      color: rgba(255,255,255,0.6);
-    }
-
-    .step-label {
-      display: block;
-      font-size: 12px;
-      line-height: 1.2;
-      font-weight: 700;
-      color: #f4f4f5;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    .progress-track {
-      position: relative;
-      width: 100%;
-      height: 6px;
-      border-radius: 999px;
-      background: rgba(255,255,255,0.08);
-      overflow: hidden;
-      margin-top: 14px;
-    }
-
-    .progress-fill {
-      position: absolute;
-      inset: 0 auto 0 0;
-      width: 0%;
-      border-radius: inherit;
-      background: linear-gradient(90deg, var(--indigo), rgba(167, 139, 250, 0.95));
-      transition: width 220ms ease;
-    }
-
-    .form-step {
-      display: none;
-      animation: fadeIn 180ms ease;
-    }
-
-    .form-step.active { display: block; }
-
-    @keyframes fadeIn {
+    .step-section { display: none; }
+    .step-section.active { display: block; animation: stepFadeIn 150ms ease-in-out; }
+    @keyframes stepFadeIn {
       from { opacity: 0; transform: translateY(4px); }
       to { opacity: 1; transform: translateY(0); }
     }
-
-    .field-label {
-      display: block;
-      margin-bottom: 8px;
-      color: #d4d4d8;
-      font-size: 12px;
-      font-weight: 600;
-    }
-
-    .field-input,
-    .field-select,
-    .field-textarea {
-      width: 100%;
-      border-radius: 14px;
-      background: rgba(9, 9, 11, 0.75);
-      border: 1px solid rgba(255,255,255,0.08);
-      color: var(--text);
-      padding: 12px 14px;
-      outline: none;
-      transition: border-color 180ms ease, box-shadow 180ms ease, background 180ms ease;
-      font-size: 14px;
-    }
-
-    .field-input::placeholder,
-    .field-textarea::placeholder {
-      color: #71717a;
-    }
-
-    .field-input:focus,
-    .field-select:focus,
-    .field-textarea:focus,
-    .action-btn:focus-visible,
-    .step-indicator:focus-visible,
-    .feature-item:focus-within,
-    .upload-box:has(input:focus-visible) {
-      border-color: rgba(99,102,241,0.72);
-      box-shadow: 0 0 0 3px rgba(99,102,241,0.14);
-      outline: none;
-    }
-
-    .field-textarea {
-      min-height: 120px;
-      resize: vertical;
-    }
-
-    .feature-fieldset {
-      margin: 0;
-      padding: 0;
-      border: none;
-      min-width: 0;
-    }
-
-    .feature-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-      gap: 12px;
-    }
-
-    .feature-item {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 12px 12px;
-      border-radius: 14px;
-      background: rgba(9,9,11,0.72);
-      border: 1px solid rgba(255,255,255,0.08);
-      color: #e4e4e7;
-      cursor: pointer;
-      transition: border-color 180ms ease, transform 180ms ease, box-shadow 180ms ease;
-    }
-
-    .feature-item:hover {
-      border-color: rgba(165, 180, 252, 0.5);
-      transform: translateY(-1px);
-    }
-
-    .feature-item input {
-      accent-color: var(--indigo);
-      width: 15px;
-      height: 15px;
-      margin: 0;
-    }
-
-    .upload-box {
-      position: relative;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      min-height: 140px;
-      border: 1.5px dashed rgba(255,255,255,0.2);
-      border-radius: 18px;
-      background: rgba(9,9,11,0.65);
-      transition: border-color 180ms ease, background 180ms ease, box-shadow 180ms ease;
-      overflow: hidden;
-    }
-
-    .upload-box:hover {
-      border-color: rgba(99,102,241,0.7);
-      background: rgba(19,20,29,0.9);
-    }
-
-    .upload-box input {
-      position: absolute;
-      inset: 0;
-      width: 100%;
-      height: 100%;
-      opacity: 0;
-      cursor: pointer;
-    }
-
-    .upload-box-content {
-      position: relative;
-      z-index: 1;
-      text-align: center;
-      padding: 0 18px;
-    }
-
-    .mini-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 7px 10px;
-      border-radius: 999px;
-      background: rgba(99,102,241,0.12);
-      border: 1px solid rgba(99,102,241,0.25);
-      color: #c7d2fe;
-      font-size: 10px;
-      font-weight: 700;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-    }
-
-    .form-footer {
-      display: flex;
-      justify-content: space-between;
-      gap: 12px;
-      margin-top: 24px;
-      padding-top: 20px;
-      border-top: 1px solid rgba(255,255,255,0.08);
-    }
-
-    .action-btn {
-      border: 1px solid rgba(255,255,255,0.08);
-      background: rgba(9,9,11,0.7);
-      color: var(--text);
-      border-radius: 14px;
-      padding: 12px 18px;
-      font-weight: 700;
-      font-size: 13px;
-      cursor: pointer;
-      transition: transform 180ms ease, border-color 180ms ease, background 180ms ease, box-shadow 180ms ease;
-    }
-
-    .action-btn:hover {
-      transform: translateY(-1px);
-      border-color: var(--agency-primary);
-    }
-
-    .action-btn.primary {
-      background: var(--agency-primary);
-      color: var(--agency-on-primary);
-      border-color: transparent;
-    }
-
-    .action-btn.hidden {
-      display: none;
-    }
-
-    @media (max-width: 768px) {
-      .shell { padding-top: 20px; }
-
-      .stepper {
-        display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 8px;
-        width: 100%;
-      }
-
-      .step-indicator {
-        min-width: 0;
-        padding: 10px 8px;
-      }
-
-      .step-kicker {
-        font-size: 8px;
-        letter-spacing: 0.12em;
-      }
-
-      .step-label {
-        font-size: 11px;
-      }
-
-      .form-footer {
-        flex-direction: column-reverse;
-      }
-
-      .action-btn {
-        width: 100%;
-      }
-    }
   </style>
 </head>
-<body style="--agency-primary: {{ agency_settings.primary_color }}; --agency-on-primary: {{ agency_settings.primary_contrast }}; --indigo: {{ agency_settings.primary_color }};">
-  <div class="mx-auto w-full max-w-5xl px-5 pt-5 sm:px-8">{% include "includes/agency_brand.html" %}</div>
-  <div class="shell">
-    <a href="{{ url_for('customer.dashboard') }}" class="inline-flex items-center gap-2 text-xs font-semibold text-indigo-300 hover:text-indigo-200 transition mono">
-      <i data-lucide="arrow-left" class="w-3.5 h-3.5"></i>
-      <span>Return to Workspace</span>
-    </a>
+<body class="bg-zinc-950 text-zinc-100 min-h-screen selection:bg-zinc-100 selection:text-zinc-950 antialiased font-sans" style="--agency-primary: {{ agency_settings.primary_color }}; --agency-on-primary: {{ agency_settings.primary_contrast }};">
 
-    <div class="mt-6 rounded-3xl border border-white/8 bg-zinc-900/80 p-5 sm:p-7 shadow-2xl shadow-black/20">
-      <div class="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+  <!-- TOP WORKBENCH HEADER -->
+  <header class="border-b border-zinc-800 bg-zinc-950/95 sticky top-0 z-50">
+    <div class="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        {% include "includes/agency_brand.html" %}
+        <span class="font-mono text-xs text-zinc-500">/</span>
+        <span class="font-mono text-xs text-zinc-400 font-bold uppercase">Engagement Intake</span>
+      </div>
+
+      <a href="{{ url_for('customer.dashboard') }}" class="btn btn-secondary text-xs h-8">
+        ← Return to Workspace
+      </a>
+    </div>
+  </header>
+
+  <!-- MAIN INTAKE SHELL -->
+  <main class="max-w-5xl mx-auto px-6 py-10 space-y-8">
+
+    <!-- Flash Messages Slot -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="space-y-2">
+          {% for category, message in messages %}
+            <div class="system-alert {{ 'system-alert-success' if category == 'success' else 'system-alert-error' }}">
+              <span class="font-mono">{{ message }}</span>
+              <button onclick="this.parentElement.remove()" class="text-zinc-400 hover:text-white ml-auto cursor-pointer">✕</button>
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    <!-- Top Executive Header & Step Pipeline -->
+    <div class="border border-zinc-800 bg-zinc-900 rounded-lg p-6 sm:p-8">
+      <div class="flex flex-col lg:flex-row lg:items-end justify-between gap-6">
         <div>
-          <span class="mini-badge">New project commission</span>
-          <h1 class="mt-4 text-3xl font-extrabold tracking-tight text-white sm:text-4xl">Project kickoff intake</h1>
-          <p class="mt-2 max-w-xl text-sm text-zinc-400">Clarify your business context, target market, and delivery scope so we can plan the right build and launch sequence.</p>
+          <span class="badge badge-indigo mb-2">STRUCTURED SOW ONBOARDING</span>
+          <h1 class="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">Project Commission Intake</h1>
+          <p class="text-xs font-mono text-zinc-400 mt-1 max-w-xl">
+            Configure your technical scope, target market, and milestone package to initialize the statement of work.
+          </p>
         </div>
 
-        <div class="w-full max-w-md">
-          <div class="flex items-center justify-between text-[10px] uppercase tracking-[0.18em] text-zinc-400 mono">
-            <span>Progress</span>
-            <span id="progressText" aria-live="polite">Step 1 of 3</span>
-          </div>
-          <div class="progress-track" id="progressTrack" role="progressbar" aria-labelledby="progressText" aria-valuemin="1" aria-valuemax="3" aria-valuenow="1" aria-valuetext="Step 1 of 3">
-            <div id="progressFill" class="progress-fill"></div>
+        <div class="w-full lg:w-96 space-y-2 font-mono text-xs">
+          <div class="flex justify-between items-center text-zinc-400">
+            <span class="uppercase tracking-wider text-[11px]">Intake Gate Progress</span>
+            <span id="progressText" class="text-white font-bold">Gate 1 of 3</span>
           </div>
 
-          <nav class="stepper" aria-label="Project intake steps">
-            <button type="button" class="step-indicator" data-step-indicator="0" aria-current="step" aria-label="Go to step 1: Service and business details">
-              <span class="step-index">1</span>
-              <span class="step-copy">
-                <span class="step-kicker mono">Stage</span>
-                <span class="step-label">Workspace</span>
-              </span>
+          <!-- Progress Bar -->
+          <div class="w-full h-1.5 bg-zinc-950 border border-zinc-800 rounded-full overflow-hidden" role="progressbar" id="progressBar" aria-valuenow="1" aria-valuemin="1" aria-valuemax="3">
+            <div id="progressFill" class="h-full bg-white transition-all duration-200" style="width: 33.33%;"></div>
+          </div>
+
+          <!-- Step Indicators -->
+          <div class="grid grid-cols-3 gap-2 pt-2">
+            <button type="button" class="step-btn p-2 rounded border border-white bg-zinc-950 text-left transition" data-step-nav="0" aria-current="step">
+              <span class="text-[10px] text-zinc-500 block">STEP 01</span>
+              <span class="text-xs font-bold text-white block truncate font-sans">Workspace</span>
             </button>
-            <button type="button" class="step-indicator" data-step-indicator="1" aria-current="false" aria-label="Go to step 2: Brand and launch details">
-              <span class="step-index">2</span>
-              <span class="step-copy">
-                <span class="step-kicker mono">Stage</span>
-                <span class="step-label">Brand</span>
-              </span>
+            <button type="button" class="step-btn p-2 rounded border border-zinc-800 bg-zinc-950 text-left transition" data-step-nav="1" aria-current="false">
+              <span class="text-[10px] text-zinc-500 block">STEP 02</span>
+              <span class="text-xs font-bold text-zinc-400 block truncate font-sans">Brand</span>
             </button>
-            <button type="button" class="step-indicator" data-step-indicator="2" aria-current="false" aria-label="Go to step 3: Features, upload and scope">
-              <span class="step-index">3</span>
-              <span class="step-copy">
-                <span class="step-kicker mono">Stage</span>
-                <span class="step-label">Scope</span>
-              </span>
+            <button type="button" class="step-btn p-2 rounded border border-zinc-800 bg-zinc-950 text-left transition" data-step-nav="2" aria-current="false">
+              <span class="text-[10px] text-zinc-500 block">STEP 03</span>
+              <span class="text-xs font-bold text-zinc-400 block truncate font-sans">Scope</span>
             </button>
-          </nav>
+          </div>
         </div>
       </div>
     </div>
 
-    <form id="projectForm" method="POST" action="{{ url_for('customer.start_project', service_slug=service_slug|default('website-development')) }}" enctype="multipart/form-data" class="mt-6 panel p-5 sm:p-7">
+    <!-- MAIN FORM CONTAINER -->
+    <form id="projectForm" method="POST" action="{{ url_for('customer.start_project', service_slug=service_slug|default('website-development')) }}" enctype="multipart/form-data" class="border border-zinc-800 bg-zinc-900 rounded-lg p-6 sm:p-8 space-y-8">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       {% set selected_features = request.form.getlist('features') %}
 
-      <section class="form-step active" data-step="0">
-        <div class="mb-6 flex items-center gap-3">
-          <span class="h-2.5 w-2.5 rounded-full bg-indigo-500"></span>
-          <h2 tabindex="-1" class="text-sm font-bold uppercase tracking-[0.18em] text-zinc-200 mono">Service & business details</h2>
+      <!-- STEP 1: SERVICE & BUSINESS DETAILS -->
+      <section class="step-section active" data-step="0">
+        <div class="border-b border-zinc-800 pb-4 mb-6 flex items-center justify-between font-mono text-xs">
+          <div class="flex items-center gap-2">
+            <span class="h-2 w-2 rounded-full bg-white"></span>
+            <h2 class="text-white font-bold uppercase tracking-wider">Gate 1: Service Package & Financial Currency</h2>
+          </div>
+          <span class="text-zinc-500">[1/3]</span>
         </div>
 
-        <div class="grid gap-5 md:grid-cols-2 lg:grid-cols-4">
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 font-mono text-xs">
           <div>
-            <label for="business_id" class="field-label">Associated business</label>
-            <select id="business_id" name="business_id" class="field-select" {% if businesses %}required{% endif %}>
+            <label for="business_id" class="block text-zinc-400 mb-1">Associated Business Entity</label>
+            <select id="business_id" name="business_id" class="form-control text-xs" {% if businesses %}required{% endif %}>
               {% for b in businesses %}
                 <option value="{{ b.id }}" {% if request.form.get('business_id')|string == (b.id|string) %}selected{% endif %}>{{ b.name }}{% if b.business_type %} · {{ b.business_type }}{% endif %}</option>
               {% else %}
-                <option value="">Direct Client Workspace</option>
+                <option value="">Direct Client Account</option>
               {% endfor %}
             </select>
           </div>
 
           <div>
-            <label for="service" class="field-label">Service</label>
-            <select id="service" name="service" class="field-select" required>
+            <label for="service" class="block text-zinc-400 mb-1">Service Category</label>
+            <select id="service" name="service" class="form-control text-xs" required>
               {% set current_service = request.form.get('service') or ('Website Design & Development' if service_slug == 'website-development' else 'SEO' if service_slug == 'seo' else 'Custom Web Application') or 'Website Design & Development' %}
               <option value="Website Design & Development" {% if current_service == 'Website Design & Development' %}selected{% endif %}>Website Design & Development</option>
-              <option value="SEO" {% if current_service == 'SEO' or current_service == 'seo' %}selected{% endif %}>SEO</option>
+              <option value="SEO" {% if current_service == 'SEO' or current_service == 'seo' %}selected{% endif %}>SEO Engine & Architecture</option>
               <option value="Custom Web Application" {% if current_service == 'Custom Web Application' %}selected{% endif %}>Custom Web Application</option>
             </select>
           </div>
 
           <div>
-            <label for="package" class="field-label">Package</label>
-            <select id="package" name="package" class="field-select" required>
+            <label for="package" class="block text-zinc-400 mb-1">Milestone Package</label>
+            <select id="package" name="package" class="form-control text-xs" required>
               {% set current_package = request.form.get('package') or 'Basic Website' %}
-              <option value="Basic Website" data-inr="4999" data-usd="699" data-eur="650" data-gbp="550" {% if current_package == 'Basic Website' %}selected{% endif %}>Basic Website · ₹4,999</option>
-              <option value="Business Website" data-inr="9999" data-usd="1299" data-eur="1199" data-gbp="999" {% if current_package == 'Business Website' %}selected{% endif %}>Business Website · ₹9,999</option>
-              <option value="Advanced Website" data-inr="19999" data-usd="2499" data-eur="2299" data-gbp="1999" {% if current_package == 'Advanced Website' %}selected{% endif %}>Advanced Website · ₹19,999</option>
-              <option value="SEO Starter" data-inr="2999" data-usd="499" data-eur="450" data-gbp="390" {% if current_package == 'SEO Starter' %}selected{% endif %}>SEO Starter · ₹2,999</option>
-              <option value="SEO Growth" data-inr="6999" data-usd="899" data-eur="850" data-gbp="750" {% if current_package == 'SEO Growth' %}selected{% endif %}>SEO Growth · ₹6,999</option>
-              <option value="SEO Advanced" data-inr="12000" data-usd="1599" data-eur="1499" data-gbp="1299" {% if current_package == 'SEO Advanced' %}selected{% endif %}>SEO Advanced · ₹12,000</option>
-              <option value="Starter Retainer" data-inr="14999" {% if current_package == 'Starter Retainer' %}selected{% endif %}>Starter Retainer</option>
+              <option value="Basic Website" data-inr="48000" data-usd="699" data-eur="650" data-gbp="550" {% if current_package == 'Basic Website' %}selected{% endif %}>Basic Website · ₹48,000</option>
+              <option value="Business Website" data-inr="78000" data-usd="1299" data-eur="1199" data-gbp="999" {% if current_package == 'Business Website' %}selected{% endif %}>Business Website · ₹78,000</option>
+              <option value="Advanced Website" data-inr="125000" data-usd="2499" data-eur="2299" data-gbp="1999" {% if current_package == 'Advanced Website' %}selected{% endif %}>Advanced Website · ₹1,25,000</option>
+              <option value="SEO Starter" data-inr="24000" data-usd="499" data-eur="450" data-gbp="390" {% if current_package == 'SEO Starter' %}selected{% endif %}>SEO Starter · ₹24,000</option>
+              <option value="SEO Growth" data-inr="48000" data-usd="899" data-eur="850" data-gbp="750" {% if current_package == 'SEO Growth' %}selected{% endif %}>SEO Growth · ₹48,000</option>
+              <option value="SEO Advanced" data-inr="96000" data-usd="1599" data-eur="1499" data-gbp="1299" {% if current_package == 'SEO Advanced' %}selected{% endif %}>SEO Advanced · ₹96,000</option>
+              <option value="Starter Retainer" data-inr="14999" {% if current_package == 'Starter Retainer' %}selected{% endif %}>Starter Retainer · ₹14,999/mo</option>
             </select>
           </div>
 
           <div>
-            <label for="currency" class="field-label">Billing Currency</label>
+            <label for="currency" class="block text-zinc-400 mb-1">Billing Currency</label>
             {% set current_currency = request.form.get('currency') or 'INR' %}
-            <select id="currency" name="currency" class="field-select" required>
-              <option value="INR" {% if current_currency == 'INR' %}selected{% endif %}>₹ INR</option>
-              <option value="USD" {% if current_currency == 'USD' %}selected{% endif %}>$ USD</option>
-              <option value="EUR" {% if current_currency == 'EUR' %}selected{% endif %}>€ EUR</option>
-              <option value="GBP" {% if current_currency == 'GBP' %}selected{% endif %}>£ GBP</option>
+            <select id="currency" name="currency" class="form-control text-xs" required>
+              <option value="INR" {% if current_currency == 'INR' %}selected{% endif %}>₹ INR (Domestic GST)</option>
+              <option value="USD" {% if current_currency == 'USD' %}selected{% endif %}>$ USD (Export LUT)</option>
+              <option value="EUR" {% if current_currency == 'EUR' %}selected{% endif %}>€ EUR (Export LUT)</option>
+              <option value="GBP" {% if current_currency == 'GBP' %}selected{% endif %}>£ GBP (Export LUT)</option>
             </select>
-            <p class="mt-1 text-[10px] leading-relaxed text-zinc-500">Starter Retainer recurring billing is INR-only.</p>
           </div>
         </div>
 
-        <div class="mt-5 grid gap-5 md:grid-cols-2">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 font-mono text-xs">
           <div>
-            <label for="brand_name" class="field-label">Brand name</label>
-            <input id="brand_name" name="brand_name" type="text" class="field-input" value="{{ request.form.get('brand_name', '') }}" placeholder="Northstar Hospitality" required>
+            <label for="brand_name" class="block text-zinc-400 mb-1">Brand or Enterprise Name *</label>
+            <input
+              id="brand_name"
+              name="brand_name"
+              type="text"
+              required
+              class="form-control text-xs"
+              value="{{ request.form.get('brand_name', '') }}"
+              placeholder="e.g. Apex Global Logistics"
+            >
           </div>
 
           <div>
-            <label for="industry" class="field-label">Industry category</label>
-            <input id="industry" name="industry" type="text" class="field-input" value="{{ request.form.get('industry', '') }}" placeholder="Hospitality, Education, Real Estate..." required>
+            <label for="industry" class="block text-zinc-400 mb-1">Industry Sector *</label>
+            <input
+              id="industry"
+              name="industry"
+              type="text"
+              required
+              class="form-control text-xs"
+              value="{{ request.form.get('industry', '') }}"
+              placeholder="e.g. Fintech, Healthcare, Real Estate"
+            >
           </div>
         </div>
       </section>
 
-      <section class="form-step" data-step="1">
-        <div class="mb-6 flex items-center gap-3">
-          <span class="h-2.5 w-2.5 rounded-full bg-emerald-500"></span>
-          <h2 tabindex="-1" class="text-sm font-bold uppercase tracking-[0.18em] text-zinc-200 mono">Brand & launch direction</h2>
+      <!-- STEP 2: BRAND & LAUNCH DIRECTION -->
+      <section class="step-section" data-step="1">
+        <div class="border-b border-zinc-800 pb-4 mb-6 flex items-center justify-between font-mono text-xs">
+          <div class="flex items-center gap-2">
+            <span class="h-2 w-2 rounded-full bg-white"></span>
+            <h2 class="text-white font-bold uppercase tracking-wider">Gate 2: Brand Identity & Target Timeline</h2>
+          </div>
+          <span class="text-zinc-500">[2/3]</span>
         </div>
 
-        <div class="grid gap-5 md:grid-cols-2">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 font-mono text-xs">
           <div>
-            <label for="brand_colors" class="field-label">Brand colors</label>
-            <input id="brand_colors" name="brand_colors" type="text" class="field-input" value="{{ request.form.get('brand_colors', '') }}" placeholder="#0F172A, #6366F1, #22C55E">
+            <label for="brand_colors" class="block text-zinc-400 mb-1">Brand Palette / Color Hexes</label>
+            <input
+              id="brand_colors"
+              name="brand_colors"
+              type="text"
+              class="form-control text-xs"
+              value="{{ request.form.get('brand_colors', '') }}"
+              placeholder="#09090B, #6366F1, #10B981"
+            >
           </div>
 
           <div>
-            <label for="deadline" class="field-label">Launch timeline</label>
-            <select id="deadline" name="deadline" class="field-select" required>
+            <label for="deadline" class="block text-zinc-400 mb-1">Target Launch Velocity *</label>
+            <select id="deadline" name="deadline" class="form-control text-xs" required>
               {% set current_deadline = request.form.get('deadline') or 'Standard Sprint (14 Days)' %}
               <option value="Urgent Sprint (7 Days)" {% if current_deadline == 'Urgent Sprint (7 Days)' %}selected{% endif %}>Urgent Sprint (7 Days)</option>
               <option value="Standard Sprint (14 Days)" {% if current_deadline == 'Standard Sprint (14 Days)' %}selected{% endif %}>Standard Sprint (14 Days)</option>
@@ -540,286 +247,305 @@
           </div>
 
           <div>
-            <label for="asset_link" class="field-label">Logo / design asset link</label>
-            <input id="asset_link" name="asset_link" type="url" class="field-input" value="{{ request.form.get('asset_link', '') }}" placeholder="https://figma.com/... or drive.google.com/...">
+            <label for="asset_link" class="block text-zinc-400 mb-1">Figma Prototype or Drive Assets URL</label>
+            <input
+              id="asset_link"
+              name="asset_link"
+              type="url"
+              class="form-control text-xs"
+              value="{{ request.form.get('asset_link', '') }}"
+              placeholder="https://figma.com/@file or drive.google.com/..."
+            >
           </div>
 
           <div>
-            <label for="reference_sites" class="field-label">Reference sites</label>
-            <input id="reference_sites" name="reference_sites" type="text" class="field-input" value="{{ request.form.get('reference_sites', '') }}" placeholder="stripe.com, linear.app, brand-example.com">
+            <label for="reference_sites" class="block text-zinc-400 mb-1">Benchmark / Competitor URLs</label>
+            <input
+              id="reference_sites"
+              name="reference_sites"
+              type="text"
+              class="form-control text-xs"
+              value="{{ request.form.get('reference_sites', '') }}"
+              placeholder="linear.app, stripe.com, vercel.com"
+            >
           </div>
 
           <div>
-            <label for="target_cities" class="field-label">Target cities</label>
-            <input id="target_cities" name="target_cities" type="text" class="field-input" value="{{ request.form.get('target_cities', '') }}" placeholder="Bengaluru, Hyderabad, Pune">
+            <label for="target_cities" class="block text-zinc-400 mb-1">Primary Target Geographies</label>
+            <input
+              id="target_cities"
+              name="target_cities"
+              type="text"
+              class="form-control text-xs"
+              value="{{ request.form.get('target_cities', '') }}"
+              placeholder="Bengaluru, Mumbai, London, New York"
+            >
           </div>
 
           <div>
-            <label for="target_keywords" class="field-label">SEO target keywords</label>
-            <input id="target_keywords" name="target_keywords" type="text" class="field-input" value="{{ request.form.get('target_keywords', '') }}" placeholder="wedding planner, catering service, event venue">
+            <label for="target_keywords" class="block text-zinc-400 mb-1">Target Organic SEO Keywords</label>
+            <input
+              id="target_keywords"
+              name="target_keywords"
+              type="text"
+              class="form-control text-xs"
+              value="{{ request.form.get('target_keywords', '') }}"
+              placeholder="enterprise logistics software, b2b saas billing"
+            >
           </div>
         </div>
       </section>
 
-      <section class="form-step" data-step="2">
-        <div class="mb-6 flex items-center gap-3">
-          <span class="h-2.5 w-2.5 rounded-full bg-violet-500"></span>
-          <h2 tabindex="-1" class="text-sm font-bold uppercase tracking-[0.18em] text-zinc-200 mono">Features, uploads & scope</h2>
+      <!-- STEP 3: SCOPE & FEATURE SELECTION -->
+      <section class="step-section" data-step="2">
+        <div class="border-b border-zinc-800 pb-4 mb-6 flex items-center justify-between font-mono text-xs">
+          <div class="flex items-center gap-2">
+            <span class="h-2 w-2 rounded-full bg-white"></span>
+            <h2 class="text-white font-bold uppercase tracking-wider">Gate 3: Scope & Technical Deliverables</h2>
+          </div>
+          <span class="text-zinc-500">[3/3]</span>
         </div>
 
-        <fieldset class="feature-fieldset">
-          <legend class="field-label">Requested features</legend>
-          <div class="feature-grid">
-            <label class="feature-item">
+        <!-- Pre-Configured Architectural Modules -->
+        <div class="space-y-3 font-mono text-xs">
+          <span class="block text-zinc-400 uppercase tracking-wider text-[11px]">Architectural Components Checklist</span>
+          <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 text-zinc-300">
+            <label class="p-3 rounded border border-zinc-800 bg-zinc-950 flex items-center gap-2.5 cursor-pointer">
               <input type="checkbox" name="features" value="Razorpay / UPI Payment Gateway" {% if 'Razorpay / UPI Payment Gateway' in selected_features %}checked{% endif %}>
-              <span>Razorpay / UPI</span>
+              <span>Razorpay / Multi-Currency</span>
             </label>
-            <label class="feature-item">
-              <input type="checkbox" name="features" value="WhatsApp chat" {% if 'WhatsApp chat' in selected_features %}checked{% endif %}>
-              <span>WhatsApp chat</span>
+            <label class="p-3 rounded border border-zinc-800 bg-zinc-950 flex items-center gap-2.5 cursor-pointer">
+              <input type="checkbox" name="features" value="WhatsApp Click-to-Chat" {% if 'WhatsApp Click-to-Chat' in selected_features %}checked{% endif %}>
+              <span>WhatsApp Direct Dispatch</span>
             </label>
-            <label class="feature-item">
-              <input type="checkbox" name="features" value="Responsive UI" {% if 'Responsive UI' in selected_features %}checked{% endif %}>
-              <span>Responsive UI</span>
+            <label class="p-3 rounded border border-zinc-800 bg-zinc-950 flex items-center gap-2.5 cursor-pointer">
+              <input type="checkbox" name="features" value="Mobile-First Responsive UI" {% if 'Mobile-First Responsive UI' in selected_features %}checked{% endif %}>
+              <span>Mobile-First Responsive UI</span>
             </label>
-            <label class="feature-item">
-              <input type="checkbox" name="features" value="SEO schema" {% if 'SEO schema' in selected_features %}checked{% endif %}>
-              <span>SEO schema</span>
+            <label class="p-3 rounded border border-zinc-800 bg-zinc-950 flex items-center gap-2.5 cursor-pointer">
+              <input type="checkbox" name="features" value="SEO Schema & Meta Tags" {% if 'SEO Schema & Meta Tags' in selected_features %}checked{% endif %}>
+              <span>Structured Schema Markup</span>
             </label>
-            <label class="feature-item">
+            <label class="p-3 rounded border border-zinc-800 bg-zinc-950 flex items-center gap-2.5 cursor-pointer">
               <input type="checkbox" name="features" value="CMS / content management" {% if 'CMS / content management' in selected_features %}checked{% endif %}>
-              <span>CMS</span>
+              <span>Headless CMS Architecture</span>
             </label>
-            <label class="feature-item">
+            <label class="p-3 rounded border border-zinc-800 bg-zinc-950 flex items-center gap-2.5 cursor-pointer">
               <input type="checkbox" name="features" value="Lead capture forms" {% if 'Lead capture forms' in selected_features %}checked{% endif %}>
-              <span>Lead capture</span>
-            </label>
-          </div>
-        </fieldset>
-
-        <div class="mt-5 grid gap-5 md:grid-cols-2">
-          <div>
-            <label for="custom_features" class="field-label">Custom feature notes</label>
-            <textarea id="custom_features" name="custom_features" class="field-textarea" placeholder="Tell us about booking flows, blog structure, integrations, or advanced page requirements.">{{ request.form.get('custom_features', '') }}</textarea>
-          </div>
-
-          <div>
-            <label for="srs_document" class="field-label">Upload brief or assets</label>
-            <label class="upload-box" for="srs_document" aria-label="Upload brief or asset files">
-              <input id="srs_document" type="file" name="srs_document" accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.zip" aria-label="Upload SRS document or brand assets">
-              <span class="upload-box-content">
-                <span class="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-zinc-300">
-                  <i data-lucide="upload-cloud" class="h-5 w-5"></i>
-                </span>
-                <span class="block text-sm font-semibold text-zinc-200">Upload PDF, DOC, image, or ZIP</span>
-                <span class="mt-2 block text-[10px] uppercase tracking-[0.18em] text-zinc-400 mono">Optional</span>
-              </span>
+              <span>Lead Capture & Webhooks</span>
             </label>
           </div>
         </div>
 
-        <div class="mt-5">
-          <label for="brief" class="field-label">Detailed project scope</label>
-          <textarea id="brief" name="brief" class="field-textarea" placeholder="Describe the business goals, audiences, conversion paths, visual direction, and any constraints or references that should shape the build." required>{{ request.form.get('brief', '') }}</textarea>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 font-mono text-xs">
+          <div>
+            <label for="custom_features" class="block text-zinc-400 mb-1">Custom Architecture Notes</label>
+            <textarea
+              id="custom_features"
+              name="custom_features"
+              rows="4"
+              class="w-full p-3 rounded bg-zinc-950 border border-zinc-800 text-white font-sans text-xs focus:outline-none focus:border-zinc-500"
+              placeholder="Specify custom API routes, database schemas, or multi-tenant requirements..."
+            >{{ request.form.get('custom_features', '') }}</textarea>
+          </div>
+
+          <div>
+            <label for="srs_document" class="block text-zinc-400 mb-1">Attach SRS Document or Brief (Max 10 MB)</label>
+            <div class="border border-dashed border-zinc-700 bg-zinc-950 rounded p-6 text-center">
+              <input
+                id="srs_document"
+                type="file"
+                name="srs_document"
+                accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.zip"
+                class="form-control text-xs p-1"
+              >
+              <span class="text-[10px] text-zinc-500 block mt-2">Accepted formats: PDF, DOC, DOCX, ZIP, PNG, JPG</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="pt-2 font-mono text-xs">
+          <label for="brief" class="block text-zinc-400 mb-1">Master Scope of Work Narrative *</label>
+          <textarea
+            id="brief"
+            name="brief"
+            rows="5"
+            required
+            class="w-full p-3 rounded bg-zinc-950 border border-zinc-800 text-white font-sans text-xs focus:outline-none focus:border-zinc-500"
+            placeholder="Describe the engagement goals, target user flows, conversion funnels, and core deliverables shaping the sprint..."
+          >{{ request.form.get('brief', '') }}</textarea>
         </div>
       </section>
 
-      <div class="form-footer">
-        <button type="button" id="prevBtn" class="action-btn hidden">Back</button>
-        <div></div>
-        <button type="button" id="nextBtn" class="action-btn primary">Next: Brand details</button>
-        <button type="submit" id="submitBtn" class="action-btn primary hidden">Start project intake</button>
+      <!-- Stepper Navigation Buttons -->
+      <div class="flex justify-between items-center pt-6 border-t border-zinc-800 font-mono text-xs">
+        <button type="button" id="prevStepBtn" class="btn btn-secondary text-xs h-9 px-4 disabled:opacity-40 disabled:cursor-not-allowed" disabled>
+          ← Previous
+        </button>
+        <div class="flex items-center gap-3">
+          <button type="button" id="nextStepBtn" class="btn btn-primary text-xs h-9 px-5 font-semibold cursor-pointer">
+            Next →
+          </button>
+          <button type="submit" id="submitBtn" class="btn btn-primary text-xs h-9 px-6 font-semibold hidden cursor-pointer">
+            Submit Intake ⚡
+          </button>
+        </div>
       </div>
-    </form>
-  </div>
+    </form> 
+  </main>
 
+  <!-- Complete Multi-Step Controller Script -->
   <script>
-    (function () {
-      const form = document.getElementById('projectForm');
-      const steps = Array.from(document.querySelectorAll('.form-step'));
-      const indicators = Array.from(document.querySelectorAll('[data-step-indicator]'));
-      const progressTrack = document.getElementById('progressTrack');
-      const progressFill = document.getElementById('progressFill');
-      const progressText = document.getElementById('progressText');
-      const prevBtn = document.getElementById('prevBtn');
-      const nextBtn = document.getElementById('nextBtn');
-      const submitBtn = document.getElementById('submitBtn');
-      const packageSelect = document.getElementById('package');
-      const currencySelect = document.getElementById('currency');
-      const currencySymbols = { INR: '₹', USD: '$', EUR: '€', GBP: '£' };
-      let currentStep = 0;
+    document.addEventListener("DOMContentLoaded", function () {
+      var form = document.getElementById("projectForm");
+      var steps = Array.from(document.querySelectorAll(".step-section"));
+      var indicators = Array.from(document.querySelectorAll("[data-step-nav]"));
+      var progressFill = document.getElementById("progressFill");
+      var progressText = document.getElementById("progressText");
+      var progressBar = document.getElementById("progressBar");
+      var prevBtn = document.getElementById("prevStepBtn");
+      var nextBtn = document.getElementById("nextStepBtn");
+      var submitBtn = document.getElementById("submitBtn");
+      var packageSelect = document.getElementById("package");
+      var currencySelect = document.getElementById("currency");
+
+      var currencySymbols = { INR: "₹", USD: "$", EUR: "€", GBP: "£" };
+      var currentStep = 0;
 
       function updatePackagePrices() {
-        if (packageSelect.value === 'Starter Retainer' && currencySelect.value !== 'INR') {
-          currencySelect.value = 'INR';
+        if (!packageSelect || !currencySelect) return;
+        var selectedCurrency = currencySelect.value;
+
+        if (packageSelect.value === "Starter Retainer" && selectedCurrency !== "INR") {
+          currencySelect.value = "INR";
+          selectedCurrency = "INR";
         }
 
-        Array.from(packageSelect.options).forEach((option) => {
-          const price = option.dataset[currencySelect.value.toLowerCase()];
-          if (!price) {
-            option.textContent = 'Starter Retainer · ₹14,999/month (INR only)';
+        Array.from(packageSelect.options).forEach(function (option) {
+          if (option.value === "Starter Retainer") {
+            option.textContent = "Starter Retainer · ₹14,999/mo (INR only)";
             return;
           }
-          const formattedPrice = Number(price).toLocaleString(undefined, {
-            maximumFractionDigits: 0
-          });
-          option.textContent = `${option.value} · ${currencySymbols[currencySelect.value]}${formattedPrice}`;
+          var price = option.dataset[selectedCurrency.toLowerCase()];
+          if (price) {
+            var formattedPrice = Number(price).toLocaleString();
+            option.textContent = option.value + " · " + currencySymbols[selectedCurrency] + formattedPrice;
+          }
         });
       }
 
-      packageSelect.addEventListener('change', updatePackagePrices);
-      currencySelect.addEventListener('change', updatePackagePrices);
+      if (packageSelect) packageSelect.addEventListener("change", updatePackagePrices);
+      if (currencySelect) currencySelect.addEventListener("change", updatePackagePrices);
       updatePackagePrices();
 
-      function updateButtons() {
-        prevBtn.classList.toggle('hidden', currentStep === 0);
-        nextBtn.classList.toggle('hidden', currentStep === steps.length - 1);
-        submitBtn.classList.toggle('hidden', currentStep !== steps.length - 1);
+      function updateUI() {
+        // Toggle step containers
+        steps.forEach(function (step, index) {
+          step.classList.toggle("active", index === currentStep);
+        });
 
-        if (currentStep === 0) {
-          nextBtn.textContent = 'Next: Brand details';
-        } else if (currentStep === 1) {
-          nextBtn.textContent = 'Next: Scope & upload';
+        // Update button visibility & states
+        if (prevBtn) {
+          prevBtn.disabled = (currentStep === 0);
         }
-      }
 
-      function updateProgress() {
-        const progress = (currentStep / (steps.length - 1)) * 100;
-        const stepNumber = currentStep + 1;
-        progressFill.style.width = `${progress}%`;
-        progressText.textContent = `Step ${stepNumber} of ${steps.length}`;
-        progressTrack.setAttribute('aria-valuenow', String(stepNumber));
-        progressTrack.setAttribute('aria-valuetext', `Step ${stepNumber} of ${steps.length}`);
+        if (nextBtn && submitBtn) {
+          if (currentStep === steps.length - 1) {
+            nextBtn.classList.add("hidden");
+            submitBtn.classList.remove("hidden");
+          } else {
+            nextBtn.classList.remove("hidden");
+            submitBtn.classList.add("hidden");
+          }
+        }
 
-        indicators.forEach((indicator, index) => {
-          const isCurrent = index === currentStep;
-          const isComplete = index < currentStep;
-          indicator.classList.toggle('complete', isComplete);
-          indicator.setAttribute('aria-current', isCurrent ? 'step' : 'false');
+        // Update progress bar
+        var progress = ((currentStep + 1) / steps.length) * 100;
+        if (progressFill) progressFill.style.width = progress + "%";
+        if (progressText) progressText.textContent = "Gate " + (currentStep + 1) + " of " + steps.length;
+        if (progressBar) progressBar.setAttribute("aria-valuenow", String(currentStep + 1));
+
+        // Update top stepper indicators
+        indicators.forEach(function (indicator, index) {
+          var isCurrent = (index === currentStep);
+          indicator.setAttribute("aria-current", isCurrent ? "step" : "false");
+          if (isCurrent) {
+            indicator.className = "step-btn p-2 rounded border border-white bg-zinc-950 text-left transition";
+            var label = indicator.querySelector(".font-bold");
+            if (label) label.className = "text-xs font-bold text-white block truncate font-sans";
+          } else {
+            indicator.className = "step-btn p-2 rounded border border-zinc-800 bg-zinc-950 text-left transition";
+            var label2 = indicator.querySelector(".font-bold");
+            if (label2) label2.className = "text-xs font-bold text-zinc-400 block truncate font-sans";
+          }
         });
       }
 
       function validateCurrentStep() {
-        const currentFields = steps[currentStep].querySelectorAll('input, select, textarea');
+        var currentSection = steps[currentStep];
+        var fields = currentSection.querySelectorAll("input, select, textarea");
 
-        for (const field of currentFields) {
-          if (field.type === 'hidden' || field.disabled) continue;
-          if (field.matches('[type="checkbox"]')) continue;
+        for (var i = 0; i < fields.length; i++) {
+          var field = fields[i];
+          if (field.type === "hidden" || field.disabled || field.type === "checkbox") continue;
           if (!field.required && !field.value) continue;
 
-          if (!field.checkValidity()) {
+          if (!field.checkValidity() || (field.required && !field.value.trim())) {
             field.focus();
-            if (typeof field.reportValidity === 'function') {
-              field.reportValidity();
-            }
-            return false;
-          }
-
-          if (!field.value || !field.value.trim()) {
-            field.focus();
-            if (typeof field.reportValidity === 'function') {
+            if (typeof field.reportValidity === "function") {
               field.reportValidity();
             }
             return false;
           }
         }
-
         return true;
       }
 
-      function showStep(stepIndex, focusHeading = true) {
-        currentStep = Math.max(0, Math.min(stepIndex, steps.length - 1));
-
-        steps.forEach((step, index) => {
-          step.classList.toggle('active', index === currentStep);
-        });
-
-        updateProgress();
-        updateButtons();
-
-        if (focusHeading) {
-          const currentSection = steps[currentStep];
-          const heading = currentSection.querySelector('h2');
-          if (heading) {
-            heading.focus();
+      // Step button clicks
+      indicators.forEach(function (indicator) {
+        indicator.addEventListener("click", function () {
+          var target = Number(this.dataset.stepNav);
+          if (target < currentStep) {
+            currentStep = target;
+            updateUI();
+          } else if (target > currentStep && validateCurrentStep()) {
+            currentStep = target;
+            updateUI();
           }
-        }
+        });
+      });
+
+      // Previous button
+      if (prevBtn) {
+        prevBtn.addEventListener("click", function () {
+          if (currentStep > 0) {
+            currentStep--;
+            updateUI();
+          }
+        });
       }
 
-      indicators.forEach((indicator) => {
-        indicator.addEventListener('click', function () {
-          const targetStep = Number(this.dataset.stepIndicator);
-          if (targetStep < currentStep) {
-            showStep(targetStep);
-            return;
-          }
-
-          if (targetStep > currentStep + 1) {
-            return;
-          }
-
-          if (targetStep === currentStep) {
-            return;
-          }
-
-          if (validateCurrentStep()) {
-            showStep(targetStep);
+      // Next button
+      if (nextBtn) {
+        nextBtn.addEventListener("click", function () {
+          if (validateCurrentStep() && currentStep < steps.length - 1) {
+            currentStep++;
+            updateUI();
           }
         });
-      });
-
-      prevBtn.addEventListener('click', function () {
-        if (currentStep > 0) {
-          showStep(currentStep - 1);
-        }
-      });
-
-      nextBtn.addEventListener('click', function () {
-        if (!validateCurrentStep()) {
-          return;
-        }
-        if (currentStep < steps.length - 1) {
-          showStep(currentStep + 1);
-        }
-      });
-
-      form.addEventListener('submit', function (event) {
-        const briefField = form.querySelector('textarea[name="brief"]');
-        if (!briefField || !briefField.value.trim()) {
-          event.preventDefault();
-          briefField.focus();
-          if (typeof briefField.reportValidity === 'function') {
-            briefField.reportValidity();
-          }
-          return;
-        }
-
-        const requiredFields = Array.from(form.querySelectorAll('[required]')).filter((field) => {
-          return field.type !== 'hidden' && !field.disabled;
-        });
-
-        for (const field of requiredFields) {
-          if (!field.checkValidity() || !field.value || !String(field.value).trim()) {
-            event.preventDefault();
-            field.focus();
-            if (typeof field.reportValidity === 'function') {
-              field.reportValidity();
-            }
-            return;
-          }
-        }
-
-        if (!validateCurrentStep()) {
-          event.preventDefault();
-        }
-      });
-
-      if (window.lucide) {
-        lucide.createIcons();
       }
 
-      showStep(0, false);
-    }());
+      // Form submit validation
+      if (form) {
+        form.addEventListener("submit", function (e) {
+          if (!validateCurrentStep()) {
+            e.preventDefault();
+          }
+        });
+      }
+
+      updateUI();
+    });
   </script>
 </body>
 </html>

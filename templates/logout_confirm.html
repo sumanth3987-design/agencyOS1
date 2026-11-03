@@ -1,14 +1,64 @@
+<!-- Save this directly into: templates/logout_confirm.html -->
 <!DOCTYPE html>
-<html lang="en" class="dark"><head><meta charset="UTF-8"><title>Sign Out — AgencyOS</title><script src="https://cdn.tailwindcss.com"></script></head>
-<body class="bg-zinc-950 text-zinc-100 font-sans min-h-screen flex items-center justify-center p-6">
-  <div class="max-w-sm w-full p-8 rounded-2xl bg-[#121215] border border-zinc-800 text-center shadow-2xl">
-    <div class="h-10 w-10 mx-auto rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 flex items-center justify-center font-bold mb-4">AO</div>
-    <h2 class="text-xl font-bold text-white mb-2">Sign Out of AgencyOS?</h2>
-    <p class="text-xs text-zinc-400 mb-6">Are you sure you want to end your current active session?</p>
-    <form method="POST" action="{{ url_for('logout') }}" class="space-y-3">
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sign Out — AgencyOS</title>
+
+  <!-- Typography: Plus Jakarta Sans & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="/static/style.css">
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace'],
+          },
+          colors: {
+            zinc: {
+              950: '#09090b',
+              900: '#101014',
+              850: '#18181b',
+              800: '#27272a',
+              700: '#3f3f46',
+            }
+          }
+        }
+      }
+    }
+  </script>
+</head>
+<body class="bg-zinc-950 text-zinc-100 min-h-screen flex items-center justify-center p-6 selection:bg-zinc-100 selection:text-zinc-950 antialiased font-sans text-center">
+
+  <div class="w-full max-w-sm border border-zinc-800 bg-zinc-900 rounded-lg p-8 shadow-2xl space-y-4">
+    <div class="h-10 w-10 mx-auto rounded border border-zinc-700 bg-zinc-950 text-white font-mono font-bold text-xs flex items-center justify-center">
+      AO
+    </div>
+
+    <h1 class="text-xl font-extrabold text-white tracking-tight">End Current Session?</h1>
+    <p class="text-xs font-mono text-zinc-400">
+      Are you sure you want to sign out? Unsaved milestone notes or brief inputs will be cleared from local storage.
+    </p>
+
+    <form method="POST" action="{{ url_for('auth.logout') }}" class="pt-2 space-y-2 font-mono text-xs">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <button type="submit" class="w-full py-2.5 rounded-xl bg-rose-500 hover:bg-rose-600 text-white font-bold text-xs transition">Confirm Sign Out</button>
-      <a href="{{ url_for('dashboard') }}" class="block w-full py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-300 font-bold text-xs transition">Cancel</a>
+      <button type="submit" class="btn btn-primary w-full h-10 font-semibold cursor-pointer">
+        Confirm Sign Out
+      </button>
+      <a href="{{ url_for('customer.dashboard') }}" class="btn btn-secondary w-full h-10 flex items-center justify-center">
+        Cancel &amp; Keep Session Active
+      </a>
     </form>
   </div>
-</body></html>
+
+</body>
+</html>

@@ -1,5 +1,7 @@
+"""Automated Payment and Deliverable Review Reminders for AgencyOS."""
+
 import logging
-from datetime import timedelta, timezone
+from datetime import datetime, timedelta, timezone
 from urllib.parse import urlsplit
 
 from flask import current_app
@@ -14,25 +16,25 @@ PAYMENT_REMINDER_AFTER = timedelta(hours=24)
 REVIEW_REMINDER_AFTER = timedelta(hours=48)
 
 
-def _naive_ist(value):
+def _naive_ist(value: datetime) -> datetime:
     if value.tzinfo is not None:
         return value.astimezone(IST).replace(tzinfo=None)
     return value
 
 
-def _naive_utc(value):
+def _naive_utc(value: datetime) -> datetime:
     if value.tzinfo is not None:
         return value.astimezone(timezone.utc).replace(tzinfo=None)
     return value
 
 
-def _is_due(timestamp, now, delay, normalize):
+def _is_due(timestamp: datetime | None, now: datetime, delay: timedelta, normalize) -> bool:
     if timestamp is None:
         return False
     return normalize(timestamp) <= normalize(now) - delay
 
 
-def _workspace_url(endpoint, **values):
+def _workspace_url(endpoint: str, **values) -> str | None:
     base_url = current_app.config.get("APP_BASE_URL", "").strip()
     if not base_url:
         logger.error("APP_BASE_URL must be configured before sending reminders.")
@@ -49,7 +51,7 @@ def _workspace_url(endpoint, **values):
     return f"{base_url.rstrip('/')}{path}"
 
 
-def _email_delivery_available():
+def _email_delivery_available() -> bool:
     if current_app.config.get("MAIL_SUPPRESS_SEND", False):
         logger.error("Email sending is suppressed; reminder will remain pending.")
         return False
@@ -58,13 +60,11 @@ def _email_delivery_available():
         return True
     if backend == "console" and current_app.config.get("TESTING", False):
         return True
-    logger.error(
-        "Reminder email requires an active SMTP backend outside tests."
-    )
+    logger.error("Reminder email requires an active SMTP backend outside tests.")
     return False
 
 
-def send_payment_reminder(project_id, *, force=False, now=None):
+def send_payment_reminder(project_id: int, *, force: bool = False, now: datetime | None = None) -> bool:
     project = db.session.get(Project, project_id)
     if project is None or project.status != "Payment Pending":
         return False
@@ -107,14 +107,16 @@ def send_payment_reminder(project_id, *, force=False, now=None):
     return True
 
 
-def send_review_reminder(project_id, *, force=False, now=None):
+def send_review_reminder(project_id: int, *, force: bool = False, now: datetime | None = None) -> bool:
     project = db.session.get(Project, project_id)
     if project is None or project.status != "Submitted":
         return False
 
-    delivery = ProjectDelivery.query.filter_by(
-        project_id=project.id
-    ).order_by(ProjectDelivery.submission_number.desc()).first()
+    delivery = (
+        ProjectDelivery.query.filter_by(project_id=project.id)
+        .order_by(ProjectDelivery.submission_number.desc())
+        .first()
+    )
     if (
         delivery is None
         or delivery.status != "Submitted"
@@ -133,9 +135,7 @@ def send_review_reminder(project_id, *, force=False, now=None):
         logger.warning("Cannot send review reminder for project #%s: no client email.", project.id)
         return False
 
-    workspace_link = _workspace_url(
-        "customer.project_details", project_id=project.id
-    )
+    workspace_link = _workspace_url("customer.project_details", project_id=project.id)
     if workspace_link is None or not _email_delivery_available():
         return False
 
@@ -160,7 +160,7 @@ def send_review_reminder(project_id, *, force=False, now=None):
     return True
 
 
-def run_due_reminders(now=None):
+def run_due_reminders(now: datetime | None = None) -> dict[str, int]:
     """Send each eligible reminder once; suitable for a scheduled CLI run."""
     sent_at = now or get_ist_now()
     payment_cutoff = _naive_utc(sent_at) - PAYMENT_REMINDER_AFTER

@@ -1,18 +1,20 @@
+<!-- Save this directly into: templates/index.html -->
 <!DOCTYPE html>
-<html lang="en" class="dark scroll-smooth">
+<html lang="en" class="dark">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AgencyOS — High-Performance Websites & SEO Growth for Indian Brands</title>
-  <meta name="description" content="We build high-converting websites and scalable SEO engines for Indian businesses. Transparent milestone billing, live client dashboard, and verified ROI.">
-  
-  <!-- Plus Jakarta Sans & JetBrains Mono Fonts -->
+  <title>AgencyOS — The Operating System for High-Ticket Engineering & Design</title>
+  <meta name="description" content="Milestone-escrowed web development and SEO execution. Zero scope creep, transparent 45/55 specialist allocations, and live client ledger.">
+
+  <!-- Typography: Plus Jakarta Sans & JetBrains Mono -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  
-  <!-- Tailwind CSS -->
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
   <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="/static/style.css">
+
   <script>
     tailwind.config = {
       darkMode: 'class',
@@ -25,420 +27,354 @@
           colors: {
             zinc: {
               950: '#09090b',
-              900: '#121215',
-              850: '#18181d',
+              900: '#101014',
+              850: '#18181b',
               800: '#27272a',
+              700: '#3f3f46',
             }
           }
         }
       }
     }
   </script>
-  
-  <style>
-    body { background-color: #09090b; }
-    .glass-card {
-      background: rgba(18, 18, 21, 0.7);
-      backdrop-filter: blur(12px);
-      border: 1px solid rgba(255, 255, 255, 0.07);
-    }
-    .glass-card:hover {
-      border-color: rgba(255, 255, 255, 0.15);
-    }
-  </style>
 </head>
-<body class="bg-zinc-950 text-zinc-100 font-sans antialiased selection:bg-indigo-500 selection:text-white">
+<body class="bg-zinc-950 text-zinc-100 selection:bg-zinc-100 selection:text-zinc-950 antialiased font-sans">
 
-  <!-- ==================== TOP SCARCITY / ANNOUNCEMENT BAR ==================== -->
-  <div class="border-b border-zinc-800/80 bg-zinc-900/60 py-2.5 px-4 text-center text-xs font-medium text-zinc-300">
-    <span class="inline-flex items-center gap-1.5">
-      <span class="h-2 w-2 rounded-full bg-emerald-400 animate-pulse"></span>
-      <span class="text-zinc-400">Current Client Capacity:</span>
-      <span class="font-bold text-white">Only 2 Onboarding Slots Remaining</span>
-      <span class="text-zinc-500 hidden sm:inline">• Locked 72-Hour Proposal Window</span>
-    </span>
+  <!-- TOP SYSTEM LEDGER BAR -->
+  <div class="border-b border-zinc-800 bg-zinc-900 py-2 px-6 text-xs text-zinc-400 font-mono">
+    <div class="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2">
+      <div class="flex items-center gap-2">
+        <span class="inline-block h-2 w-2 rounded-full bg-emerald-400"></span>
+        <span>SYSTEM OPERATIONAL: ALL MILESTONE GATES CLEAR</span>
+        <span class="text-zinc-600">|</span>
+        <span class="text-zinc-300">SAC 998311 Compliant Escrow</span>
+      </div>
+      <div class="text-zinc-400 text-[11px]">
+        Q4 Intake: 2 Enterprise Cohort Slots Open
+      </div>
+    </div>
   </div>
 
-  <!-- ==================== NAVIGATION BAR ==================== -->
-  <header class="sticky top-0 z-50 border-b border-zinc-800/60 bg-zinc-950/80 backdrop-blur-md">
-    <div class="max-w-7xl mx-auto px-6 h-18 flex items-center justify-between">
-      <!-- Logo -->
-      <a href="/" class="flex items-center gap-3 group">
-        <div class="h-9 w-9 rounded-xl bg-linear-to-tr from-indigo-600 via-indigo-500 to-violet-500 flex items-center justify-center font-bold text-white shadow-lg shadow-indigo-500/20 group-hover:scale-105 transition-transform">
+  <!-- NAVIGATION HEADER -->
+  <header class="sticky top-0 z-50 border-b border-zinc-800 bg-zinc-950/95 backdrop-blur-xs">
+    <div class="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
+      <a href="/" class="flex items-center gap-2.5">
+        <div class="h-7 w-7 rounded bg-white text-zinc-950 font-bold font-mono text-sm flex items-center justify-center">
           A
         </div>
-        <span class="font-extrabold text-lg tracking-tight text-white">AgencyOS<span class="text-indigo-400">.</span></span>
+        <span class="font-extrabold text-base tracking-tight text-white font-mono uppercase">AgencyOS</span>
       </a>
 
-      <!-- Middle Nav -->
-      <nav class="hidden md:flex items-center gap-8 text-sm font-medium text-zinc-400">
-        <a href="#services" class="hover:text-white transition">Services</a>
-        <a href="#proof" class="hover:text-white transition">Live Proof</a>
-        <a href="#pricing" class="hover:text-white transition">Packages</a>
-        <a href="#audit" class="hover:text-white transition">Free AI Audit</a>
+      <nav class="hidden md:flex items-center gap-7 text-xs font-semibold uppercase tracking-wider text-zinc-400 font-mono">
+        <a href="#operating-model" class="hover:text-white transition">Model</a>
+        <a href="#ledger" class="hover:text-white transition">Live Ledger</a>
+        <a href="#packages" class="hover:text-white transition">Engagements</a>
+        <a href="#audit" class="hover:text-white transition">AI Audit</a>
       </nav>
 
-      <!-- Right CTAs -->
       <div class="flex items-center gap-3">
-        <a href="/login" class="px-4 py-2 rounded-lg text-xs font-semibold text-zinc-300 hover:text-white transition">
-          Client Portal →
+        <a href="/login" class="btn btn-secondary text-xs h-9">
+          Client Portal
         </a>
-        <a href="#audit" class="px-4 py-2 rounded-lg bg-white text-zinc-950 hover:bg-zinc-200 font-bold text-xs shadow transition">
-          Book Kickoff
+        <a href="#audit" class="btn btn-primary text-xs h-9 font-semibold">
+          Commission Project
         </a>
       </div>
     </div>
   </header>
 
   <main>
-    <!-- ==================== HERO SECTION ==================== -->
-    <section class="relative pt-24 pb-20 px-6 max-w-7xl mx-auto text-center">
-      <!-- Ambient Glow Behind Hero -->
-      <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-150 h-75 bg-indigo-600/15 blur-[120px] rounded-full pointer-events-none"></div>
-
-      <!-- Social Proof Badge -->
-      <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full border border-zinc-800 bg-zinc-900/80 text-xs text-zinc-300 mb-8 shadow-inner">
-        <span class="flex -space-x-1.5">
-          <span class="inline-block h-4 w-4 rounded-full bg-emerald-500 ring-2 ring-zinc-900"></span>
-          <span class="inline-block h-4 w-4 rounded-full bg-indigo-500 ring-2 ring-zinc-900"></span>
-          <span class="inline-block h-4 w-4 rounded-full bg-violet-500 ring-2 ring-zinc-900"></span>
-        </span>
-        <span>Trusted by <strong>24+ Indian Brands</strong></span>
-        <span class="text-zinc-600">|</span>
-        <span class="text-emerald-400 font-semibold font-mono">₹1.8 Cr+ Generated</span>
-      </div>
-
-      <!-- Hero Headline -->
-      <h1 class="text-4xl sm:text-6xl lg:text-7xl font-extrabold tracking-tight text-white max-w-4xl mx-auto leading-[1.1]">
-        High-Converting Websites.<br>
-        <span class="text-transparent bg-clip-text bg-linear-to-r from-zinc-100 via-zinc-400 to-zinc-500">
-          Rankings That Actually Drive Sales.
-        </span>
-      </h1>
-
-      <p class="mt-6 text-base sm:text-lg text-zinc-400 max-w-2xl mx-auto leading-relaxed">
-        We eliminate messy WhatsApp chaos and unaccountable retainers. Milestone-driven delivery, strict 2-revision guarantees, and a live client dashboard tracking every rupee.
-      </p>
-
-      <!-- Primary CTAs -->
-      <div class="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
-        <a href="#audit" class="w-full sm:w-auto px-7 py-3.5 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-bold text-sm shadow-xl transition flex items-center justify-center gap-2">
-          <span>Get Free 60-Sec AI Audit</span>
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3"/></svg>
-        </a>
-        <a href="https://wa.me/91XXXXXXXXXX?text=Hi%20AgencyOS,%20I'd%20like%20to%20discuss%20a%20website%20project" target="_blank" class="w-full sm:w-auto px-7 py-3.5 rounded-xl border border-zinc-800 bg-zinc-900 hover:bg-zinc-850 text-zinc-200 font-semibold text-sm transition flex items-center justify-center gap-2">
-          <svg class="w-4 h-4 text-emerald-400" fill="currentColor" viewBox="0 0 24 24"><path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.582 2.128 2.182-.573c.978.58 1.911.928 3.145.929 3.178 0 5.767-2.587 5.768-5.766.001-3.187-2.575-5.771-5.764-5.771zm3.392 8.244c-.144.405-.837.774-1.17.824-.299.045-.677.063-1.092-.069-.252-.08-.575-.187-.988-.365-1.739-.751-2.874-2.502-2.961-2.617-.087-.116-.708-.94-.708-1.793s.448-1.273.607-1.446c.159-.173.346-.217.462-.217l.332.007c.106.005.249-.04.39.298.144.347.491 1.2.534 1.287.043.087.072.188.014.304-.058.116-.087.188-.173.289l-.26.304c-.087.086-.177.18-.076.354.101.174.449.741.964 1.201.662.591 1.221.774 1.394.86.174.086.275.072.376-.044.101-.116.433-.506.549-.68.116-.173.231-.144.39-.086s1.011.477 1.184.564.289.13.332.202c.044.073.044.42-.1.825z"/></svg>
-          <span>Chat on WhatsApp</span>
-        </a>
-      </div>
-
-      <!-- Trust Badges Bar -->
-      <div class="mt-14 pt-8 border-t border-zinc-900 flex flex-wrap items-center justify-center gap-8 text-xs font-semibold text-zinc-500 uppercase tracking-widest">
-        <span class="flex items-center gap-2">
-          <svg class="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-          100% GST Compliant
-        </span>
-        <span class="flex items-center gap-2">
-          <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
-          Instant UPI & Razorpay
-        </span>
-        <span class="flex items-center gap-2">
-          <svg class="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
-          Zero-Password Magic Links
-        </span>
-        <span class="flex items-center gap-2">
-          <svg class="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
-          SAC 998311 Verified
-        </span>
-      </div>
-    </section>
-
-    <!-- ==================== LIVE DASHBOARD PREVIEW (Corbel Aesthetic) ==================== -->
-    <section id="proof" class="px-6 max-w-6xl mx-auto pb-24">
-      <div class="rounded-2xl border border-zinc-800 bg-[#0e0e12] p-4 sm:p-6 shadow-2xl relative overflow-hidden">
-        <!-- Floating Header Pill inside Dashboard -->
-        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between pb-6 border-b border-zinc-800 gap-4">
-          <div class="flex items-center gap-3">
-            <span class="h-3 w-3 rounded-full bg-emerald-500"></span>
-            <span class="font-bold text-sm tracking-tight text-white">Client Portal: Retail Brand India Pvt Ltd</span>
-            <span class="px-2 py-0.5 rounded text-[10px] font-mono bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">LIVE</span>
+    <!-- ABOVE THE FOLD HERO -->
+    <section class="border-b border-zinc-800 py-24 px-6">
+      <div class="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
+        
+        <!-- Left: Value Proposition Narrative -->
+        <div class="lg:col-span-7">
+          <div class="inline-flex items-center gap-2 px-2.5 py-1 rounded bg-zinc-900 border border-zinc-800 text-[11px] font-mono text-zinc-400 uppercase tracking-widest mb-6">
+            <span class="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>
+            Enterprise Milestone Engine
           </div>
-          <!-- Segmented Tab Nav -->
-          <div class="bg-zinc-900 border border-zinc-800 p-1 rounded-full flex text-xs font-semibold">
-            <span class="px-3 py-1 rounded-full bg-white text-zinc-950 font-bold">Overview</span>
-            <span class="px-3 py-1 text-zinc-400">Milestones</span>
-            <span class="px-3 py-1 text-zinc-400">SEO Analytics</span>
-            <span class="px-3 py-1 text-zinc-400">Invoices</span>
+
+          <h1 class="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-white leading-[1.08]">
+            High-Performance Digital Architecture.<br>
+            <span class="text-zinc-500">Enforced by Milestone Escrow.</span>
+          </h1>
+
+          <!-- The 4 Core Questions Explicitly Answered -->
+          <div class="mt-6 space-y-3 max-w-2xl text-zinc-400 text-sm leading-relaxed">
+            <p>
+              <strong class="text-zinc-200">What it is:</strong> A rigorous engineering & design operating system executing high-ticket web platforms and search ranking engines.
+            </p>
+            <p>
+              <strong class="text-zinc-200">Who it is for:</strong> Mid-market firms and funded startups seeking enterprise-grade delivery without agency friction.
+            </p>
+            <p>
+              <strong class="text-zinc-200">Why it matters:</strong> 50/25/25 sequential milestone gates prevent scope creep, guarantee 2 revision iterations per phase, and bind specialist payouts (45/55) to verified deliverable sign-offs.
+            </p>
+          </div>
+
+          <!-- CTAs -->
+          <div class="mt-8 flex flex-col sm:flex-row items-stretch sm:items-center gap-3 font-mono text-xs">
+            <a href="#audit" class="btn btn-primary h-11 px-6 font-semibold">
+              Commission an Engagement →
+            </a>
+            <a href="/login" class="btn btn-secondary h-11 px-6 font-semibold">
+              Inspect Live Workspace
+            </a>
+          </div>
+
+          <div class="mt-8 grid grid-cols-3 gap-4 border-t border-zinc-800 pt-6 text-xs text-zinc-500 font-mono">
+            <div>
+              <span class="text-white font-bold block text-sm">₹1.8 Cr+</span>
+              <span>Delivered Scope</span>
+            </div>
+            <div>
+              <span class="text-white font-bold block text-sm">14 Days</span>
+              <span>Standard Sprint Handover</span>
+            </div>
+            <div>
+              <span class="text-white font-bold block text-sm">100% Tax</span>
+              <span>GST & LUT Compliant</span>
+            </div>
           </div>
         </div>
 
-        <!-- 3 KPI Cards -->
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
-          <div class="glass-card rounded-xl p-5">
-            <span class="text-xs font-medium text-zinc-400 uppercase tracking-wider">Project Invoiced (Advance Paid)</span>
-            <div class="mt-3 flex items-baseline justify-between">
-              <span class="font-mono text-2xl font-bold text-white">₹48,000</span>
-              <span class="text-xs font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">100% On-Track</span>
+        <!-- Right: Real-Time Interactive Project Ledger Simulator -->
+        <div id="ledger" class="lg:col-span-5">
+          <div class="border border-zinc-800 bg-zinc-900 rounded-lg overflow-hidden shadow-2xl font-mono text-xs">
+            <div class="border-b border-zinc-800 px-4 py-3 bg-zinc-950 flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <span class="h-2 w-2 rounded-full bg-emerald-400"></span>
+                <span class="text-zinc-300 font-bold">PRJ-2026-LIVE-WORKBENCH</span>
+              </div>
+              <span class="badge badge-emerald">ESCROW HELD</span>
             </div>
-            <div class="mt-4 h-1.5 w-full bg-zinc-800 rounded-full overflow-hidden">
-              <div class="h-full bg-indigo-500 rounded-full" style="width: 50%;"></div>
-            </div>
-            <span class="mt-2 block text-[11px] text-zinc-500">Milestone 2 of 3: Development In-Progress</span>
-          </div>
 
-          <div class="glass-card rounded-xl p-5">
-            <span class="text-xs font-medium text-zinc-400 uppercase tracking-wider">Organic Inquiries Captured</span>
-            <div class="mt-3 flex items-baseline justify-between">
-              <span class="font-mono text-2xl font-bold text-white">1,248</span>
-              <span class="text-xs font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">+34.2% MoM</span>
-            </div>
-            <div class="mt-4 text-[11px] text-zinc-400 flex items-center justify-between">
-              <span>Google Maps Local Pack:</span>
-              <strong class="text-zinc-200">Rank #1</strong>
-            </div>
-          </div>
+            <!-- Ledger Details -->
+            <div class="p-5 space-y-4">
+              <div class="flex justify-between items-center pb-3 border-b border-zinc-800">
+                <span class="text-zinc-500 uppercase">Gross Project Value</span>
+                <span class="text-white font-bold text-sm">₹48,000.00</span>
+              </div>
 
-          <div class="glass-card rounded-xl p-5">
-            <span class="text-xs font-medium text-zinc-400 uppercase tracking-wider">Complimentary Revisions</span>
-            <div class="mt-3 flex items-baseline justify-between">
-              <span class="font-mono text-2xl font-bold text-amber-400">1 of 2 Left</span>
-              <span class="text-xs font-mono text-zinc-400 bg-zinc-800 px-2 py-0.5 rounded">Scope Locked</span>
+              <!-- Milestone Breakdown -->
+              <div class="space-y-2.5">
+                <div class="flex justify-between items-center text-zinc-300">
+                  <span>M1: Discovery & Architecture (50%)</span>
+                  <span class="text-emerald-400 font-bold">CLEARED ₹24,000</span>
+                </div>
+                <div class="w-full bg-zinc-950 h-1.5 rounded-full overflow-hidden border border-zinc-800">
+                  <div class="bg-emerald-400 h-full w-full"></div>
+                </div>
+
+                <div class="flex justify-between items-center text-zinc-300 pt-2">
+                  <span>M2: Full Stack & Gateway Rails (25%)</span>
+                  <span class="text-amber-400 font-bold">IN REVIEW ₹12,000</span>
+                </div>
+                <div class="w-full bg-zinc-950 h-1.5 rounded-full overflow-hidden border border-zinc-800">
+                  <div class="bg-amber-400 h-full w-2/3"></div>
+                </div>
+
+                <div class="flex justify-between items-center text-zinc-500 pt-2">
+                  <span>M3: Production DNS Handover (25%)</span>
+                  <span>PENDING ₹12,000</span>
+                </div>
+                <div class="w-full bg-zinc-950 h-1.5 rounded-full overflow-hidden border border-zinc-800">
+                  <div class="bg-zinc-800 h-full w-0"></div>
+                </div>
+              </div>
+
+              <!-- Statutory Split Metadata -->
+              <div class="mt-4 p-3 bg-zinc-950 rounded border border-zinc-800 space-y-1.5 text-[11px] text-zinc-400">
+                <div class="flex justify-between">
+                  <span>Specialist Allocation (45%):</span>
+                  <span class="text-zinc-200">₹21,600.00</span>
+                </div>
+                <div class="flex justify-between">
+                  <span>Agency Retained Reserve:</span>
+                  <span class="text-zinc-200">₹26,400.00</span>
+                </div>
+                <div class="flex justify-between">
+                  <span>Complimentary Revisions:</span>
+                  <span class="text-emerald-400">1 Remaining of 2</span>
+                </div>
+              </div>
             </div>
-            <span class="mt-4 block text-[11px] text-zinc-500">Zero scope creep. Deliverables ship on-time.</span>
           </div>
         </div>
 
-        <!-- Mini Kanban View Preview -->
-        <div class="mt-6 pt-6 border-t border-zinc-800 grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs">
-          <div class="rounded-lg bg-zinc-900/60 border border-zinc-800/80 p-3">
-            <span class="font-semibold text-zinc-400 uppercase text-[10px]">1. Scope Discovery</span>
-            <p class="font-bold text-zinc-200 mt-1">Brief & Architecture</p>
-            <span class="mt-2 inline-block px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 text-[10px] font-mono">Approved ✅</span>
-          </div>
-          <div class="rounded-lg bg-zinc-900/60 border border-zinc-800/80 p-3">
-            <span class="font-semibold text-zinc-400 uppercase text-[10px]">2. Figma UI/UX</span>
-            <p class="font-bold text-zinc-200 mt-1">Homepage & Catalog</p>
-            <span class="mt-2 inline-block px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 text-[10px] font-mono">Approved ✅</span>
-          </div>
-          <div class="rounded-lg bg-indigo-950/20 border border-indigo-500/30 p-3">
-            <span class="font-semibold text-indigo-400 uppercase text-[10px]">3. Development</span>
-            <p class="font-bold text-white mt-1">Flask & Razorpay Rails</p>
-            <span class="mt-2 inline-block px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 text-[10px] font-mono">In Progress ⚡</span>
-          </div>
-          <div class="rounded-lg bg-zinc-900/60 border border-zinc-800/80 p-3 opacity-60">
-            <span class="font-semibold text-zinc-400 uppercase text-[10px]">4. Final Handover</span>
-            <p class="font-bold text-zinc-200 mt-1">DNS & Production Deploy</p>
-            <span class="mt-2 inline-block px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400 text-[10px] font-mono">Pending Balance</span>
-          </div>
-        </div>
       </div>
     </section>
 
-    <!-- ==================== THE REASON CLIENTS CHOOSE US (Proof & Metrics) ==================== -->
-    <section class="py-20 border-t border-zinc-900 px-6 max-w-7xl mx-auto">
-      <div class="text-center max-w-3xl mx-auto">
-        <h2 class="text-xs font-mono font-bold uppercase tracking-widest text-indigo-400">Why Boutique Indian Businesses Switch</h2>
-        <p class="mt-3 text-3xl sm:text-4xl font-extrabold tracking-tight text-white">We Solve The 3 Biggest Agency Headaches</p>
-      </div>
-
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mt-14">
-        <div class="glass-card rounded-2xl p-7">
-          <div class="h-10 w-10 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400 mb-6 font-mono font-bold">01</div>
-          <h3 class="text-lg font-bold text-white">No Endlessly Delayed Deadlines</h3>
-          <p class="mt-3 text-sm text-zinc-400 leading-relaxed">
-            Other agencies take 3 months for a 15-day website. We work in sequential milestone gates. Next phase does not start until the prior phase deliverable is approved.
-          </p>
+    <!-- OPERATING MODEL (THE 3 STRICT GATES) -->
+    <section id="operating-model" class="border-b border-zinc-800 py-20 px-6">
+      <div class="max-w-7xl mx-auto">
+        <div class="max-w-2xl mb-12">
+          <span class="font-mono text-xs uppercase tracking-widest text-zinc-500 block mb-2">Protocol Architecture</span>
+          <h2 class="text-3xl font-extrabold text-white tracking-tight">Structured Milestone Gates. Zero Chaos.</h2>
+          <p class="mt-3 text-zinc-400">Every deliverable requires formal sign-off. Work progresses sequentially through cryptographically logged gates.</p>
         </div>
 
-        <div class="glass-card rounded-2xl p-7">
-          <div class="h-10 w-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 mb-6 font-mono font-bold">02</div>
-          <h3 class="text-lg font-bold text-white">No Endless Revision Drama</h3>
-          <p class="mt-3 text-sm text-zinc-400 leading-relaxed">
-            Every milestone comes with 2 structured revision cycles. You know exactly what is included, preventing surprise bills and awkward scope creep discussions.
-          </p>
-        </div>
+        <div class="grid grid-cols-1 md:grid-cols-3 border-t border-l border-zinc-800">
+          <div class="p-8 border-b border-r border-zinc-800 bg-zinc-950">
+            <span class="font-mono text-xs text-zinc-500 block mb-4">GATE 01</span>
+            <h3 class="text-lg font-bold text-white mb-2">50% Advance Commitment</h3>
+            <p class="text-sm text-zinc-400 leading-relaxed">
+              Escrow reservation unlocks dedicated Figma UI/UX architecture and schema modeling. Scope is signed and locked into the repository.
+            </p>
+          </div>
 
-        <div class="glass-card rounded-2xl p-7">
-          <div class="h-10 w-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 mb-6 font-mono font-bold">03</div>
-          <h3 class="text-lg font-bold text-white">No Black-Box Retainers</h3>
-          <p class="mt-3 text-sm text-zinc-400 leading-relaxed">
-            Tired of paying ₹25k/month for SEO and receiving an unreadable 40-page PDF report? Our live dashboard shows exact search impression gains and leads tracked daily.
-          </p>
+          <div class="p-8 border-b border-r border-zinc-800 bg-zinc-950">
+            <span class="font-mono text-xs text-zinc-500 block mb-4">GATE 02</span>
+            <h3 class="text-lg font-bold text-white mb-2">25% Functional Staging</h3>
+            <p class="text-sm text-zinc-400 leading-relaxed">
+              Live code preview running on staging domains. 2 structured review cycles are executed before final approval authorization.
+            </p>
+          </div>
+
+          <div class="p-8 border-b border-r border-zinc-800 bg-zinc-950">
+            <span class="font-mono text-xs text-zinc-500 block mb-4">GATE 03</span>
+            <h3 class="text-lg font-bold text-white mb-2">25% Production Deployment</h3>
+            <p class="text-sm text-zinc-400 leading-relaxed">
+              Final balance release activates DNS cutover, SSL provisioning, SAC-compliant tax invoices, and full repository ownership handover.
+            </p>
+          </div>
         </div>
       </div>
     </section>
 
-    <!-- ==================== PACKAGES & PRICING (Anchoring + Decoy) ==================== -->
-    <section id="pricing" class="py-24 border-t border-zinc-900 px-6 max-w-7xl mx-auto">
-      <div class="text-center max-w-3xl mx-auto">
-        <h2 class="text-xs font-mono font-bold uppercase tracking-widest text-indigo-400">Predictable Fixed-Fee Investments</h2>
-        <p class="mt-3 text-3xl sm:text-4xl font-extrabold tracking-tight text-white">Zero Hidden Costs. 100% GST Tax Invoiced.</p>
-      </div>
-
-      <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 mt-16 items-center">
-        <!-- Tier 1: Maintenance Lite -->
-        <div class="glass-card rounded-2xl p-8 border border-zinc-800">
-          <span class="text-xs font-mono text-zinc-400 uppercase tracking-widest">Maintenance & Uptime</span>
-          <h3 class="text-xl font-bold text-white mt-1">Starter Retainer</h3>
-          <div class="mt-4 flex items-baseline gap-2">
-            <span class="font-mono text-4xl font-extrabold text-white">₹14,999</span>
-            <span class="text-xs text-zinc-400">/month + GST</span>
-          </div>
-          <p class="mt-3 text-xs text-zinc-400">For businesses with existing sites needing uptime security and speed optimization.</p>
-          <ul class="mt-6 space-y-3 text-xs text-zinc-300">
-            <li class="flex items-center gap-2">✔ Weekly Cloud Backups & SSL</li>
-            <li class="flex items-center gap-2">✔ Speed & Server Optimization</li>
-            <li class="flex items-center gap-2">✔ 4 Minor Content Updates / mo</li>
-            <li class="flex items-center gap-2 text-zinc-500">✖ No Active SEO Rank Engine</li>
-          </ul>
-          <a href="#audit" class="mt-8 block text-center py-2.5 rounded-xl border border-zinc-700 bg-zinc-800 hover:bg-zinc-700 text-xs font-bold text-white transition">Select Starter</a>
+    <!-- PACKAGES & FIXED CONTRACTS -->
+    <section id="packages" class="border-b border-zinc-800 py-20 px-6">
+      <div class="max-w-7xl mx-auto">
+        <div class="max-w-2xl mb-12">
+          <span class="font-mono text-xs uppercase tracking-widest text-zinc-500 block mb-2">Pre-Configured SOWs</span>
+          <h2 class="text-3xl font-extrabold text-white tracking-tight">Transparent Engagements. No Retainer Padding.</h2>
+          <p class="mt-3 text-zinc-400">All prices in INR with international multi-currency settlement supported (USD, EUR, GBP).</p>
         </div>
 
-        <!-- Tier 2: The Core Growth Package (Target Highlight) -->
-        <div class="rounded-2xl p-8 border-2 border-indigo-500 bg-zinc-900/90 shadow-2xl shadow-indigo-500/10 relative">
-          <div class="absolute -top-3.5 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-linear-to-r from-indigo-500 to-violet-500 text-[10px] font-mono font-extrabold uppercase text-white shadow-md">
-            Most Chosen by Indian Brands
+        <div class="grid grid-cols-1 lg:grid-cols-3 border-t border-l border-zinc-800">
+          <!-- Starter Retainer -->
+          <div class="p-8 border-b border-r border-zinc-800 bg-zinc-950 flex flex-col justify-between">
+            <div>
+              <span class="font-mono text-xs text-zinc-500 block mb-1">RECURRING UPTIME</span>
+              <h3 class="text-xl font-bold text-white mb-2">Starter Retainer</h3>
+              <div class="my-4 font-mono">
+                <span class="text-3xl font-bold text-white">₹14,999</span>
+                <span class="text-zinc-500 text-xs">/month</span>
+              </div>
+              <p class="text-xs text-zinc-400 mb-6">Automated security, server tuning, and recurring database snapshots.</p>
+              <ul class="space-y-2.5 text-xs text-zinc-300 font-mono mb-8">
+                <li>• Automated SSL & Weekly DB Snapshots</li>
+                <li>• Vitals & Server Optimization</li>
+                <li>• 4 Monthly Content Adjustments</li>
+              </ul>
+            </div>
+            <a href="#audit" class="btn btn-secondary w-full text-xs">Configure Retainer</a>
           </div>
-          <span class="text-xs font-mono text-indigo-400 uppercase tracking-widest">Website + SEO Engine</span>
-          <h3 class="text-2xl font-bold text-white mt-1">Milestone Growth</h3>
-          <div class="mt-4 flex items-baseline gap-2">
-            <span class="font-mono text-4xl font-extrabold text-white">₹48,000</span>
-            <span class="text-xs text-zinc-400">One-Time (50/25/25 Split)</span>
-          </div>
-          <p class="mt-3 text-xs text-zinc-300">Complete custom website development and local SEO foundations deployed in 14 days.</p>
-          <ul class="mt-6 space-y-3 text-xs text-zinc-200">
-            <li class="flex items-center gap-2 font-semibold">✔ Bespoke Modern UI/UX (Figma to Code)</li>
-            <li class="flex items-center gap-2">✔ Structured 3-Milestone Approval Gates</li>
-            <li class="flex items-center gap-2">✔ 2-Revision Guarantee per Deliverable</li>
-            <li class="flex items-center gap-2">✔ Local SEO & Google Maps Optimization</li>
-            <li class="flex items-center gap-2">✔ Live Corbel-Style Client Portal Access</li>
-            <li class="flex items-center gap-2">✔ Native Razorpay & Instant UPI Invoicing</li>
-          </ul>
-          <a href="#audit" class="mt-8 block text-center py-3 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 text-xs font-bold shadow-lg transition">Lock Your Project Slot →</a>
-        </div>
 
-        <!-- Tier 3: Full Custom Transformation (The Anchor) -->
-        <div class="glass-card rounded-2xl p-8 border border-zinc-800">
-          <span class="text-xs font-mono text-zinc-400 uppercase tracking-widest">Enterprise Digital Overhaul</span>
-          <h3 class="text-xl font-bold text-white mt-1">Market Dominance</h3>
-          <div class="mt-4 flex items-baseline gap-2">
-            <span class="font-mono text-4xl font-extrabold text-white">₹1,25,000</span>
-            <span class="text-xs text-zinc-400">+ GST</span>
+          <!-- Milestone Growth (Primary Target) -->
+          <div class="p-8 border-b border-r border-zinc-800 bg-zinc-900 flex flex-col justify-between relative">
+            <div class="absolute -top-3 right-4 badge badge-emerald font-mono">FEATURED SOW</div>
+            <div>
+              <span class="font-mono text-xs text-emerald-400 block mb-1">COMPLETE BUILD</span>
+              <h3 class="text-xl font-bold text-white mb-2">Milestone Growth</h3>
+              <div class="my-4 font-mono">
+                <span class="text-3xl font-bold text-white">₹48,000</span>
+                <span class="text-zinc-400 text-xs">50/25/25 Gated</span>
+              </div>
+              <p class="text-xs text-zinc-300 mb-6">End-to-end bespoke web platform development + organic search architecture.</p>
+              <ul class="space-y-2.5 text-xs text-zinc-200 font-mono mb-8">
+                <li>• Bespoke UI/UX Design (Figma)</li>
+                <li>• Python/Flask & Razorpay Checkout Rails</li>
+                <li>• 3 Chronological Milestone Approval Gates</li>
+                <li>• 2 Revision Rounds Per Gate (Locked Scope)</li>
+                <li>• Live Client Dashboard & Financial Ledger</li>
+              </ul>
+            </div>
+            <a href="#audit" class="btn btn-primary w-full text-xs">Initiate M1 Escrow →</a>
           </div>
-          <p class="mt-3 text-xs text-zinc-400">Full bespoke platform build, automated CRM workflows, and 6-month SEO retainer included.</p>
-          <ul class="mt-6 space-y-3 text-xs text-zinc-300">
-            <li class="flex items-center gap-2">✔ Custom Web Application / SaaS UI</li>
-            <li class="flex items-center gap-2">✔ 6-Month Intensive SEO Growth Retainer</li>
-            <li class="flex items-center gap-2">✔ Dedicated WhatsApp Support Lead</li>
-            <li class="flex items-center gap-2">✔ Competitor Radar Real-Time Tracker</li>
-          </ul>
-          <a href="#audit" class="mt-8 block text-center py-2.5 rounded-xl border border-zinc-700 bg-zinc-800 hover:bg-zinc-700 text-xs font-bold text-white transition">Inquire Enterprise</a>
+
+          <!-- Enterprise Overhaul -->
+          <div class="p-8 border-b border-r border-zinc-800 bg-zinc-950 flex flex-col justify-between">
+            <div>
+              <span class="font-mono text-xs text-zinc-500 block mb-1">BESPOKE ARCHITECTURE</span>
+              <h3 class="text-xl font-bold text-white mb-2">Enterprise Dominance</h3>
+              <div class="my-4 font-mono">
+                <span class="text-3xl font-bold text-white">₹1,25,000</span>
+                <span class="text-zinc-500 text-xs">SOW Based</span>
+              </div>
+              <p class="text-xs text-zinc-400 mb-6">Multi-tenant platforms, custom API integrations, and 6-month growth retainer.</p>
+              <ul class="space-y-2.5 text-xs text-zinc-300 font-mono mb-8">
+                <li>• Full Application & Database Architecture</li>
+                <li>• Custom Integration Pipelines</li>
+                <li>• Dedicated Lead Specialist & SLA</li>
+                <li>• 6-Month Organic Ranking Engine</li>
+              </ul>
+            </div>
+            <a href="#audit" class="btn btn-secondary w-full text-xs">Inquire Enterprise Scope</a>
+          </div>
         </div>
       </div>
     </section>
 
-    <!-- ==================== FREE AI AUDIT (Reciprocity Hook) ==================== -->
+    <!-- INTAKE & SYSTEM AUDIT -->
     <section id="audit" class="py-20 px-6 max-w-4xl mx-auto">
-      <div class="glass-card rounded-3xl p-8 sm:p-12 border border-zinc-800 text-center relative overflow-hidden">
-        <div class="absolute -right-20 -bottom-20 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none"></div>
-
-        <span class="px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 font-mono text-xs font-bold uppercase tracking-wider">
-          Instant Free Audit • Zero Obligation
+      <div class="border border-zinc-800 bg-zinc-900 rounded-lg p-8 sm:p-12 text-center relative overflow-hidden">
+        <span class="badge badge-indigo mb-4 uppercase tracking-wider font-mono">
+          Instant Free Scope Audit • Zero Obligation
         </span>
 
-        <h2 class="text-3xl sm:text-4xl font-extrabold text-white mt-4 tracking-tight">
+        <h2 class="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">
           Find Out Why Your Competitor Ranks Above You
         </h2>
         <p class="mt-3 text-sm text-zinc-400 max-w-xl mx-auto">
-          Enter your website URL or Google Maps business name. We will run an instant Gemini-powered audit and send 3 critical fixes directly to your WhatsApp.
+          Enter your website URL or Google Maps business name. We will run an instant architectural audit and send 3 critical fixes directly to your WhatsApp.
         </p>
 
         {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
-          <div class="mb-6 space-y-2">
+          <div class="mt-6 space-y-2">
             {% for category, message in messages %}
-              <div class="rounded-xl px-4 py-3 text-sm font-medium {{ 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/20' if category == 'success' else 'bg-red-500/10 text-red-300 border border-red-500/20' }}">
-                {{ message }}
+              <div class="system-alert {{ 'system-alert-success' if category == 'success' else 'system-alert-error' }}">
+                <span class="font-mono text-xs">{{ message }}</span>
               </div>
             {% endfor %}
           </div>
         {% endif %}
         {% endwith %}
+
         <!-- Audit Form -->
         <form action="/api/free-audit" method="POST" class="mt-8 max-w-lg mx-auto flex flex-col sm:flex-row gap-3">
-          <input type="text" name="business_url" required placeholder="yourbusiness.com (or shop name)" class="flex-1 px-4 py-3 rounded-xl bg-zinc-950 border border-zinc-800 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-indigo-500 transition">
-          <button type="submit" class="px-6 py-3 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-bold text-sm shadow transition flex items-center justify-center gap-2">
+          <input type="text" name="business_url" required placeholder="yourbusiness.com (or shop name)" class="form-control flex-1 text-xs">
+          <button type="submit" class="btn btn-primary text-xs h-11 px-6 font-semibold cursor-pointer">
             Send Audit ⚡
           </button>
         </form>
 
-        <p class="mt-4 text-[11px] text-zinc-500">
-          Protected under India's DPDP Act. We never spam or sell your contact information.
+        <p class="mt-4 text-[11px] font-mono text-zinc-500">
+          Protected under India's DPDP Act 2023. We never spam or sell your contact information.
         </p>
       </div>
     </section>
   </main>
 
-  <section class="py-24 px-6 max-w-4xl mx-auto border-t border-zinc-900">
-    <div class="text-center mb-12">
-      <h2 class="text-3xl font-extrabold text-white tracking-tight">Common Questions</h2>
-      <p class="text-zinc-400 mt-2 text-sm">Everything you need to know about our milestone billing and delivery process.</p>
-    </div>
-
-    <div class="space-y-4">
-      <details class="group p-6 rounded-2xl bg-[#121215] border border-zinc-800 cursor-pointer transition hover:border-zinc-700">
-        <summary class="text-sm font-bold text-white flex items-center justify-between outline-none">
-          What happens after I pay the 50% advance?
-          <i data-lucide="chevron-down" class="w-4 h-4 text-zinc-500 group-open:rotate-180 transition-transform"></i>
-        </summary>
-        <p class="text-xs text-zinc-400 mt-4 leading-relaxed">
-          Your project workspace unlocks immediately. Our specialists are assigned and begin wireframing and UI discovery. You can track progress and chat directly with your team in the portal.
-        </p>
-      </details>
-
-      <details class="group p-6 rounded-2xl bg-[#121215] border border-zinc-800 cursor-pointer transition hover:border-zinc-700">
-        <summary class="text-sm font-bold text-white flex items-center justify-between outline-none">
-          How does the 2-Revision Guarantee work?
-          <i data-lucide="chevron-down" class="w-4 h-4 text-zinc-500 group-open:rotate-180 transition-transform"></i>
-        </summary>
-        <p class="text-xs text-zinc-400 mt-4 leading-relaxed">
-          Each milestone comes with 2 complimentary review rounds. Requests that change the signed scope are handled as a separate add-on.
-        </p>
-      </details>
-
-      <details class="group p-6 rounded-2xl bg-[#121215] border border-zinc-800 cursor-pointer transition hover:border-zinc-700">
-        <summary class="text-sm font-bold text-white flex items-center justify-between outline-none">
-          Do I get an official GST Invoice?
-          <i data-lucide="chevron-down" class="w-4 h-4 text-zinc-500 group-open:rotate-180 transition-transform"></i>
-        </summary>
-        <p class="text-xs text-zinc-400 mt-4 leading-relaxed">
-          An invoice for your project is available through the portal. Applicable taxes are shown at checkout.
-        </p>
-      </details>
-    </div>
-  </section>
-
-  <!-- ==================== FOOTER (Razorpay & DPDP Compliant) ==================== -->
-  <footer class="border-t border-zinc-900 bg-zinc-950 py-12 px-6 text-xs text-zinc-500">
+  <!-- FOOTER -->
+  <footer class="border-t border-zinc-800 bg-zinc-950 py-12 px-6 text-xs text-zinc-500 font-mono">
     <div class="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6">
-      <!-- Legal Branding -->
       <div>
-        <p class="text-zinc-300 font-bold text-sm">AgencyOS Digital Solutions</p>
-        <p class="mt-1">Bangalore & Hyderabad, India • GSTIN: Registered Entity</p>
-        <p class="mt-1">Official SAC Code: 998311 (Information Technology & Consulting)</p>
+        <p class="text-zinc-300 font-bold">AgencyOS Enterprise Architecture</p>
+        <p class="mt-1">Bangalore & Hyderabad • GST & Export LUT Registered • SAC 998311</p>
       </div>
 
-      <!-- Legal Policy Links (Required by Razorpay) -->
-      <div class="flex flex-wrap gap-6 text-zinc-400">
-        <a href="/privacy" class="hover:text-white transition">Privacy Policy (DPDP Act)</a>
-        <a href="/terms" class="hover:text-white transition">Terms & Conditions</a>
-        <a href="/refund-policy" class="hover:text-white transition">Refund & Cancellation</a>
-        <a href="/contact" class="hover:text-white transition">Contact Us</a>
+      <div class="flex flex-wrap gap-5 text-zinc-400">
+        <a href="/privacy" class="hover:text-white transition">Privacy Policy</a>
+        <a href="/terms" class="hover:text-white transition">Terms of Service</a>
+        <a href="/refund-policy" class="hover:text-white transition">Refund & Milestone Policy</a>
+        <a href="/contact" class="hover:text-white transition">Contact & Verification</a>
       </div>
 
-      <!-- Copyright -->
       <div>
-        <p>© 2026 AgencyOS. All rights reserved.</p>
+        <p>© 2026 AgencyOS. All Rights Reserved.</p>
       </div>
     </div>
   </footer>

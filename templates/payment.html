@@ -1,179 +1,307 @@
 <!-- Save this directly into: templates/payment.html -->
 <!DOCTYPE html>
-<html lang="en" class="dark scroll-smooth">
+<html lang="en" class="dark">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Authorize Milestone Payment — {{ agency_settings.agency_name }}</title>
-  
+  <title>Escrow Checkout — {{ agency_settings.agency_name }}</title>
+
+  <!-- Typography: Plus Jakarta Sans & JetBrains Mono -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://unpkg.com/lucide@latest"></script>
   <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
-  
-  <style>
-    body { background-color: #09090b; font-family: 'Plus Jakarta Sans', sans-serif; color: #f4f4f5; }
-    .checkout-card { background: #121215; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 20px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7); }
-    #payBtn { background-color: var(--agency-primary); color: var(--agency-on-primary); }
-    #payBtn:hover:not(:disabled) { filter: brightness(.92); }
-    #payBtn:focus-visible { outline: 2px solid #ffffff; outline-offset: 3px; box-shadow: 0 0 0 5px var(--agency-primary); }
-    #payBtn:disabled { opacity: .65; cursor: wait; }
-    @media (max-width: 480px) {
-      .checkout-card { padding: 1rem !important; border-radius: 16px; }
-      .checkout-card > .flex.items-center.justify-between.pb-6 { align-items: flex-start; flex-wrap: wrap; gap: .75rem; }
-      .checkout-card > .flex.items-center.justify-between.pb-6 > div { flex-basis: 100%; }
-      .checkout-card [aria-label="Agency identity"] { margin-bottom: .25rem; }
-      .checkout-card .py-6 .p-4 .flex.justify-between { align-items: flex-start; gap: .75rem; }
-      .checkout-card .py-6 .p-4 .flex.justify-between > :last-child { text-align: right; }
-      .checkout-card .py-6 .p-4 .items-baseline { align-items: flex-start; gap: .5rem; }
-      .checkout-card .py-6 .p-4 .text-2xl { font-size: 1.25rem; }
-      .checkout-card .py-6 > div:nth-child(3) { align-items: flex-start; }
-      .checkout-card > .mt-6.text-center { flex-wrap: wrap; gap: .35rem .65rem; }
-    }
-  </style>
-</head>
-<body class="bg-zinc-950 text-zinc-100 min-h-screen flex items-center justify-center p-6 selection:bg-[var(--agency-primary)] selection:text-[var(--agency-on-primary)]" style="--agency-primary: {{ agency_settings.primary_color }}; --agency-on-primary: {{ agency_settings.primary_contrast }};">
-
-  <div class="checkout-card max-w-lg w-full p-8 relative overflow-hidden">
-    <!-- Ambient Accent Line -->
-    <div class="absolute inset-x-0 -top-px h-px" style="background: linear-gradient(to right, transparent, var(--agency-primary), transparent); opacity: .6;"></div>
-
-    <!-- Header -->
-    <div class="flex items-center justify-between pb-6 border-b border-zinc-800">
-      <div class="min-w-0 flex-1">{% include "includes/agency_brand.html" %}</div>
-
-      <span class="px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-mono font-bold">
-        SAC 998311
-      </span>
-    </div>
-
-    <!-- Error Alert Box -->
-    <div id="paymentErrorBox" class="hidden mt-4 p-3.5 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-300 text-xs items-center justify-between">
-      <span id="paymentErrorMsg">Payment could not be processed.</span>
-      <button type="button" onclick="this.parentElement.classList.add('hidden'); this.parentElement.classList.remove('flex')" class="text-zinc-400 hover:text-white text-sm">×</button>
-    </div>
-
-    <!-- Milestone Context & Financial Breakdown -->
-    <div class="py-6 space-y-4">
-      <div>
-        {% if addon %}
-        <span class="text-xs font-mono uppercase text-amber-400 font-bold block mb-1">Change Request Invoice {{ addon.invoice.invoice_number }}</span>
-        <h2 class="text-xl font-bold text-white tracking-tight">{{ addon.title }}</h2>
-        <p class="text-xs text-zinc-400 mt-1">Additional scope for project #{{ project.id }}</p>
-        {% else %}
-        <span class="text-xs font-mono uppercase text-[var(--agency-primary)] font-bold block mb-1">Milestone Invoice #{{ project.id }}</span>
-        <h2 class="text-xl font-bold text-white tracking-tight">{{ project.service }}</h2>
-        <p class="text-xs text-zinc-400 mt-1">Package: <strong class="text-zinc-200">{{ project.package }}</strong> • 50% Kickoff Advance Deposit</p>
-        {% endif %}
-      </div>
-
-      <!-- Financial GST Breakdown Card -->
-      {% set gross_val = (amount / 100)|round(2) if amount else (payment.amount if payment and payment.amount else 48000) %}
-      {% if addon %}
-      {% set tax_val = addon.invoice.tax_amount %}
-      {% set base_val = gross_val - (tax_val|float) %}
-      {% else %}
-      {% set base_val = (gross_val / 1.18)|round(2) %}
-      {% set tax_val = (gross_val - base_val)|round(2) %}
-      {% endif %}
-      
-      <div class="p-4 rounded-xl bg-zinc-950 border border-zinc-800 space-y-2 text-xs">
-        <div class="flex justify-between text-zinc-400">
-          <span>Base Milestone Value:</span>
-          <span class="font-mono text-zinc-200">{{ base_val|format_currency(currency) }}</span>
-        </div>
-        <div class="flex justify-between text-zinc-400">
-          <span>{% if currency == 'INR' %}Statutory GST (18% SAC 998311):{% else %}Tax estimate (18%):{% endif %}</span>
-          <span class="font-mono text-zinc-200">{{ tax_val|format_currency(currency) }}</span>
-        </div>
-        <div class="pt-2 border-t border-zinc-800 flex justify-between items-baseline">
-          <span class="font-bold text-white text-sm">Total Payable ({{ currency }}):</span>
-          <span class="font-mono text-2xl font-extrabold text-white">{{ gross_val|format_currency(currency) }}</span>
-        </div>
-      </div>
-
-      <!-- Supported Rails -->
-      <div class="p-3.5 rounded-xl bg-zinc-900/60 border border-zinc-800/80 text-[11px] text-zinc-400 flex items-center gap-2">
-        <i data-lucide="zap" class="w-4 h-4 text-emerald-400 shrink-0"></i>
-        <span>{% if currency == 'INR' %}Supports Instant UPI (GPay, PhonePe, Paytm, BHIM), Netbanking, Cards &amp; RuPay{% else %}Supports international cards and payment methods available for your region{% endif %}</span>
-      </div>
-    </div>
-
-    <!-- Primary Action: Real Razorpay Checkout Launcher -->
-    <button type="button" id="payBtn" onclick="launchRazorpayCheckout()" class="w-full py-3.5 rounded-xl font-bold text-sm shadow-xl transition flex items-center justify-center gap-2 cursor-pointer">
-      <i data-lucide="shield-check" class="w-4 h-4"></i>
-      <span id="btnText">{% if addon %}Authorize Add-On with Razorpay{% else %}Pay Deposit with Razorpay{% endif %} ({{ gross_val|format_currency(currency) }})</span>
-    </button>
-
-    <!-- Return Link -->
-    <div class="mt-4 text-center">
-      <a href="{{ url_for('customer.project_details', project_id=project.id) }}" class="text-xs text-zinc-500 hover:text-zinc-300 font-mono hover:underline">
-        ← Cancel and return to project workspace
-      </a>
-    </div>
-
-    <!-- Trust Footer -->
-    <div class="mt-6 pt-4 border-t border-zinc-800/80 text-center text-[10px] font-mono text-zinc-500 flex items-center justify-center gap-4">
-      <span>🔒 256-Bit SSL</span>
-      <span>•</span>
-      <span>⚡ Instant Milestone Unlock</span>
-      <span>•</span>
-      <span>📜 100% Tax Invoiced</span>
-    </div>
-  </div>
+  <link rel="stylesheet" href="/static/style.css">
 
   <script>
-    if (window.lucide) { lucide.createIcons(); }
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace'],
+          },
+          colors: {
+            zinc: {
+              950: '#09090b',
+              900: '#101014',
+              850: '#18181b',
+              800: '#27272a',
+            }
+          }
+        }
+      }
+    }
+  </script>
+</head>
+<body class="bg-zinc-950 text-zinc-100 min-h-screen flex flex-col justify-between selection:bg-zinc-100 selection:text-zinc-950 antialiased" style="--agency-primary: {{ agency_settings.primary_color }}; --agency-on-primary: {{ agency_settings.primary_contrast }};">
+
+  <!-- Minimal Checkout Header -->
+  <header class="border-b border-zinc-800 bg-zinc-950 py-4 px-6">
+    <div class="max-w-4xl mx-auto flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        {% include "includes/agency_brand.html" %}
+      </div>
+      <div class="flex items-center gap-2 font-mono text-xs text-zinc-400 uppercase tracking-widest">
+        <span class="inline-block h-2 w-2 rounded-full bg-emerald-400"></span>
+        <span>256-Bit Escrow Vault</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Checkout Interface -->
+  <main class="flex-1 flex items-center justify-center p-6">
+    <div class="w-full max-w-lg border border-zinc-800 bg-zinc-900 rounded-lg overflow-hidden shadow-2xl">
+
+      <!-- Context Header -->
+      <div class="p-6 border-b border-zinc-800 bg-zinc-950 font-mono text-xs">
+        <div class="flex items-center justify-between mb-3">
+          {% if addon %}
+          <span class="badge badge-amber">SCOPE ADD-ON ORDER</span>
+          <span class="text-zinc-400">#{{ addon.invoice.invoice_number }}</span>
+          {% else %}
+          <span class="badge badge-indigo">MILESTONE {{ milestone_num }} OF 3</span>
+          <span class="text-zinc-400">PROJECT #{{ project.id }}</span>
+          {% endif %}
+        </div>
+
+        <h1 class="text-xl font-bold text-white tracking-tight font-sans">
+          {% if addon %}{{ addon.title }}{% else %}{{ project.service }}{% endif %}
+        </h1>
+        <p class="text-zinc-400 mt-1">
+          {% if addon %}
+            Authorized scope addition for project #{{ project.id }}.
+          {% else %}
+            Package: <span class="text-zinc-200 font-semibold">{{ project.package }}</span> • 
+            {% if milestone_num == 1 %}50% Advance Commitment Deposit{% else %}25% Milestone Release{% endif %}
+          {% endif %}
+        </p>
+      </div>
+
+      <!-- Error Notification Slot -->
+      <div id="paymentErrorBox" class="hidden m-6 mb-0 p-3.5 rounded border border-red-500/30 bg-red-500/10 text-red-300 text-xs flex items-center justify-between font-mono">
+        <span id="paymentErrorMsg">Transaction failed.</span>
+        <button type="button" onclick="this.parentElement.classList.add('hidden'); this.parentElement.classList.remove('flex')" class="text-zinc-400 hover:text-white ml-2 text-sm">✕</button>
+      </div>
+
+      <!-- Financial Calculation Grid -->
+      <div class="p-6 space-y-4">
+        {% set gross_val = (amount / 100)|round(2) if amount else (payment.amount if payment and payment.amount else 48000) %}
+        {% if addon %}
+          {% set tax_val = addon.invoice.tax_amount %}
+          {% set base_val = gross_val - (tax_val|float) %}
+        {% else %}
+          {% if currency == 'INR' %}
+            {% set base_val = (gross_val / 1.18)|round(2) %}
+            {% set tax_val = (gross_val - base_val)|round(2) %}
+          {% else %}
+            {% set base_val = gross_val %}
+            {% set tax_val = 0.00 %}
+          {% endif %}
+        {% endif %}
+
+        <div class="border border-zinc-800 rounded bg-zinc-950 p-4 space-y-2.5 text-xs font-mono">
+          <div class="flex justify-between items-center text-zinc-400">
+            <span>Milestone Allocation Base:</span>
+            <span class="text-zinc-200">{{ base_val|format_currency(currency) }}</span>
+          </div>
+
+          <div class="flex justify-between items-center text-zinc-400">
+            <span>
+              {% if currency == 'INR' %}
+                Statutory GST (18% SAC 998311):
+              {% else %}
+                Export Service Tax (LUT Zero-Rated):
+              {% endif %}
+            </span>
+            <span class="text-zinc-200">{{ tax_val|format_currency(currency) }}</span>
+          </div>
+
+          <div class="border-t border-zinc-800 pt-3 flex justify-between items-baseline">
+            <span class="font-sans font-bold text-white text-sm uppercase tracking-wide">Total Authorized ({{ currency }}):</span>
+            <span class="text-2xl font-bold text-white">{{ gross_val|format_currency(currency) }}</span>
+          </div>
+        </div>
+
+        <!-- Payment Rails Info -->
+        <div class="border border-zinc-800 bg-zinc-950/60 p-3 rounded text-[11px] font-mono text-zinc-400 flex items-center justify-between">
+          <span class="text-zinc-300">RAILS:</span>
+          <span>
+            {% if currency == 'INR' %}
+              Instant UPI (GPay, PhonePe, Paytm), RuPay, Netbanking & Cards
+            {% else %}
+              International Credit/Debit Cards & Multi-Currency Clearing
+            {% endif %}
+          </span>
+        </div>
+
+        <!-- Primary Action Trigger -->
+        <button
+          type="button"
+          id="payBtn"
+          data-project-id="{{ project.id }}"
+          data-addon-id="{{ addon.id if addon else '' }}"
+          data-milestone-num="{{ milestone_num if milestone_num else 1 }}"
+          data-currency="{{ currency }}"
+          data-csrf="{{ csrf_token() }}"
+          data-agency-name="{{ agency_settings.agency_name }}"
+          data-logo-url="{{ agency_settings.logo_url or '' }}"
+          data-primary-color="{{ agency_settings.primary_color or '#09090b' }}"
+          data-description="{% if addon %}{{ addon.title }}{% else %}Milestone {{ milestone_num }} for Project #{{ project.id }}{% endif %}"
+          data-gross-formatted="{{ gross_val|format_currency(currency) }}"
+          data-return-url="{{ url_for('customer.project_details', project_id=project.id) }}"
+          class="btn btn-primary w-full h-12 text-sm font-bold tracking-wide cursor-pointer font-mono"
+        >
+          <span id="btnText">
+            Pay Milestone {{ milestone_num if milestone_num else 1 }} of 3 ({{ gross_val|format_currency(currency) }}) →
+          </span>
+        </button>
+
+        <!-- Direct Development Sandbox Clearance Form (Guarantees Instant Redirect in Development) -->
+        {% if is_test_mode %}
+        <div class="p-4 rounded border border-indigo-500/30 bg-indigo-950/20 text-xs font-mono space-y-2 text-center">
+          <span class="badge badge-indigo">DEVELOPMENT MODE CLEARANCE</span>
+          <p class="text-zinc-400 font-sans text-[11px]">
+            Testing without live merchant keys. Click below to verify escrow and advance immediately to the project workspace.
+          </p>
+          <form method="POST" action="/payment/simulate-test-payment/{{ project.id }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-secondary w-full h-10 text-xs font-bold text-emerald-400 hover:text-white cursor-pointer">
+              ⚡ Instant Escrow Clearance & Redirect →
+            </button>
+          </form>
+        </div>
+        {% endif %}
+
+        <!-- Return Link -->
+        <div class="text-center pt-2">
+          <a href="{{ url_for('customer.project_details', project_id=project.id) }}" class="text-xs font-mono text-zinc-500 hover:text-zinc-300 hover:underline">
+            ← Cancel and Return to Project Workspace
+          </a>
+        </div>
+      </div>
+
+      <!-- Trust Ledger Bar -->
+      <div class="border-t border-zinc-800 p-4 bg-zinc-950 flex flex-wrap items-center justify-center gap-4 text-[11px] font-mono text-zinc-500">
+        <span>🔒 SAC 998311 VERIFIED</span>
+        <span>•</span>
+        <span>⚡ INSTANT MILESTONE UNLOCK</span>
+        <span>•</span>
+        <span>📜 COMPLIANT TAX RECEIPT</span>
+      </div>
+
+    </div>
+  </main>
+
+  <!-- Checkout Footer -->
+  <footer class="border-t border-zinc-800 bg-zinc-950 py-4 px-6 text-center text-xs font-mono text-zinc-500">
+    {{ agency_settings.agency_name }} • Escrow Node IST • Automated Statutory Billing
+  </footer>
+
+  <script>
+    document.addEventListener("DOMContentLoaded", function () {
+      var btn = document.getElementById("payBtn");
+      if (!btn) return;
+      btn.addEventListener("click", launchRazorpayCheckout);
+    });
 
     function showError(msg) {
-      const box = document.getElementById('paymentErrorBox');
-      const text = document.getElementById('paymentErrorMsg');
+      var box = document.getElementById("paymentErrorBox");
+      var text = document.getElementById("paymentErrorMsg");
+      if (!box || !text) return;
       text.textContent = msg;
-      box.classList.add('flex');
-      box.classList.remove('hidden');
+      box.classList.add("flex");
+      box.classList.remove("hidden");
     }
 
     async function launchRazorpayCheckout() {
-      const btn = document.getElementById('payBtn');
-      const btnText = document.getElementById('btnText');
+      var btn = document.getElementById("payBtn");
+      var btnText = document.getElementById("btnText");
+      if (!btn || !btnText) return;
+
+      var ds = btn.dataset;
+      var projectId = ds.projectId;
+      var addonId = ds.addonId;
+      var milestoneNum = ds.milestoneNum;
+      var currency = ds.currency || "INR";
+      var csrfToken = ds.csrf;
+      var agencyName = ds.agencyName;
+      var logoUrl = ds.logoUrl;
+      var primaryColor = ds.primaryColor;
+      var description = ds.description;
+      var grossFormatted = ds.grossFormatted;
+      var returnUrl = ds.returnUrl;
+
       btn.disabled = true;
-      btnText.textContent = "Connecting to Razorpay...";
+      btnText.textContent = "Connecting to Gateway...";
 
       try {
-        // 1. Create order on backend
-        const orderRes = await fetch("/payment/create-order/{{ project.id }}", {
+        var payload = {};
+        if (addonId) {
+          payload.addon_id = parseInt(addonId, 10);
+        } else {
+          payload.milestone = parseInt(milestoneNum, 10);
+        }
+
+        var orderRes = await fetch("/payment/create-order/" + encodeURIComponent(projectId), {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "X-CSRFToken": "{{ csrf_token() }}"
+            "X-CSRFToken": csrfToken
           },
-          body: JSON.stringify({% if addon %}{ addon_id: {{ addon.id }} }{% else %}{}{% endif %})
+          body: JSON.stringify(payload)
         });
 
-        const orderData = await orderRes.json();
+        var orderData = await orderRes.json();
         if (!orderRes.ok || !orderData.success) {
-          throw new Error(orderData.message || "Failed to initiate payment order.");
+          throw new Error(orderData.message || "Failed to initialize gateway order.");
         }
 
-        // 2. Configure Razorpay modal options
-        const options = {
+        // Automatic development sandbox fallback
+        if (orderData.order_id && orderData.order_id.startsWith("order_sim_")) {
+          btnText.textContent = "Simulating test verification...";
+          var verifyRes = await fetch("/payment/verify", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-CSRFToken": csrfToken
+            },
+            body: JSON.stringify({
+              razorpay_order_id: orderData.order_id,
+              razorpay_payment_id: "pay_sim_" + Date.now(),
+              razorpay_signature: "simulated_test_signature"
+            })
+          });
+
+          var verifyData = await verifyRes.json();
+          if (verifyRes.ok && verifyData.success) {
+            window.location.href = returnUrl;
+            return;
+          } else {
+            throw new Error(verifyData.message || "Simulation failed.");
+          }
+        }
+
+        // Real Gateway Checkout Modal
+        var options = {
           key: orderData.key_id,
           amount: orderData.amount,
-          currency: orderData.currency || "INR",
-          name: {{ agency_settings.agency_name|tojson }},
-          image: {{ agency_settings.logo_url|tojson }},
-          description: {% if addon %}{{ addon.title|tojson }}{% else %}"Advance Deposit for Project #{{ project.id }}"{% endif %},
+          currency: orderData.currency || currency,
+          name: agencyName,
+          image: logoUrl,
+          description: description,
           order_id: orderData.order_id,
           handler: async function (response) {
-            btnText.textContent = "Verifying payment with bank...";
+            btnText.textContent = "Verifying cryptographic ledger...";
             try {
-              // 3. Verify payment signature with backend
-              const verifyRes = await fetch("/payment/verify", {
+              var verifyRes = await fetch("/payment/verify", {
                 method: "POST",
                 headers: {
                   "Content-Type": "application/json",
-                  "X-CSRFToken": "{{ csrf_token() }}"
+                  "X-CSRFToken": csrfToken
                 },
                 body: JSON.stringify({
                   razorpay_order_id: response.razorpay_order_id,
@@ -182,10 +310,9 @@
                 })
               });
 
-              const verifyData = await verifyRes.json();
+              var verifyData = await verifyRes.json();
               if (verifyRes.ok && verifyData.success) {
-                // Success: Return to the updated project workspace.
-                window.location.href = "{{ url_for('customer.project_details', project_id=project.id) }}";
+                window.location.href = returnUrl;
               } else {
                 throw new Error(verifyData.message || "Payment verification failed.");
               }
@@ -198,17 +325,21 @@
           modal: {
             ondismiss: function () {
               btn.disabled = false;
-              btnText.textContent = "{% if addon %}Authorize Add-On{% else %}Pay Deposit{% endif %} with Razorpay ({{ gross_val|format_currency(currency) }})";
+              btnText.textContent = "Pay Milestone " + milestoneNum + " of 3 (" + grossFormatted + ") →";
             }
           },
-          theme: { color: {{ agency_settings.primary_color|tojson }} }
+          theme: { color: primaryColor }
         };
 
-        const rzp = new Razorpay(options);
-        rzp.open();
+        if (window.Razorpay) {
+          var rzp = new window.Razorpay(options);
+          rzp.open();
+        } else {
+          throw new Error("Payment gateway SDK not loaded.");
+        }
       } catch (err) {
         btn.disabled = false;
-        btnText.textContent = "{% if addon %}Authorize Add-On{% else %}Pay Deposit{% endif %} with Razorpay ({{ gross_val|format_currency(currency) }})";
+        btnText.textContent = "Pay Milestone " + milestoneNum + " of 3 (" + grossFormatted + ") →";
         showError(err.message);
       }
     }

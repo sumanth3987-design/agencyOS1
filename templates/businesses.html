@@ -3,67 +3,160 @@
 <html lang="en" class="dark">
 <head>
   <meta charset="UTF-8">
-  <title>My Businesses — {{ agency_settings.agency_name }}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Client Business Entities — {{ agency_settings.agency_name }}</title>
+
+  <!-- Typography: Plus Jakarta Sans & JetBrains Mono -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
   <script src="https://cdn.tailwindcss.com"></script>
-  <style>body { background-color: #09090b; font-family: 'Plus Jakarta Sans', sans-serif; }</style>
+  <link rel="stylesheet" href="/static/style.css">
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace'],
+          },
+          colors: {
+            zinc: {
+              950: '#09090b',
+              900: '#101014',
+              850: '#18181b',
+              800: '#27272a',
+              700: '#3f3f46',
+            }
+          }
+        }
+      }
+    }
+  </script>
 </head>
-<body class="bg-[#09090b] text-zinc-100 min-h-screen p-6 sm:p-12 max-w-4xl mx-auto space-y-6" style="--agency-primary: {{ agency_settings.primary_color }}; --agency-on-primary: {{ agency_settings.primary_contrast }};">
+<body class="bg-zinc-950 text-zinc-100 min-h-screen selection:bg-zinc-100 selection:text-zinc-950 antialiased font-sans" style="--agency-primary: {{ agency_settings.primary_color }}; --agency-on-primary: {{ agency_settings.primary_contrast }};">
 
-  {% include "includes/agency_brand.html" %}
-  <a href="{{ url_for('customer.dashboard') }}" class="text-xs font-mono text-[var(--agency-primary)] hover:underline">← Return to Workspace</a>
-
-  <!-- Flash Messages -->
-  {% with messages = get_flashed_messages(with_categories=true) %}
-    {% if messages %}
-      <div class="space-y-2">
-        {% for category, message in messages %}
-          <div class="p-3 rounded-xl border text-xs {% if category == 'success' %}bg-emerald-500/10 border-emerald-500/20 text-emerald-300{% else %}bg-zinc-800 border-zinc-700 text-zinc-200{% endif %}">
-            {{ message }}
-          </div>
-        {% endfor %}
+  <!-- TOP WORKBENCH HEADER -->
+  <header class="border-b border-zinc-800 bg-zinc-950/95 sticky top-0 z-50">
+    <div class="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        {% include "includes/agency_brand.html" %}
+        <span class="font-mono text-xs text-zinc-500">/</span>
+        <span class="font-mono text-xs text-zinc-400 font-bold uppercase">Business Entities</span>
       </div>
-    {% endif %}
-  {% endwith %}
 
-  <div class="flex items-center justify-between pb-6 border-b border-zinc-800">
-    <div>
-      <h1 class="text-2xl font-extrabold text-white">Registered Business Profiles</h1>
-      <p class="text-xs text-zinc-400 mt-1">Associate these profiles with commissioned sprint packages.</p>
+      <a href="{{ url_for('customer.dashboard') }}" class="btn btn-secondary text-xs h-8">
+        ← Return to Workspace
+      </a>
     </div>
-    <a href="{{ url_for('customer.add_business') }}" class="px-4 py-2 rounded-xl bg-white text-zinc-950 font-bold text-xs hover:bg-zinc-200 transition">
-      + Add Business
-    </a>
-  </div>
+  </header>
 
-  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-    {% for b in businesses %}
-    <div class="p-5 rounded-2xl bg-[#121215] border border-zinc-800 flex flex-col justify-between space-y-4">
+  <!-- MAIN CONTAINER -->
+  <main class="max-w-5xl mx-auto px-6 py-10 space-y-8">
+
+    <!-- Flash Messages Slot -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="space-y-2">
+          {% for category, message in messages %}
+            <div class="system-alert {{ 'system-alert-success' if category == 'success' else 'system-alert-error' }}">
+              <span class="font-mono text-xs">{{ message }}</span>
+              <button onclick="this.parentElement.remove()" class="text-zinc-400 hover:text-white ml-auto cursor-pointer">✕</button>
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    <!-- Top Executive Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-6 border-b border-zinc-800 gap-4">
       <div>
-        <h3 class="text-sm font-bold text-white">{{ b.name }}</h3>
-        <p class="text-xs text-zinc-400 mt-1">{{ b.business_type or 'Local Business' }} • {{ b.location or 'India' }}</p>
-        {% if b.website %}
-          <a href="{{ b.website }}" target="_blank" class="text-[11px] text-[var(--agency-primary)] hover:underline mt-1 block truncate">{{ b.website }}</a>
-        {% endif %}
+        <div class="flex items-center gap-2 mb-1 font-mono text-xs">
+          <span class="badge badge-indigo">CORPORATE ENTITIES REGISTRY</span>
+          <span class="text-zinc-600">•</span>
+          <span class="text-zinc-400">Multi-Brand Scopes</span>
+        </div>
+        <h1 class="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">Registered Business Profiles</h1>
+        <p class="text-xs font-mono text-zinc-400 mt-1">Associate these corporate entities with commissioned statements of work and milestone billing.</p>
       </div>
 
-      <div class="pt-3 border-t border-zinc-800/80 flex items-center justify-end gap-2 text-xs">
-        <a href="{{ url_for('customer.edit_business', business_id=b.id) }}" class="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-white font-semibold transition">
-          Edit
-        </a>
-        <form method="POST" action="{{ url_for('customer.delete_business', business_id=b.id) }}" onsubmit="return confirm('Delete this business?');">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <button type="submit" class="px-3 py-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 font-semibold transition cursor-pointer">
-            Delete
-          </button>
-        </form>
+      <a href="{{ url_for('customer.add_business') }}" class="btn btn-primary text-xs h-9 px-4 font-semibold">
+        + Add New Business
+      </a>
+    </div>
+
+    <!-- Entities Table -->
+    <div class="border border-zinc-800 bg-zinc-900 rounded-lg overflow-hidden">
+      <div class="p-4 border-b border-zinc-800 bg-zinc-950 flex items-center justify-between font-mono text-xs">
+        <span class="font-bold uppercase tracking-wider text-white">Active Corporate Profiles</span>
+        <span class="text-zinc-400">{{ businesses|length }} Entities</span>
+      </div>
+
+      <div class="overflow-x-auto w-full">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Business Name</th>
+              <th>Sector / Category</th>
+              <th>Operating Jurisdiction</th>
+              <th>Official Website</th>
+              <th class="text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody class="font-mono text-xs">
+            {% for b in businesses %}
+            <tr>
+              <td>
+                <strong class="text-white font-sans text-xs block">{{ b.name }}</strong>
+              </td>
+              <td>
+                <span class="badge badge-neutral text-[10px]">{{ b.business_type or 'General Commercial' }}</span>
+              </td>
+              <td class="text-zinc-300">
+                {{ b.location or 'India' }}
+              </td>
+              <td>
+                {% if b.website %}
+                <a href="{{ b.website }}" target="_blank" class="text-zinc-300 hover:text-white underline truncate block max-w-xs">{{ b.website }}</a>
+                {% else %}
+                <span class="text-zinc-600">None</span>
+                {% endif %}
+              </td>
+              <td class="text-right">
+                <div class="flex items-center justify-end gap-1.5">
+                  <a href="{{ url_for('customer.edit_business', business_id=b.id) }}" class="btn btn-secondary text-xs h-7 px-3">
+                    Edit
+                  </a>
+                  <form method="POST" action="{{ url_for('customer.delete_business', business_id=b.id) }}" class="inline" onsubmit="return confirm('Permanently remove this business entity?');">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-subtle text-xs h-7 px-2.5 text-red-400 cursor-pointer">
+                      Delete
+                    </button>
+                  </form>
+                </div>
+              </td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="5" class="p-12 text-center text-zinc-500 font-mono text-xs">
+                No auxiliary business entities registered yet. Click "+ Add New Business" to configure your first profile.
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
       </div>
     </div>
-    {% else %}
-    <p class="text-xs text-zinc-500 col-span-2 py-10 text-center">No businesses added yet. Click "+ Add Business" to register your first brand.</p>
-    {% endfor %}
-  </div>
+
+  </main>
+
+  <!-- FOOTER -->
+  <footer class="border-t border-zinc-800 bg-zinc-950 py-6 px-6 text-center text-xs font-mono text-zinc-500">
+    {{ agency_settings.agency_name }} Corporate Vault • Multi-Tenant Enterprise Architecture
+  </footer>
 
 </body>
 </html>

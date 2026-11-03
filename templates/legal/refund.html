@@ -1,14 +1,87 @@
+<!-- Save this directly into: templates/legal/refund.html -->
 <!DOCTYPE html>
 <html lang="en" class="dark">
 <head>
-  <meta charset="UTF-8"><title>Refund Policy — AgencyOS</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Refund &amp; Cancellation Policy — {{ agency_settings.agency_name }}</title>
+
+  <!-- Typography: Plus Jakarta Sans & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
   <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="/static/style.css">
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace'],
+          },
+          colors: {
+            zinc: {
+              950: '#09090b',
+              900: '#101014',
+              850: '#18181b',
+              800: '#27272a',
+              700: '#3f3f46',
+            }
+          }
+        }
+      }
+    }
+  </script>
 </head>
-<body class="bg-[#09090b] text-zinc-300 font-sans p-6 sm:p-12 max-w-4xl mx-auto">
-  <a href="/" class="text-xs font-mono text-indigo-400 hover:underline">← Return to Homepage</a>
-  <h1 class="text-3xl font-extrabold text-white mt-6">Refund & Cancellation Policy</h1>
-  <div class="mt-8 space-y-6 text-sm leading-relaxed border-t border-zinc-800 pt-6">
-    <section><h2 class="text-lg font-bold text-white mb-2">1. Advance Milestone Payments</h2><p>Advance milestone deposits are strictly non-refundable once design or development has commenced.</p></section>
-    <section><h2 class="text-lg font-bold text-white mb-2">2. SEO Retainer Cancellation</h2><p>Subscriptions may be cancelled anytime with 7 days written notice prior to monthly cycle rollover.</p></section>
-  </div>
-</body></html>
+<body class="bg-zinc-950 text-zinc-100 min-h-screen selection:bg-zinc-100 selection:text-zinc-950 antialiased font-sans flex flex-col justify-between" style="--agency-primary: {{ agency_settings.primary_color }}; --agency-on-primary: {{ agency_settings.primary_contrast }};">
+
+  <!-- TOP HEADER -->
+  <header class="border-b border-zinc-800 bg-zinc-950/95 sticky top-0 z-50">
+    <div class="max-w-4xl mx-auto px-6 h-16 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        {% include "includes/agency_brand.html" %}
+      </div>
+      <a href="/" class="btn btn-secondary text-xs h-8">
+        ← Return to Homepage
+      </a>
+    </div>
+  </header>
+
+  <!-- MAIN REFUND SHELL -->
+  <main class="max-w-4xl mx-auto px-6 py-12 space-y-8 flex-1 w-full font-sans">
+    
+    <div class="border-b border-zinc-800 pb-6">
+      <span class="badge badge-amber mb-2 font-mono">ESCROW &amp; SOW TERMS</span>
+      <h1 class="text-3xl font-extrabold text-white tracking-tight">Refund &amp; Cancellation Policy</h1>
+      <p class="text-xs font-mono text-zinc-400 mt-1">Governing milestone escrow deposits, retainer cancellations, and scope adjustments.</p>
+    </div>
+
+    <div class="space-y-6 text-xs leading-relaxed text-zinc-300 font-mono">
+      <section class="border border-zinc-800 bg-zinc-900 rounded-lg p-6 space-y-2">
+        <h2 class="text-sm font-bold text-white uppercase tracking-wider font-mono">1. Advance Milestone Escrow Deposits</h2>
+        <p class="text-zinc-400 font-sans leading-relaxed">
+          Advance milestone escrow deposits (50% Kickoff Advance) are strictly non-refundable once specialist allocation and design/architecture discovery have commenced. Unpaid draft projects may be cancelled freely from the client workspace prior to advance authorization.
+        </p>
+      </section>
+
+      <section class="border border-zinc-800 bg-zinc-900 rounded-lg p-6 space-y-2">
+        <h2 class="text-sm font-bold text-white uppercase tracking-wider font-mono">2. Monthly Retainer Cancellation</h2>
+        <p class="text-zinc-400 font-sans leading-relaxed">
+          Recurring monthly SEO and maintenance retainers may be cancelled at any time by submitting formal notice through the portal at least seven (7) days prior to the next billing cycle rollover date.
+        </p>
+      </section>
+    </div>
+
+  </main>
+
+  <!-- FOOTER -->
+  <footer class="border-t border-zinc-800 bg-zinc-950 py-6 px-6 text-center text-xs font-mono text-zinc-500">
+    {{ agency_settings.agency_name }} • Milestone Escrow &amp; Cancellation Node
+  </footer>
+
+</body>
+</html>

@@ -1,107 +1,166 @@
 <!-- Save this directly into: templates/client_invoices.html -->
 <!DOCTYPE html>
-<html lang="en" class="dark scroll-smooth">
+<html lang="en" class="dark">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Billing Ledger & GST Invoices — {{ agency_settings.agency_name }}</title>
-  
+  <title>Billing Ledger & Tax Invoices — {{ agency_settings.agency_name }}</title>
+
+  <!-- Typography: Plus Jakarta Sans & JetBrains Mono -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://unpkg.com/lucide@latest"></script>
-  
-  <style>
-    body { background-color: #09090b; font-family: 'Plus Jakarta Sans', sans-serif; color: #f4f4f5; }
-    .portal-card { background: #121215; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 20px; }
-  </style>
+  <link rel="stylesheet" href="/static/style.css">
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace'],
+          },
+          colors: {
+            zinc: {
+              950: '#09090b',
+              900: '#101014',
+              850: '#18181b',
+              800: '#27272a',
+              700: '#3f3f46',
+            }
+          }
+        }
+      }
+    }
+  </script>
 </head>
-<body class="bg-zinc-950 text-zinc-100 min-h-screen p-6 sm:p-10 max-w-5xl mx-auto selection:bg-indigo-500 selection:text-white space-y-6" style="--agency-primary: {{ agency_settings.primary_color }}; --agency-on-primary: {{ agency_settings.primary_contrast }};">
+<body class="bg-zinc-950 text-zinc-100 min-h-screen selection:bg-zinc-100 selection:text-zinc-950 antialiased font-sans" style="--agency-primary: {{ agency_settings.primary_color }}; --agency-on-primary: {{ agency_settings.primary_contrast }};">
 
-  {% include "includes/agency_brand.html" %}
-  <!-- Header Return -->
-  <div class="flex items-center justify-between pb-6 border-b border-zinc-800">
-    <a href="{{ url_for('customer.dashboard') }}" class="text-xs font-mono text-indigo-400 hover:underline flex items-center gap-1.5">
-      <i data-lucide="arrow-left" class="w-3.5 h-3.5"></i>
-      <span>Return to Workspace</span>
-    </a>
+  <!-- TOP WORKBENCH HEADER -->
+  <header class="border-b border-zinc-800 bg-zinc-950/95 sticky top-0 z-50">
+    <div class="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        {% include "includes/agency_brand.html" %}
+        <span class="font-mono text-xs text-zinc-500">/</span>
+        <span class="font-mono text-xs text-zinc-400 font-bold uppercase">Financial Ledger</span>
+      </div>
 
-    <span class="px-3 py-1 rounded-full text-xs font-mono bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-bold">
-      SAC 998311 Compliant
-    </span>
-  </div>
+      <div class="flex items-center gap-3">
+        <a href="{{ url_for('customer.dashboard') }}" class="btn btn-secondary text-xs h-8">
+          ← Return to Workspace
+        </a>
+      </div>
+    </div>
+  </header>
 
-  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-    <div>
-      <h1 class="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">Billing Ledger & Invoices</h1>
-      <p class="text-xs text-zinc-400 mt-1">Official tax invoices (18% GST) and payment receipts for your company accounting records.</p>
+  <!-- MAIN LEDGER BODY -->
+  <main class="max-w-6xl mx-auto px-6 py-8 space-y-8">
+
+    <!-- Flash Messages Slot -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="space-y-2">
+          {% for category, message in messages %}
+            <div class="system-alert {{ 'system-alert-success' if category == 'success' else 'system-alert-error' }}">
+              <span class="font-mono text-xs">{{ message }}</span>
+              <button onclick="this.parentElement.remove()" class="text-zinc-400 hover:text-white ml-auto cursor-pointer">✕</button>
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    <!-- Top Executive Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-6 border-b border-zinc-800 gap-4">
+      <div>
+        <div class="flex items-center gap-2 mb-1 font-mono text-xs">
+          <span class="badge badge-emerald">SAC 998311 COMPLIANT</span>
+          <span class="text-zinc-600">•</span>
+          <span class="text-zinc-400">100% Tax Invoiced</span>
+        </div>
+        <h1 class="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">Billing Ledger & Receipts</h1>
+        <p class="text-xs font-mono text-zinc-400 mt-1">Official tax invoices and digital payment receipts for your corporate accounting records.</p>
+      </div>
+
+      <div class="p-3 rounded border border-zinc-800 bg-zinc-900 font-mono text-xs text-left sm:text-right">
+        <span class="text-zinc-500 uppercase text-[10px] block">Supplier GSTIN</span>
+        <span class="text-white font-bold">29AAAAA0000A1Z5</span>
+      </div>
     </div>
 
-    <div class="p-3 rounded-xl bg-zinc-900 border border-zinc-800 text-xs text-right">
-      <span class="text-zinc-500 text-[10px] font-mono block">Registered GSTIN:</span>
-      <span class="font-mono text-white font-bold">29AAAAA0000A1Z5</span>
-    </div>
-  </div>
+    <!-- Invoices Ledger Table -->
+    <div class="border border-zinc-800 bg-zinc-900 rounded-lg overflow-hidden">
+      <div class="p-4 border-b border-zinc-800 bg-zinc-950 flex items-center justify-between font-mono text-xs">
+        <span class="font-bold uppercase tracking-wider text-white">Tax Invoice Registry</span>
+        <span class="text-zinc-400">{{ invoices|length }} Invoices Recorded</span>
+      </div>
 
-  <!-- Invoices Table Card -->
-  <div class="portal-card overflow-hidden shadow-2xl">
-    <table class="w-full text-left text-xs">
-      <thead class="bg-[#18181d] text-zinc-400 font-mono uppercase tracking-wider border-b border-zinc-800">
-        <tr>
-          <th class="p-4">Invoice #</th>
-          <th class="p-4">Project / Milestone</th>
-          <th class="p-4">Amount</th>
-          <th class="p-4">Status</th>
-          <th class="p-4">Date</th>
-          <th class="p-4 text-right">Action</th>
-        </tr>
-      </thead>
-      <tbody class="divide-y divide-zinc-800/60 text-zinc-300">
-        {% for inv in invoices %}
-        <tr class="hover:bg-white/[0.02] transition">
-          <td class="p-4 font-mono font-bold">
-            <span class="inline-block rounded px-2 py-1" style="background-color: var(--agency-primary); color: var(--agency-on-primary)">
-              {{ inv.invoice_number if inv.invoice_number else ('INV-2026-' ~ inv.id) }}
-            </span>
-          </td>
-          <td class="p-4">
-            <span class="font-bold text-white block">{{ inv.project.service if inv.project else 'Milestone Sprint' }}</span>
-            <span class="text-zinc-500 text-[11px] font-mono">{{ inv.project.package if inv.project else 'Custom' }}</span>
-          </td>
-          <td class="p-4 font-mono font-bold text-white">
-            {{ (inv.gross_amount or inv.amount or 48000)|format_currency(inv.currency) }}
-          </td>
-          <td class="p-4">
-            <span class="px-2.5 py-0.5 rounded text-[10px] font-mono border {% if inv.status.lower() == 'paid' %}bg-emerald-500/10 text-emerald-400 border-emerald-500/20{% else %}bg-amber-500/10 text-amber-400 border-amber-500/20{% endif %}">
-              {{ inv.status }}
-            </span>
-          </td>
-          <td class="p-4 font-mono text-zinc-500 text-[11px]">
-            {{ inv.paid_at.strftime('%d %b %Y') if inv.paid_at else (inv.issued_at.strftime('%d %b %Y') if inv.issued_at else '—') }}
-          </td>
-          <td class="p-4 text-right">
-            {% if inv.project_id %}
-            <a href="{{ url_for('customer.view_invoice', project_id=inv.project_id, invoice_id=inv.id) }}" target="_blank" class="px-3.5 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-white font-bold text-[11px] transition inline-flex items-center gap-1.5 shadow">
-              <i data-lucide="printer" class="w-3.5 h-3.5 text-indigo-400"></i>
-              <span>View / PDF</span>
-            </a>
+      <div class="overflow-x-auto w-full">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Invoice #</th>
+              <th>Engagement / SOW</th>
+              <th>Gross Amount</th>
+              <th>Status</th>
+              <th>Settlement Date</th>
+              <th class="text-right">Action</th>
+            </tr>
+          </thead>
+          <tbody class="font-mono text-xs">
+            {% for inv in invoices %}
+            <tr>
+              <td>
+                <span class="font-bold text-white">
+                  {{ inv.invoice_number if inv.invoice_number else ('INV-2026-' ~ inv.id) }}
+                </span>
+              </td>
+              <td>
+                <span class="font-sans font-bold text-zinc-200 block">{{ inv.project.service if inv.project else 'Milestone Sprint' }}</span>
+                <span class="text-zinc-500 text-[11px]">{{ inv.project.package if inv.project else 'Custom SOW' }}</span>
+              </td>
+              <td class="font-bold text-white">
+                {{ (inv.gross_amount or inv.amount or 48000)|format_currency(inv.currency) }}
+              </td>
+              <td>
+                <span class="badge {% if inv.status.lower() == 'paid' %}badge-emerald{% else %}badge-amber{% endif %}">
+                  {{ inv.status|upper }}
+                </span>
+              </td>
+              <td class="text-zinc-400 text-[11px]">
+                {{ inv.paid_at.strftime('%d %b %Y') if inv.paid_at else (inv.created_at.strftime('%d %b %Y') if inv.created_at else '—') }}
+              </td>
+              <td class="text-right">
+                {% if inv.project_id %}
+                <a href="{{ url_for('customer.view_invoice', project_id=inv.project_id, invoice_id=inv.id) }}" target="_blank" class="btn btn-secondary text-xs h-7 px-3">
+                  Inspect Tax Invoice →
+                </a>
+                {% else %}
+                <span class="text-zinc-600 text-[11px]">Direct Entry</span>
+                {% endif %}
+              </td>
+            </tr>
             {% else %}
-            <span class="text-zinc-600 font-mono text-[11px]">Direct</span>
-            {% endif %}
-          </td>
-        </tr>
-        {% else %}
-        <tr>
-          <td colspan="6" class="p-12 text-center text-zinc-500 font-mono text-xs">
-            <i data-lucide="receipt" class="w-8 h-8 text-zinc-600 mx-auto mb-3"></i>
-            <p>No invoices on file yet. Invoices generate automatically upon milestone commissioning.</p>
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
+            <tr>
+              <td colspan="6" class="p-12 text-center text-zinc-500 font-mono text-xs">
+                No invoices on file yet. Tax invoices generate automatically upon milestone commissioning.
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
 
-  <script>if (window.lucide) lucide.createIcons();</script>
+  </main>
+
+  <!-- FOOTER -->
+  <footer class="border-t border-zinc-800 bg-zinc-950 py-6 px-6 text-center text-xs font-mono text-zinc-500">
+    {{ agency_settings.agency_name }} Financial Accounting • SAC 998311 Compliant Escrow
+  </footer>
+
 </body>
 </html>

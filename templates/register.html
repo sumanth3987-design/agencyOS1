@@ -5,151 +5,214 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Create Account — AgencyOS</title>
+
+  <!-- Typography: Plus Jakarta Sans & JetBrains Mono -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://unpkg.com/lucide@latest"></script>
-  <style>
-    body { background-color: #09090b; font-family: 'Plus Jakarta Sans', sans-serif; color: #f4f4f5; }
-    .auth-card { background-color: #121215; border: 1px solid rgba(255, 255, 255, 0.08); box-shadow: 0 20px 40px rgba(0,0,0,0.6); }
-    .input-field { background-color: #09090b; border: 1px solid #27272a; color: #ffffff; }
-    .input-field:focus { border-color: #6366f1; outline: none; }
-    .tab-active { background-color: #ffffff !important; color: #09090b !important; font-weight: 700 !important; }
-    .tab-inactive { background-color: transparent; color: #a1a1aa; }
-  </style>
+  <link rel="stylesheet" href="/static/style.css">
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace'],
+          },
+          colors: {
+            zinc: {
+              950: '#09090b',
+              900: '#101014',
+              850: '#18181b',
+              800: '#27272a',
+              700: '#3f3f46',
+            }
+          }
+        }
+      }
+    }
+  </script>
 </head>
-<body class="bg-zinc-950 text-zinc-100 min-h-screen flex items-center justify-center p-6 selection:bg-indigo-500 selection:text-white">
+<body class="bg-zinc-950 text-zinc-100 min-h-screen flex items-center justify-center p-6 selection:bg-zinc-100 selection:text-zinc-950 antialiased font-sans">
 
-  <div class="auth-card max-w-lg w-full p-8 rounded-2xl relative overflow-hidden">
-    <div class="absolute inset-x-0 -top-px h-px bg-linear-to-r from-transparent via-indigo-500/60 to-transparent"></div>
+  <div class="w-full max-w-lg border border-zinc-800 bg-zinc-900 rounded-lg p-8 shadow-2xl space-y-6">
 
-    <div class="text-center mb-6">
-      <a href="{{ url_for('public.index') }}" class="inline-flex items-center gap-2 mb-3">
-        <div class="h-10 w-10 rounded-xl bg-linear-to-tr from-indigo-600 to-violet-500 flex items-center justify-center font-bold text-white shadow-lg shadow-indigo-500/20">
-          AO
+    <!-- Header Branding -->
+    <div class="text-center space-y-2">
+      <a href="/" class="inline-flex items-center gap-2 mb-1">
+        <div class="h-8 w-8 rounded bg-white text-zinc-950 font-mono font-bold text-sm flex items-center justify-center">
+          A
         </div>
       </a>
       <h1 class="text-2xl font-extrabold text-white tracking-tight">Create AgencyOS Account</h1>
-      <p class="text-xs text-zinc-400 mt-1">Get started with milestone delivery and live sprint tracking</p>
+      <p class="text-xs font-mono text-zinc-400">Initialize milestone delivery, SOW digital agreements, and live sprint ledgers.</p>
     </div>
 
     <!-- Role Selection Tabs -->
-    <div class="bg-zinc-900 border border-zinc-800 p-1 rounded-xl grid grid-cols-2 gap-1 mb-6 text-xs font-semibold">
-      <button type="button" id="tab-reg-customer" onclick="setRegRole('customer')" class="tab-active py-2 rounded-lg flex items-center justify-center gap-2 transition cursor-pointer">
-        <i data-lucide="building" class="w-3.5 h-3.5"></i>
-        <span>Client / Business</span>
+    <div class="grid grid-cols-2 gap-1 p-1 bg-zinc-950 border border-zinc-800 rounded font-mono text-xs font-semibold">
+      <button type="button" id="tab-reg-customer" class="py-2 rounded bg-white text-zinc-950 font-bold transition cursor-pointer">
+        Client Organization
       </button>
-      <button type="button" id="tab-reg-specialist" onclick="setRegRole('professional')" class="tab-inactive py-2 rounded-lg flex items-center justify-center gap-2 transition cursor-pointer">
-        <i data-lucide="briefcase" class="w-3.5 h-3.5"></i>
-        <span>Specialist Partner</span>
+      <button type="button" id="tab-reg-specialist" class="py-2 rounded bg-transparent text-zinc-400 hover:text-white transition cursor-pointer">
+        Specialist Partner
       </button>
     </div>
 
-    <!-- Flash Messages -->
+    <!-- Flash Messages Slot -->
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}
-        <div class="mb-4 space-y-2">
+        <div class="space-y-2">
           {% for category, message in messages %}
-            <div class="p-3 rounded-xl border text-xs flex items-center justify-between {% if category == 'success' %}bg-emerald-500/10 border-emerald-500/20 text-emerald-300{% else %}bg-rose-500/10 border-rose-500/20 text-rose-300{% endif %}">
-              <span>{{ message }}</span>
-              <button type="button" onclick="this.parentElement.remove()" class="text-zinc-400 hover:text-white text-sm">×</button>
+            <div class="system-alert {{ 'system-alert-success' if category == 'success' else 'system-alert-error' }}">
+              <span class="font-mono text-xs">{{ message }}</span>
+              <button type="button" onclick="this.parentElement.remove()" class="text-zinc-400 hover:text-white ml-auto cursor-pointer">✕</button>
             </div>
           {% endfor %}
         </div>
       {% endif %}
     {% endwith %}
 
-    <form method="POST" action="{{ url_for('auth.register') }}" class="space-y-4 text-xs">
+    <!-- Registration Form -->
+    <form method="POST" action="{{ url_for('auth.register') }}" class="space-y-4 font-mono text-xs">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="account_type" id="accountTypeInput" value="customer">
 
       <div>
-        <label class="block text-zinc-400 font-semibold mb-1">Full Legal Name *</label>
-        <input type="text" name="name" required placeholder="John Doe" class="input-field w-full px-3.5 py-2.5 rounded-xl">
+        <label class="block text-zinc-400 mb-1">Full Legal Name *</label>
+        <input
+          type="text"
+          name="name"
+          required
+          placeholder="e.g. Alexander Vance"
+          class="form-control text-xs"
+        >
       </div>
 
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
-          <label class="block text-zinc-400 font-semibold mb-1">Work Email Address *</label>
-          <input type="email" name="email" required placeholder="you@company.com" class="input-field w-full px-3.5 py-2.5 rounded-xl">
+          <label class="block text-zinc-400 mb-1">Work Email Address *</label>
+          <input
+            type="email"
+            name="email"
+            required
+            placeholder="name@enterprise.com"
+            class="form-control text-xs"
+          >
         </div>
         <div>
-          <label class="block text-zinc-400 font-semibold mb-1">Password (8+ chars, letters & numbers) *</label>
-          <input type="password" name="password" required placeholder="••••••••" class="input-field w-full px-3.5 py-2.5 rounded-xl">
+          <label class="block text-zinc-400 mb-1">Password (8+ chars) *</label>
+          <input
+            type="password"
+            name="password"
+            required
+            placeholder="••••••••"
+            class="form-control text-xs"
+          >
         </div>
       </div>
 
-      <!-- Client Fields -->
-      <div id="clientFields" class="space-y-3">
+      <!-- Client Organization Specific Fields -->
+      <div id="clientFields" class="space-y-4">
         <div>
-          <label class="block text-zinc-400 font-semibold mb-1">Company / Business Name</label>
-          <input type="text" name="business_name" placeholder="e.g. Bombay Spice Retail Pvt Ltd" class="input-field w-full px-3.5 py-2.5 rounded-xl">
+          <label class="block text-zinc-400 mb-1">Registered Entity / Business Name</label>
+          <input
+            type="text"
+            name="business_name"
+            placeholder="e.g. Tata Retail Logistics Ltd"
+            class="form-control text-xs"
+          >
         </div>
         <div>
-          <label class="block text-zinc-400 font-semibold mb-1">Phone / WhatsApp Number</label>
-          <input type="tel" name="phone" placeholder="+91 98765 43210" class="input-field w-full px-3.5 py-2.5 rounded-xl">
+          <label class="block text-zinc-400 mb-1">Phone / WhatsApp Number</label>
+          <input
+            type="tel"
+            name="phone"
+            placeholder="+91 98765 43210"
+            class="form-control text-xs"
+          >
         </div>
       </div>
 
-      <!-- Specialist Fields -->
-      <div id="specialistFields" class="space-y-3 hidden">
+      <!-- Specialist Partner Specific Fields -->
+      <div id="specialistFields" class="space-y-4 hidden">
         <div>
-          <label class="block text-zinc-400 font-semibold mb-1">Core Expertise *</label>
-          <select name="expertise" class="input-field w-full px-3.5 py-2.5 rounded-xl">
+          <label class="block text-zinc-400 mb-1">Core Technical Discipline *</label>
+          <select name="expertise" class="form-control text-xs">
             <option value="Website Design & Development">Website Design & Development</option>
             <option value="SEO & Technical Optimization">SEO & Technical Optimization</option>
             <option value="UI/UX Prototyping (Figma)">UI/UX Prototyping (Figma)</option>
             <option value="Full-Stack Engineering">Full-Stack Engineering</option>
           </select>
         </div>
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label class="block text-zinc-400 font-semibold mb-1">Experience Level</label>
-            <input type="text" name="experience" placeholder="e.g. 3+ Years" class="input-field w-full px-3.5 py-2.5 rounded-xl">
+            <label class="block text-zinc-400 mb-1">Years of Experience</label>
+            <input
+              type="text"
+              name="experience"
+              placeholder="e.g. 5+ Years"
+              class="form-control text-xs"
+            >
           </div>
           <div>
-            <label class="block text-zinc-400 font-semibold mb-1">Portfolio or GitHub URL *</label>
-            <input type="url" name="portfolio" placeholder="https://github.com/..." class="input-field w-full px-3.5 py-2.5 rounded-xl">
+            <label class="block text-zinc-400 mb-1">GitHub / Portfolio URL *</label>
+            <input
+              type="url"
+              name="portfolio"
+              placeholder="https://github.com/..."
+              class="form-control text-xs"
+            >
           </div>
         </div>
       </div>
 
-      <button type="submit" id="regSubmitBtn" class="w-full py-3 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-bold text-xs shadow-lg transition mt-2 cursor-pointer">
-        Create Client Account →
+      <button type="submit" id="regSubmitBtn" class="btn btn-primary w-full h-11 text-xs font-semibold tracking-wide cursor-pointer mt-2">
+        Create Client Organization Account →
       </button>
     </form>
 
-    <div class="mt-6 pt-6 border-t border-zinc-800/80 text-center text-xs text-zinc-500">
-      Already have an account? <a href="{{ url_for('auth.login') }}" class="text-indigo-400 hover:underline font-bold">Sign In</a>
+    <!-- Context Footer -->
+    <div class="pt-6 border-t border-zinc-800 text-center font-mono text-xs text-zinc-500">
+      Already have an account? <a href="{{ url_for('auth.login') }}" class="text-white hover:underline font-bold">Sign In</a>
     </div>
+
   </div>
 
   <script>
-    if (window.lucide) lucide.createIcons();
+    document.addEventListener("DOMContentLoaded", function () {
+      var tabClient = document.getElementById("tab-reg-customer");
+      var tabSpecialist = document.getElementById("tab-reg-specialist");
+      var accountTypeInput = document.getElementById("accountTypeInput");
+      var clientFields = document.getElementById("clientFields");
+      var specialistFields = document.getElementById("specialistFields");
+      var submitBtn = document.getElementById("regSubmitBtn");
 
-    function setRegRole(role) {
-      document.getElementById('accountTypeInput').value = role;
-      const tabClient = document.getElementById('tab-reg-customer');
-      const tabSpecialist = document.getElementById('tab-reg-specialist');
-      const clientFields = document.getElementById('clientFields');
-      const specialistFields = document.getElementById('specialistFields');
-      const submitBtn = document.getElementById('regSubmitBtn');
+      function setRegRole(role) {
+        if (!accountTypeInput || !tabClient || !tabSpecialist || !clientFields || !specialistFields || !submitBtn) return;
+        accountTypeInput.value = role;
 
-      if (role === 'customer') {
-        tabClient.className = 'tab-active py-2 rounded-lg flex items-center justify-center gap-2 transition cursor-pointer';
-        tabSpecialist.className = 'tab-inactive py-2 rounded-lg flex items-center justify-center gap-2 transition cursor-pointer';
-        clientFields.classList.remove('hidden');
-        specialistFields.classList.add('hidden');
-        submitBtn.textContent = 'Create Client Account →';
-      } else {
-        tabSpecialist.className = 'tab-active py-2 rounded-lg flex items-center justify-center gap-2 transition cursor-pointer';
-        tabClient.className = 'tab-inactive py-2 rounded-lg flex items-center justify-center gap-2 transition cursor-pointer';
-        specialistFields.classList.remove('hidden');
-        clientFields.classList.add('hidden');
-        submitBtn.textContent = 'Apply as Specialist Partner →';
+        if (role === "customer") {
+          tabClient.className = "py-2 rounded bg-white text-zinc-950 font-bold transition cursor-pointer";
+          tabSpecialist.className = "py-2 rounded bg-transparent text-zinc-400 hover:text-white transition cursor-pointer";
+          clientFields.classList.remove("hidden");
+          specialistFields.classList.add("hidden");
+          submitBtn.textContent = "Create Client Organization Account →";
+        } else {
+          tabSpecialist.className = "py-2 rounded bg-white text-zinc-950 font-bold transition cursor-pointer";
+          tabClient.className = "py-2 rounded bg-transparent text-zinc-400 hover:text-white transition cursor-pointer";
+          specialistFields.classList.remove("hidden");
+          clientFields.classList.add("hidden");
+          submitBtn.textContent = "Apply as Specialist Partner →";
+        }
       }
-      if (window.lucide) lucide.createIcons();
-    }
+
+      if (tabClient) tabClient.addEventListener("click", function () { setRegRole("customer"); });
+      if (tabSpecialist) tabSpecialist.addEventListener("click", function () { setRegRole("professional"); });
+    });
   </script>
 </body>
 </html>

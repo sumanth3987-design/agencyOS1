@@ -1,33 +1,181 @@
+<!-- Save this directly into: templates/admin_customers.html -->
 {% extends "admin_base.html" %}
-{% block title %}Customer Directory — AgencyOS{% endblock %}
+{% block title %}Client CRM & Corporate Directory — AgencyOS{% endblock %}
 {% block content %}
-<main class="max-w-7xl mx-auto px-6 py-8">
-  <div class="pb-6 border-b border-zinc-800/80 mb-6 flex items-center justify-between">
+<main class="max-w-7xl mx-auto px-6 py-8 space-y-8 font-sans">
+
+  <!-- Header -->
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-6 border-b border-zinc-800 gap-4">
     <div>
-      <h1 class="text-2xl font-extrabold text-white tracking-tight">Client CRM & Accounts</h1>
-      <p class="text-xs text-zinc-400 mt-1">Directory of Indian businesses, GSTINs, and active billing accounts.</p>
+      <div class="flex items-center gap-2 mb-1 font-mono text-xs">
+        <span class="badge badge-indigo">CLIENT CRM REGISTRY</span>
+        <span class="text-zinc-600">•</span>
+        <span class="text-zinc-400">Corporate Identity & GST Records</span>
+      </div>
+      <h1 class="text-2xl font-extrabold text-white tracking-tight">Client Accounts Directory</h1>
+      <p class="text-xs font-mono text-zinc-400 mt-1">Directory of registered entities, GSTIN billing accounts, and active milestone contracts.</p>
     </div>
-    <span class="text-xs font-mono text-zinc-400 px-3 py-1.5 rounded-xl bg-zinc-900 border border-zinc-800">{{ customers|length if customers else 0 }} Clients</span>
+
+    <span class="badge badge-neutral font-mono">
+      {{ customers|length if customers else 0 }} Registered Organizations
+    </span>
   </div>
-  <div class="rounded-2xl bg-[#121215] border border-zinc-800 overflow-hidden">
-    <table class="w-full text-left text-xs">
-      <thead class="bg-[#18181d] text-zinc-400 font-mono border-b border-zinc-800">
-        <tr><th class="p-4">Customer</th><th class="p-4">Email</th><th class="p-4">Businesses</th><th class="p-4">Projects</th><th class="p-4">Joined</th></tr>
-      </thead>
-      <tbody class="divide-y divide-zinc-800/60 text-zinc-300">
-        {% for c in customers %}
-        <tr class="hover:bg-white/[0.02]">
-          <td class="p-4 font-bold text-white">{{ c.name }}</td>
-          <td class="p-4 font-mono text-zinc-400">{{ c.email }}</td>
-          <td class="p-4 font-mono">{{ c.businesses|length if c.businesses else 0 }}</td>
-          <td class="p-4 font-mono text-indigo-400">{{ c.projects|length if c.projects else 0 }}</td>
-          <td class="p-4 font-mono text-zinc-500">{{ c.created_at.strftime('%d %b %Y') if c.created_at else '—' }}</td>
-        </tr>
-        {% else %}
-        <tr><td colspan="5" class="p-8 text-center text-zinc-600">No customers registered yet.</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
+
+  <!-- Customer Directory Table -->
+  <div class="border border-zinc-800 bg-zinc-900 rounded-lg overflow-hidden">
+    <div class="p-4 border-b border-zinc-800 bg-zinc-950 flex items-center justify-between font-mono text-xs">
+      <span class="font-bold uppercase tracking-wider text-white">Verified Client Accounts</span>
+      <span class="text-zinc-500">Live DB Registry</span>
+    </div>
+
+    <div class="overflow-x-auto w-full">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Organization / Representative</th>
+            <th>Email Endpoint</th>
+            <th>Entities</th>
+            <th>Commissioned SOWs</th>
+            <th>Onboarding Date</th>
+            <th class="text-right">Profile Actions</th>
+          </tr>
+        </thead>
+        <tbody class="font-mono text-xs">
+          {% for c in customers %}
+          {% set prof = customer_profiles.get(c.id) if customer_profiles else None %}
+          <tr>
+            <td>
+              <strong class="text-white font-sans text-xs block">{{ c.name }}</strong>
+              <span class="text-zinc-400 text-[11px] font-sans">{{ prof.business_name if prof and prof.business_name else 'Direct Business Account' }}</span>
+            </td>
+            <td>
+              <span class="text-zinc-300">{{ c.email }}</span>
+              {% if prof and prof.phone %}
+              <span class="text-zinc-500 text-[10px] block mt-0.5">{{ prof.phone }}</span>
+              {% endif %}
+            </td>
+            <td>
+              <span class="badge badge-neutral text-xs">
+                {{ c.businesses|length if c.businesses else 0 }} Entities
+              </span>
+            </td>
+            <td>
+              <span class="badge badge-indigo text-xs">
+                {{ c.projects|length if c.projects else 0 }} SOWs
+              </span>
+            </td>
+            <td class="text-zinc-400 text-[11px]">
+              {{ c.created_at.strftime('%d %b %Y') if c.created_at else '—' }}
+            </td>
+            <td class="text-right">
+              <button
+                type="button"
+                class="btn btn-secondary text-xs h-7 px-3 view-client-btn cursor-pointer"
+                data-client-name="{{ c.name }}"
+                data-client-email="{{ c.email }}"
+                data-client-phone="{{ prof.phone if prof and prof.phone else 'Not provided' }}"
+                data-client-secondary="{{ prof.secondary_phone if prof and prof.secondary_phone else 'None' }}"
+                data-client-gstin="{{ prof.gstin if prof and prof.gstin else 'Unregistered (Consumer)' }}"
+                data-client-location="{{ prof.location if prof and prof.location else 'India' }}"
+                data-client-address="{{ prof.billing_address if prof and prof.billing_address else 'Not specified' }}"
+                data-client-signatory="{{ prof.signatory_name if prof and prof.signatory_name else c.name }}"
+              >
+                View Details
+              </button>
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="6" class="p-12 text-center text-zinc-500 font-mono text-xs">
+              No client accounts registered in the database yet.
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
   </div>
+
 </main>
+
+<!-- CLIENT DETAILS MODAL -->
+<div id="clientModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs hidden">
+  <div class="w-full max-w-lg p-6 bg-zinc-900 border border-zinc-800 rounded-lg shadow-2xl font-mono text-xs space-y-4">
+    <div class="flex items-center justify-between pb-3 border-b border-zinc-800">
+      <h3 class="font-bold text-white uppercase tracking-wider">Client Corporate Profile</h3>
+      <button type="button" id="closeClientModalBtn" class="text-zinc-400 hover:text-white text-sm cursor-pointer">✕</button>
+    </div>
+
+    <div class="space-y-3 p-4 rounded border border-zinc-800 bg-zinc-950 font-mono text-xs">
+      <div>
+        <span class="text-zinc-500 text-[10px] uppercase block">Representative Name:</span>
+        <strong id="modalClientName" class="text-white font-sans text-sm">Client Name</strong>
+      </div>
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <span class="text-zinc-500 text-[10px] uppercase block">Email Address:</span>
+          <span id="modalClientEmail" class="text-zinc-200">email@domain.com</span>
+        </div>
+        <div>
+          <span class="text-zinc-500 text-[10px] uppercase block">WhatsApp Phone:</span>
+          <span id="modalClientPhone" class="text-zinc-200">+91 0000000000</span>
+        </div>
+      </div>
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <span class="text-zinc-500 text-[10px] uppercase block">Client GSTIN / Tax ID:</span>
+          <span id="modalClientGstin" class="text-emerald-400 font-bold">GSTIN</span>
+        </div>
+        <div>
+          <span class="text-zinc-500 text-[10px] uppercase block">Place of Supply:</span>
+          <span id="modalClientLocation" class="text-zinc-200">Location</span>
+        </div>
+      </div>
+      <div>
+        <span class="text-zinc-500 text-[10px] uppercase block">Registered Office Address:</span>
+        <p id="modalClientAddress" class="text-zinc-300 font-sans text-xs">Address</p>
+      </div>
+      <div>
+        <span class="text-zinc-500 text-[10px] uppercase block">Authorized Signatory:</span>
+        <span id="modalClientSignatory" class="text-zinc-200 font-sans">Signatory</span>
+      </div>
+    </div>
+
+    <div class="pt-2">
+      <button type="button" id="dismissClientModalBtn" class="btn btn-secondary w-full text-xs h-9 cursor-pointer">
+        Close Profile
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    var modal = document.getElementById("clientModal");
+    var closeBtn = document.getElementById("closeClientModalBtn");
+    var dismissBtn = document.getElementById("dismissClientModalBtn");
+
+    function closeModal() {
+      if (modal) modal.classList.add("hidden");
+    }
+
+    if (closeBtn) closeBtn.addEventListener("click", closeModal);
+    if (dismissBtn) dismissBtn.addEventListener("click", closeModal);
+
+    document.querySelectorAll(".view-client-btn").forEach(function (button) {
+      button.addEventListener("click", function () {
+        var ds = this.dataset;
+        document.getElementById("modalClientName").textContent = ds.clientName;
+        document.getElementById("modalClientEmail").textContent = ds.clientEmail;
+        document.getElementById("modalClientPhone").textContent = ds.clientPhone;
+        document.getElementById("modalClientGstin").textContent = ds.clientGstin;
+        document.getElementById("modalClientLocation").textContent = ds.clientLocation;
+        document.getElementById("modalClientAddress").textContent = ds.clientAddress;
+        document.getElementById("modalClientSignatory").textContent = ds.clientSignatory;
+
+        if (modal) modal.classList.remove("hidden");
+      });
+    });
+  });
+</script>
 {% endblock %}

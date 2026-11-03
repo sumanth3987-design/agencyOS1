@@ -1,134 +1,212 @@
 <!-- Save this directly into: templates/contract.html -->
 <!DOCTYPE html>
-<html lang="en" class="dark scroll-smooth">
+<html lang="en" class="dark">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Statement of Work & Agreement — Project #{{ project.id }} — {{ agency_settings.agency_name }}</title>
-  
+  <title>Statement of Work & Master Engagement Agreement — Project #{{ project.id }} | {{ agency_settings.agency_name }}</title>
+
+  <!-- Typography: Plus Jakarta Sans & JetBrains Mono -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://unpkg.com/lucide@latest"></script>
-  
-  <style>
-    body { background-color: #09090b; font-family: 'Plus Jakarta Sans', sans-serif; color: #f4f4f5; }
-    .contract-paper { background: #121215; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 20px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7); }
-  </style>
+  <link rel="stylesheet" href="/static/style.css">
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace'],
+          },
+          colors: {
+            zinc: {
+              950: '#09090b',
+              900: '#101014',
+              850: '#18181b',
+              800: '#27272a',
+              700: '#3f3f46',
+            }
+          }
+        }
+      }
+    }
+  </script>
 </head>
-<body class="bg-zinc-950 text-zinc-100 min-h-screen p-6 sm:p-12 max-w-4xl mx-auto selection:bg-[var(--agency-primary)] selection:text-[var(--agency-on-primary)] space-y-6" style="--agency-primary: {{ agency_settings.primary_color }}; --agency-on-primary: {{ agency_settings.primary_contrast }};">
+<body class="bg-zinc-950 text-zinc-100 min-h-screen selection:bg-zinc-100 selection:text-zinc-950 antialiased" style="--agency-primary: {{ agency_settings.primary_color }}; --agency-on-primary: {{ agency_settings.primary_contrast }};">
 
-  {% include "includes/agency_brand.html" %}
+  <!-- TOP HEADER -->
+  <header class="border-b border-zinc-800 bg-zinc-950/95 sticky top-0 z-50">
+    <div class="max-w-4xl mx-auto px-6 h-16 flex items-center justify-between">
+      <a href="{{ url_for('customer.project_details', project_id=project.id) }}" class="btn btn-secondary text-xs h-8">
+        ← Return to Workbench
+      </a>
 
-  <!-- Header Return -->
-  <div class="flex items-center justify-between pb-6 border-b border-zinc-800">
-    <a href="{{ url_for('customer.dashboard') }}" class="text-xs font-mono text-[var(--agency-primary)] hover:underline flex items-center gap-1.5">
-      <i data-lucide="arrow-left" class="w-3.5 h-3.5"></i>
-      <span>Save as Draft & Return</span>
-    </a>
-
-    <span class="px-3 py-1 rounded-full text-xs font-mono font-bold" style="background-color: color-mix(in srgb, var(--agency-primary) 10%, transparent); border: 1px solid color-mix(in srgb, var(--agency-primary) 20%, transparent); color: var(--agency-primary);">
-      Binding Scope Contract
-    </span>
-  </div>
-
-  <!-- Contract Container -->
-  <div class="contract-paper p-8 sm:p-12 relative overflow-hidden space-y-8">
-    <div class="absolute inset-x-0 -top-px h-px" style="background: linear-gradient(to right, transparent, var(--agency-primary), transparent); opacity: .6;"></div>
-
-    <!-- Contract Header -->
-    <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-6 border-b border-zinc-800 gap-4">
-      <div>
-        <span class="text-xs font-mono uppercase text-[var(--agency-primary)] font-bold">Standard Client Agreement</span>
-        <h1 class="text-2xl sm:text-3xl font-extrabold text-white mt-1">Statement of Work (SOW)</h1>
-        <p class="text-xs text-zinc-400 mt-1">Project Ref: <strong class="text-white font-mono">#{{ project.id }}</strong> • Service: <strong class="text-white">{{ project.service }}</strong></p>
-      </div>
-
-      <div class="text-right text-xs">
-        <strong class="text-[var(--agency-primary)] font-bold block text-sm">{{ agency_settings.agency_name }}</strong>
-        <span class="text-zinc-500 font-mono text-[11px]">SAC Code: 998311</span>
+      <div class="flex items-center gap-2">
+        <span class="inline-block h-2 w-2 rounded-full bg-emerald-500"></span>
+        <span class="font-mono text-xs text-zinc-400 uppercase tracking-wider">IT Act 2000 Binding Contract</span>
       </div>
     </div>
+  </header>
 
-    <!-- Parties Involved -->
-    <div class="grid grid-cols-1 sm:grid-cols-2 gap-6 p-4 rounded-xl bg-zinc-950 border border-zinc-800 text-xs">
-      <div>
-        <span class="text-zinc-500 font-mono uppercase text-[10px] font-bold block mb-1">Service Provider:</span>
-        <strong class="text-white block">{{ agency_settings.agency_name }}</strong>
-        <p class="text-zinc-400">Bangalore & Hyderabad, India</p>
-      </div>
-      <div>
-        <span class="text-zinc-500 font-mono uppercase text-[10px] font-bold block mb-1">Client (Recipient):</span>
-        <strong class="text-white block">{{ customer.name if customer else 'Client Enterprise' }}</strong>
-        <p class="text-zinc-400">{{ business.name if business else 'Direct Business Account' }}</p>
-        <p class="text-zinc-500 font-mono">{{ customer.email if customer else '' }}</p>
-      </div>
-    </div>
+  <!-- MAIN SOW DOCUMENT -->
+  <main class="max-w-4xl mx-auto px-6 py-10 space-y-8 font-sans">
 
-    <!-- SOW Brief & Scope Details -->
-    <div class="space-y-4 text-xs leading-relaxed text-zinc-300">
-      <h3 class="text-sm font-bold text-white uppercase tracking-wider font-mono">1. Scope of Deliverables</h3>
-      <div class="p-4 rounded-xl bg-zinc-950 border border-zinc-800 font-mono text-zinc-300">
-        {{ project.requirements or 'Website development, responsive mobile polish, and search optimization as per configured milestone package.' }}
-      </div>
-
-      <h3 class="text-sm font-bold text-white uppercase tracking-wider font-mono pt-4">2. Three-Milestone Execution Schedule</h3>
-      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <div class="p-3.5 rounded-xl bg-zinc-950 border border-zinc-800">
-          <strong class="text-white block text-xs">Milestone 1 (50% Advance)</strong>
-          <p class="text-zinc-400 text-[11px] mt-1">Kickoff, wireframes & architecture. Work commences upon settlement.</p>
+    <!-- Flash Messages Slot -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="space-y-2">
+          {% for category, message in messages %}
+            <div class="system-alert {{ 'system-alert-success' if category == 'success' else 'system-alert-error' }}">
+              <span class="font-mono">{{ message }}</span>
+              <button onclick="this.parentElement.remove()" class="text-zinc-400 hover:text-white ml-auto cursor-pointer">✕</button>
+            </div>
+          {% endfor %}
         </div>
-        <div class="p-3.5 rounded-xl bg-zinc-950 border border-zinc-800">
-          <strong class="text-white block text-xs">Milestone 2 (25% UI Sign-Off)</strong>
-          <p class="text-zinc-400 text-[11px] mt-1">Interactive prototype & responsive UI code review gate.</p>
-        </div>
-        <div class="p-3.5 rounded-xl bg-zinc-950 border border-zinc-800">
-          <strong class="text-white block text-xs">Milestone 3 (25% Final)</strong>
-          <p class="text-zinc-400 text-[11px] mt-1">Live production deployment, domain DNS setup & IP handover.</p>
+      {% endif %}
+    {% endwith %}
+
+    <article class="border border-zinc-800 bg-zinc-900 rounded-lg overflow-hidden shadow-2xl">
+      
+      <!-- Contract Header -->
+      <div class="p-8 border-b border-zinc-800 bg-zinc-950">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <span class="badge badge-indigo mb-2">MASTER ENGAGEMENT SOW</span>
+            <h1 class="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">Statement of Work (SOW)</h1>
+            <p class="text-xs font-mono text-zinc-400 mt-1">
+              Project Identifier: <strong class="text-white">#{{ project.id }}</strong> • Service Engagement: <strong class="text-white">{{ project.service }}</strong>
+            </p>
+          </div>
+
+          <div class="text-left sm:text-right font-mono text-xs text-zinc-400">
+            <strong class="text-white font-sans text-sm block">{{ agency_settings.agency_name }}</strong>
+            <span class="block mt-0.5">SAC Code: 998311</span>
+            <span class="text-emerald-400 block mt-0.5">● Escrow Gated</span>
+          </div>
         </div>
       </div>
 
-      <h3 class="text-sm font-bold text-white uppercase tracking-wider font-mono pt-4">3. Statutory Terms & Guarantees</h3>
-      <ul class="space-y-2 list-disc list-inside text-zinc-400 text-[11px]">
-        <li><strong class="text-zinc-200">2-Revision Cap:</strong> Each milestone deliverable includes up to two (2) complimentary rounds of revisions. Further revisions require a written scope add-on.</li>
-        <li><strong class="text-zinc-200">Intellectual Property:</strong> 100% of source code, design assets, and domains transfer to the Client upon final milestone payment.</li>
-        <li><strong class="text-zinc-200">Electronic Validity:</strong> This agreement is digitally executed under Section 10A of the Information Technology Act, 2000 (India).</li>
-      </ul>
-    </div>
+      <!-- Parties Declaration -->
+      <div class="p-8 border-b border-zinc-800 bg-zinc-950/60 grid grid-cols-1 sm:grid-cols-2 gap-6 text-xs font-mono">
+        <div class="border border-zinc-800 rounded bg-zinc-950 p-4 space-y-1">
+          <span class="text-zinc-500 uppercase tracking-wider block text-[10px]">Service Provider (Agency):</span>
+          <strong class="text-white font-sans text-sm block">{{ agency_settings.agency_name }}</strong>
+          <p class="text-zinc-400">Operational Delivery Node: Bangalore & Hyderabad, India</p>
+          <p class="text-zinc-500 text-[11px]">GSTIN / Export LUT Clearance Verified</p>
+        </div>
 
-    <!-- Digital E-Signature Form -->
-    <form method="POST" action="{{ url_for('customer.project_contract', project_id=project.id) }}" class="p-6 rounded-2xl bg-zinc-950 space-y-4 text-xs pt-6" style="border: 1px solid color-mix(in srgb, var(--agency-primary) 30%, transparent);">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-
-      <div class="flex items-center gap-2 mb-2">
-        <i data-lucide="check-square" class="w-4 h-4 text-[var(--agency-primary)]"></i>
-        <h4 class="text-sm font-bold text-white">Electronic Signature Authorization</h4>
+        <div class="border border-zinc-800 rounded bg-zinc-950 p-4 space-y-1">
+          <span class="text-zinc-500 uppercase tracking-wider block text-[10px]">Client (Recipient Entity):</span>
+          <strong class="text-white font-sans text-sm block">{{ customer.name if customer else 'Client Enterprise' }}</strong>
+          <p class="text-zinc-400">{{ business.name if business else 'Direct Business Account' }}</p>
+          <p class="text-zinc-500 text-[11px]">{{ customer.email if customer else '' }}</p>
+        </div>
       </div>
 
-      <label class="flex items-start gap-3 text-zinc-300 cursor-pointer">
-        <input type="checkbox" name="agreed_terms" required class="mt-0.5 rounded border-zinc-700 focus:ring-0" style="accent-color: var(--agency-primary);">
-        <span>I, the authorized representative of <strong class="text-white">{{ business.name if business else 'the Client' }}</strong>, have read and agree to the Statement of Work, 50/25/25 milestone terms, and 2-revision limit.</span>
-      </label>
-
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+      <!-- SOW Terms & Milestones Narrative -->
+      <div class="p-8 space-y-6 text-xs text-zinc-300 leading-relaxed font-mono">
+        
         <div>
-          <label class="block text-zinc-400 font-semibold mb-1">Authorized Signer Full Legal Name *</label>
-          <input type="text" name="signer_name" value="{{ customer.name if customer else '' }}" required placeholder="Type your full legal name" class="w-full px-3.5 py-2.5 rounded-xl bg-zinc-900 border border-zinc-800 text-white font-semibold focus:outline-none focus:border-[var(--agency-primary)]">
+          <h2 class="text-white text-sm font-bold uppercase tracking-wider mb-2 font-mono">1. Statement of Deliverables & Requirements</h2>
+          <div class="border border-zinc-800 rounded bg-zinc-950 p-4 text-zinc-300 whitespace-pre-wrap leading-relaxed font-sans text-xs">
+            {{ project.requirements or 'Standard digital milestone engineering, responsive UI styling, and organic search optimization as configured in the project intake form.' }}
+          </div>
         </div>
 
         <div>
-          <label class="block text-zinc-400 font-semibold mb-1">Corporate Title / Role *</label>
-          <input type="text" name="signer_title" required placeholder="e.g. Founder, CEO, Director" value="Director / Founder" class="w-full px-3.5 py-2.5 rounded-xl bg-zinc-900 border border-zinc-800 text-white font-semibold focus:outline-none focus:border-[var(--agency-primary)]">
+          <h2 class="text-white text-sm font-bold uppercase tracking-wider mb-3 font-mono">2. Three-Milestone Sequential Execution Architecture</h2>
+          <div class="grid grid-cols-1 sm:grid-cols-3 border-t border-l border-zinc-800 bg-zinc-950">
+            <div class="p-4 border-b border-r border-zinc-800 space-y-1.5">
+              <span class="text-zinc-500 block text-[10px]">MILESTONE 1 (50%)</span>
+              <strong class="text-white font-sans text-xs block">Discovery & UI/UX</strong>
+              <p class="text-zinc-400 text-[11px] font-sans">Architecture, Figma wireframes, and schema definitions. Activated upon advance escrow reservation.</p>
+            </div>
+            <div class="p-4 border-b border-r border-zinc-800 space-y-1.5">
+              <span class="text-zinc-500 block text-[10px]">MILESTONE 2 (25%)</span>
+              <strong class="text-white font-sans text-xs block">Functional Staging</strong>
+              <p class="text-zinc-400 text-[11px] font-sans">Full code implementation on staging URLs. Triggers client review cycle and revision allocation.</p>
+            </div>
+            <div class="p-4 border-b border-r border-zinc-800 space-y-1.5">
+              <span class="text-zinc-500 block text-[10px]">MILESTONE 3 (25%)</span>
+              <strong class="text-white font-sans text-xs block">Deployment & IP</strong>
+              <p class="text-zinc-400 text-[11px] font-sans">Final production launch, DNS routing, and complete intellectual property repository handover.</p>
+            </div>
+          </div>
         </div>
+
+        <div>
+          <h2 class="text-white text-sm font-bold uppercase tracking-wider mb-2 font-mono">3. Statutory Terms, Revision Caps & Legal Validity</h2>
+          <div class="border border-zinc-800 rounded bg-zinc-950 p-4 space-y-2 text-zinc-400 font-sans text-xs">
+            <p>• <strong class="text-zinc-200">2-Revision Cap Guarantee:</strong> Each milestone deliverable includes up to two (2) complimentary structured revision cycles. Any requests altering the scope of work described in Section 1 will be invoiced under an explicit Change Order Add-On.</p>
+            <p>• <strong class="text-zinc-200">Intellectual Property Rights:</strong> 100% of source code, design components, and production assets transfer unencumbered to the Client upon settlement of the final milestone balance.</p>
+            <p>• <strong class="text-zinc-200">Electronic Contract Validity:</strong> This document constitutes an enforceable electronic contract under Section 10A of the Information Technology Act, 2000 (India). Digital signatures and cryptographic event hashes are legally binding.</p>
+          </div>
+        </div>
+
       </div>
 
-      <button type="submit" class="w-full py-3.5 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-bold text-xs shadow-xl transition flex items-center justify-center gap-2 cursor-pointer mt-4">
-        <i data-lucide="pen-tool" class="w-4 h-4 text-[var(--agency-primary)]"></i>
-        <span>Digitally Sign SOW & Proceed to Deposit Payment →</span>
-      </button>
-    </form>
-  </div>
+      <!-- DIGITAL SIGNATURE FORM -->
+      <form method="POST" action="{{ url_for('customer.project_contract', project_id=project.id) }}" class="p-8 border-t border-zinc-800 bg-zinc-950 space-y-5 text-xs font-mono">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
-  <script>if (window.lucide) lucide.createIcons();</script>
+        <div class="flex items-center gap-2">
+          <span class="badge badge-emerald">SIGNATURE REQUIRED</span>
+          <span class="text-white font-bold uppercase">Authorized Representative Execution</span>
+        </div>
+
+        <label class="flex items-start gap-3 p-3.5 rounded border border-zinc-800 bg-zinc-900 cursor-pointer font-sans text-xs text-zinc-300">
+          <input type="checkbox" name="agreed_terms" required class="mt-0.5">
+          <span>
+            I, the authorized legal representative of <strong class="text-white">{{ business.name if business else 'the Client Organization' }}</strong>, have read and unconditionally accept the Statement of Work, 50/25/25 milestone gates, and 2-revision scope policy.
+          </span>
+        </label>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+          <div>
+            <label class="block text-zinc-400 mb-1">Signer Full Legal Name *</label>
+            <input
+              type="text"
+              name="signer_name"
+              value="{{ customer.name if customer else '' }}"
+              required
+              placeholder="e.g. John Doe"
+              class="form-control text-xs"
+            >
+          </div>
+
+          <div>
+            <label class="block text-zinc-400 mb-1">Corporate Title / Role *</label>
+            <input
+              type="text"
+              name="signer_title"
+              value="Director / Founder"
+              required
+              placeholder="e.g. Managing Director / CEO"
+              class="form-control text-xs"
+            >
+          </div>
+        </div>
+
+        <div class="pt-3">
+          <button type="submit" class="btn btn-primary w-full h-12 text-sm font-bold tracking-wide cursor-pointer">
+            Digitally Sign SOW & Proceed to Deposit Checkout →
+          </button>
+        </div>
+      </form>
+
+    </article>
+
+  </main>
+
+  <!-- FOOTER -->
+  <footer class="border-t border-zinc-800 bg-zinc-950 py-6 px-6 text-center text-xs font-mono text-zinc-500">
+    {{ agency_settings.agency_name }} • Master Service Agreement Node • SAC 998311 Compliant
+  </footer>
+
 </body>
 </html>

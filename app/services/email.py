@@ -1,3 +1,5 @@
+"""Transactional SMTP and Console Email Delivery Engine for AgencyOS."""
+
 import logging
 import smtplib
 from email.message import EmailMessage
@@ -11,7 +13,7 @@ class EmailDeliveryError(Exception):
     """Raised when email delivery cannot be completed safely."""
 
 
-def _build_message(to, subject, body):
+def _build_message(to: str, subject: str, body: str) -> EmailMessage:
     message = EmailMessage()
     message["To"] = to
     message["From"] = current_app.config.get(
@@ -22,7 +24,7 @@ def _build_message(to, subject, body):
     return message
 
 
-def send_email(to, subject, body):
+def send_email(to: str, subject: str, body: str) -> None:
     """Send an email using the configured backend.
 
     The console backend records messages only during tests and never logs
@@ -48,7 +50,7 @@ def send_email(to, subject, body):
         return
 
     if backend != "smtp":
-        raise EmailDeliveryError("Unsupported mail backend: %s" % backend)
+        raise EmailDeliveryError(f"Unsupported mail backend: {backend}")
 
     server = current_app.config.get("MAIL_SERVER", "")
     port = current_app.config.get("MAIL_PORT", 587)
@@ -76,3 +78,4 @@ def send_email(to, subject, body):
     except (OSError, smtplib.SMTPException) as exc:
         logger.error("Email delivery failed: %s", type(exc).__name__)
         raise EmailDeliveryError("Email delivery failed.") from exc
+        

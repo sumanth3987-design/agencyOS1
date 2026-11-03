@@ -1,21 +1,117 @@
+<!-- Save this directly into: templates/legal/contact.html -->
 <!DOCTYPE html>
 <html lang="en" class="dark">
 <head>
-  <meta charset="UTF-8"><title>Contact Us — AgencyOS</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Contact & Operations Desk — {{ agency_settings.agency_name }}</title>
+
+  <!-- Typography: Plus Jakarta Sans & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
   <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="/static/style.css">
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace'],
+          },
+          colors: {
+            zinc: {
+              950: '#09090b',
+              900: '#101014',
+              850: '#18181b',
+              800: '#27272a',
+              700: '#3f3f46',
+            }
+          }
+        }
+      }
+    }
+  </script>
 </head>
-<body class="bg-[#09090b] text-zinc-300 font-sans p-6 sm:p-12 max-w-4xl mx-auto">
-  <a href="/" class="text-xs font-mono text-indigo-400 hover:underline">← Return to Homepage</a>
-  <h1 class="text-3xl font-extrabold text-white mt-6">Contact AgencyOS</h1>
-  <div class="mt-8 grid grid-cols-1 md:grid-cols-2 gap-8 border-t border-zinc-800 pt-8">
-    <div class="space-y-4">
-      <div><span class="text-xs font-mono text-zinc-500 uppercase block">Operating Office</span><p class="text-sm">Bangalore & Hyderabad, India</p></div>
-      <div><span class="text-xs font-mono text-zinc-500 uppercase block">Direct Support</span><p class="text-sm">Email: support@agencyos.local</p></div>
+<body class="bg-zinc-950 text-zinc-100 min-h-screen selection:bg-zinc-100 selection:text-zinc-950 antialiased font-sans flex flex-col justify-between" style="--agency-primary: {{ agency_settings.primary_color }}; --agency-on-primary: {{ agency_settings.primary_contrast }};">
+
+  <!-- TOP HEADER -->
+  <header class="border-b border-zinc-800 bg-zinc-950/95 sticky top-0 z-50">
+    <div class="max-w-4xl mx-auto px-6 h-16 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        {% include "includes/agency_brand.html" %}
+      </div>
+      <a href="/" class="btn btn-secondary text-xs h-8">
+        ← Return to Homepage
+      </a>
     </div>
-    <div class="bg-zinc-900 border border-zinc-800 p-6 rounded-2xl">
-      <h3 class="text-sm font-bold text-white mb-2">Official WhatsApp Desk</h3>
-      <p class="text-xs text-zinc-400 mb-4">Direct WhatsApp assistance for active milestones.</p>
-      <a href="https://wa.me/91XXXXXXXXXX" class="px-4 py-2 rounded-xl bg-emerald-500 text-zinc-950 font-bold text-xs">Chat on WhatsApp</a>
+  </header>
+
+  <!-- MAIN CONTACT SHELL -->
+  <main class="max-w-4xl mx-auto px-6 py-12 space-y-8 flex-1 w-full">
+    
+    <div class="border-b border-zinc-800 pb-6">
+      <span class="badge badge-indigo mb-2 font-mono">MERCHANT VERIFICATION DESK</span>
+      <h1 class="text-3xl font-extrabold text-white tracking-tight">Contact {{ agency_settings.agency_name }}</h1>
+      <p class="text-xs font-mono text-zinc-400 mt-1">Official communication channels for client escrow support, technical inquiries, and merchant verification.</p>
     </div>
-  </div>
-</body></html>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-8 font-mono text-xs">
+      
+      <!-- Operating Office & Email -->
+      <div class="border border-zinc-800 bg-zinc-900 rounded-lg p-6 space-y-6">
+        <div>
+          <span class="text-zinc-500 uppercase tracking-wider block text-[10px] mb-1">Corporate Operating Office:</span>
+          <strong class="text-white font-sans text-sm block">Bangalore &amp; Hyderabad, India</strong>
+          <p class="text-zinc-400 font-sans text-xs mt-0.5">Primary delivery nodes operating on Indian Standard Time (IST).</p>
+        </div>
+
+        <div>
+          <span class="text-zinc-500 uppercase tracking-wider block text-[10px] mb-1">Electronic Mail Support:</span>
+          <strong class="text-zinc-200 block text-xs">support@agencyos.local</strong>
+          <p class="text-zinc-500 text-[11px] font-sans mt-0.5">Average response time: Under 4 business hours.</p>
+        </div>
+
+        <div>
+          <span class="text-zinc-500 uppercase tracking-wider block text-[10px] mb-1">Statutory SAC Classification:</span>
+          <strong class="text-zinc-200 block text-xs">998311 (Information Technology &amp; Consulting)</strong>
+        </div>
+      </div>
+
+      <!-- WhatsApp Direct Desk -->
+      <div class="border border-zinc-800 bg-zinc-900 rounded-lg p-6 flex flex-col justify-between space-y-4">
+        <div>
+          <span class="badge badge-emerald mb-2 font-mono">PRIORITY CLIENT DISPATCH</span>
+          <h3 class="text-sm font-bold text-white font-sans uppercase tracking-wider">Official WhatsApp Desk</h3>
+          <p class="text-xs text-zinc-400 font-sans mt-1 leading-relaxed">
+            Active milestone clients can ping our operations lead directly via WhatsApp for instant sprint updates and staging previews.
+          </p>
+        </div>
+
+        <div>
+          <a
+            href="https://wa.me/{{ agency_settings.whatsapp_support_number|replace('+', '') }}"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="btn btn-primary w-full h-11 text-xs font-semibold flex items-center justify-center gap-2"
+          >
+            <span>Chat on WhatsApp ⚡</span>
+          </a>
+        </div>
+      </div>
+
+    </div>
+
+  </main>
+
+  <!-- FOOTER -->
+  <footer class="border-t border-zinc-800 bg-zinc-950 py-6 px-6 text-center text-xs font-mono text-zinc-500">
+    {{ agency_settings.agency_name }} • Merchant Legal &amp; Operations Desk
+  </footer>
+
+</body>
+</html>

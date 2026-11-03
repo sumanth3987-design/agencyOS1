@@ -1,117 +1,133 @@
+<!-- Save this directly into: templates/professional_my_projects.html -->
 <!DOCTYPE html>
-<html lang="en" class="dark scroll-smooth">
+<html lang="en" class="dark">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Specialist Task Workspace — {{ agency_settings.agency_name }}</title>
-  
+  <title>My Assigned Sprints — {{ agency_settings.agency_name }}</title>
+
+  <!-- Typography: Plus Jakarta Sans & JetBrains Mono -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://unpkg.com/lucide@latest"></script>
-  
-  <style>
-    body { background-color: #09090b; font-family: 'Plus Jakarta Sans', sans-serif; color: #f4f4f5; }
-    .pro-card { background: #121215; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 18px; }
-  </style>
+  <link rel="stylesheet" href="/static/style.css">
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace'],
+          },
+          colors: {
+            zinc: {
+              950: '#09090b',
+              900: '#101014',
+              850: '#18181b',
+              800: '#27272a',
+              700: '#3f3f46',
+            }
+          }
+        }
+      }
+    }
+  </script>
 </head>
-<body class="bg-zinc-950 text-zinc-100 min-h-screen p-6 sm:p-10 max-w-6xl mx-auto selection:bg-indigo-500 selection:text-white" style="--agency-primary: {{ agency_settings.primary_color }}; --agency-on-primary: {{ agency_settings.primary_contrast }};">
+<body class="bg-zinc-950 text-zinc-100 min-h-screen selection:bg-zinc-100 selection:text-zinc-950 antialiased font-sans" style="--agency-primary: {{ agency_settings.primary_color }}; --agency-on-primary: {{ agency_settings.primary_contrast }};">
 
-  {% include "includes/agency_brand.html" %}
-  <!-- Header -->
-  <header class="flex flex-col sm:flex-row sm:items-center justify-between pb-6 border-b border-zinc-800/80 gap-4">
-    <div>
-      <div class="flex items-center gap-2 mb-1">
-        <span class="h-2 w-2 rounded-full bg-emerald-400"></span>
-        <span class="text-xs font-mono text-emerald-400 font-bold uppercase">Specialist Portal Active</span>
+  <!-- TOP WORKBENCH HEADER -->
+  <header class="border-b border-zinc-800 bg-zinc-950/95 sticky top-0 z-50">
+    <div class="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        {% include "includes/agency_brand.html" %}
+        <span class="font-mono text-xs text-zinc-500">/</span>
+        <span class="font-mono text-xs text-zinc-400 font-bold uppercase">My Deliverables</span>
       </div>
-      <h1 class="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">Assigned Deliverables & Sprints</h1>
-      <p class="text-xs text-zinc-400 mt-1">Manage milestone tasks, submit deliverable URLs, and monitor your UPI payouts.</p>
-    </div>
 
-    <div class="flex items-center gap-3">
-      <a href="{{ url_for('professional_profile') }}" class="px-4 py-2 rounded-xl bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-xs font-bold text-white transition flex items-center gap-2">
-        <i data-lucide="wallet" class="w-3.5 h-3.5 text-indigo-400"></i>
-        <span>Payout Settings (UPI)</span>
-      </a>
-      <form method="POST" action="{{ url_for('logout') }}">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button type="submit" class="px-3.5 py-2 rounded-xl bg-zinc-900 text-xs font-bold text-zinc-400 hover:text-rose-400 transition cursor-pointer">
-          Sign Out
-        </button>
-      </form>
+      <div class="flex items-center gap-3">
+        <a href="{{ url_for('professional.professional_profile') }}" class="btn btn-secondary text-xs h-8">
+          Payout Settings (UPI)
+        </a>
+        <form method="POST" action="{{ url_for('auth.logout') }}" class="inline">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="btn btn-subtle text-xs h-8 cursor-pointer">Sign Out</button>
+        </form>
+      </div>
     </div>
   </header>
 
-  <!-- Payout & Performance Statistics -->
-  <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-8">
-    <div class="pro-card p-6">
-      <span class="text-xs font-mono uppercase text-zinc-400">Active Task Sprints</span>
-      <div class="mt-3 font-mono text-3xl font-extrabold text-sky-400">
-        {{ projects|selectattr("status", "in", ["Assigned", "In Progress", "Revision"])|list|length if projects else 0 }}
-      </div>
-      <span class="mt-2 block text-[11px] text-zinc-500">Currently in development</span>
-    </div>
+  <!-- MAIN SPRINT ROSTER -->
+  <main class="max-w-6xl mx-auto px-6 py-8 space-y-8">
 
-    <div class="pro-card p-6">
-      <span class="text-xs font-mono uppercase text-zinc-400">Awaiting Client Sign-Off</span>
-      <div class="mt-3 font-mono text-3xl font-extrabold text-amber-400">
-        {{ projects|selectattr("status", "equalto", "Submitted")|list|length if projects else 0 }}
-      </div>
-      <span class="mt-2 block text-[11px] text-zinc-500">Under quality review gate</span>
-    </div>
-
-    <div class="pro-card p-6">
-      <span class="text-xs font-mono uppercase text-zinc-400">Completed & Handed Over</span>
-      <div class="mt-3 font-mono text-3xl font-extrabold text-emerald-400">
-        {{ projects|selectattr("status", "equalto", "Completed")|list|length if projects else 0 }}
-      </div>
-      <span class="mt-2 block text-[11px] text-zinc-500">Eligible for instant UPI payout</span>
-    </div>
-  </div>
-
-  <!-- Assigned Projects & Deliverables Board -->
-  <div class="pro-card p-6 mt-8">
-    <div class="flex items-center justify-between pb-6 border-b border-zinc-800">
+    <!-- Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-6 border-b border-zinc-800 gap-4">
       <div>
-        <h2 class="text-lg font-bold text-white tracking-tight">Sprint Tasks Assigned To You</h2>
-        <p class="text-xs text-zinc-400 mt-1">Submit your preview URLs, source links, and completion notes for each milestone.</p>
+        <div class="flex items-center gap-2 mb-1 font-mono text-xs">
+          <span class="badge badge-emerald">SPECIALIST DELIVERABLE RUNTIME</span>
+          <span class="text-zinc-600">•</span>
+          <span class="text-zinc-400">Assigned Workspaces</span>
+        </div>
+        <h1 class="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">My Active Sprints</h1>
+        <p class="text-xs font-mono text-zinc-400 mt-1">Manage milestone tasks, submit deliverable staging URLs, and monitor 45% UPI payouts.</p>
       </div>
+
+      <a href="{{ url_for('professional.professional_projects') }}" class="btn btn-primary text-xs h-9 px-4 font-semibold">
+        Browse Open Sprints →
+      </a>
     </div>
 
-    <div class="divide-y divide-zinc-800/60 mt-2">
-      {% for project in projects if projects %}
-      <article class="py-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <div class="flex items-center gap-3">
-            <span class="font-mono text-xs font-bold text-indigo-400">#{{ project.id }}</span>
-            <h3 class="text-base font-bold text-white">{{ project.service }}</h3>
-            <span class="px-2.5 py-0.5 rounded text-[10px] font-mono border {% if project.status == 'Completed' %}bg-emerald-500/10 text-emerald-400 border-emerald-500/20{% elif project.status == 'Revision' %}bg-amber-500/10 text-amber-400 border-amber-500/20{% else %}bg-sky-500/10 text-sky-400 border-sky-500/20{% endif %}">
-              {{ project.status }}
-            </span>
+    <!-- Assigned Sprints Table -->
+    <div class="border border-zinc-800 bg-zinc-900 rounded-lg overflow-hidden">
+      <div class="p-4 border-b border-zinc-800 bg-zinc-950 flex items-center justify-between font-mono text-xs">
+        <span class="font-bold uppercase tracking-wider text-white">Active Milestone Tasks</span>
+        <span class="text-zinc-500">{{ projects|length if projects else 0 }} Assigned</span>
+      </div>
+
+      <div class="divide-y divide-zinc-800">
+        {% for project in projects if projects %}
+        <article class="p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 font-mono text-xs">
+          <div>
+            <div class="flex items-center gap-2.5 mb-1">
+              <span class="text-zinc-400 font-bold">#{{ project.id }}</span>
+              <h3 class="text-sm font-bold text-white font-sans">{{ project.service }}</h3>
+              <span class="badge
+                {% if project.status == 'Completed' %}badge-emerald
+                {% elif project.status == 'Revision' %}badge-amber
+                {% elif project.status == 'Submitted' %}badge-indigo
+                {% else %}badge-neutral{% endif %} text-[10px]">
+                {{ project.status }}
+              </span>
+            </div>
+            <p class="text-zinc-400 text-[11px]">
+              Package: <strong class="text-zinc-200">{{ project.package }}</strong> • 
+              Client: <strong class="text-zinc-200">{{ project.customer.name if project.customer else 'Direct Client' }}</strong>
+            </p>
           </div>
-          <p class="text-xs text-zinc-400 mt-1">
-            Package: <strong class="text-zinc-200">{{ project.package }}</strong> • 
-            Client: <strong class="text-zinc-200">{{ project.customer.name if project.customer else 'Direct Client' }}</strong>
-          </p>
-        </div>
 
-        <div class="flex items-center gap-3">
-          <a href="/professional/project/{{ project.id }}/workspace" class="px-4 py-2 rounded-xl font-bold text-xs transition flex items-center gap-1.5 shadow {% if current_user.role|lower == 'admin' %}bg-white hover:bg-zinc-200 text-zinc-950{% else %}hover:brightness-110{% endif %}" {% if current_user.role|lower != 'admin' %}style="background-color: var(--agency-primary); color: var(--agency-on-primary)"{% endif %}>
-            <span>Open Delivery Workspace</span>
-            <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
-          </a>
+          <div class="flex items-center gap-3">
+            <a href="{{ url_for('professional.professional_project_workspace', project_id=project.id) }}" class="btn btn-primary text-xs h-8 px-4 font-semibold">
+              Open Workbench →
+            </a>
+          </div>
+        </article>
+        {% else %}
+        <div class="p-12 text-center text-zinc-500 font-mono text-xs">
+          You have no active projects assigned right now. Browse open sprints in the marketplace to apply!
         </div>
-      </article>
-      {% else %}
-      <div class="py-12 text-center text-xs text-zinc-500 font-mono">
-        <i data-lucide="inbox" class="w-8 h-8 text-zinc-600 mx-auto mb-3"></i>
-        <p>No active project sprints assigned right now. You will be assigned as client orders are placed.</p>
+        {% endfor %}
       </div>
-      {% endfor %}
     </div>
-  </div>
 
-  <script>if (window.lucide) lucide.createIcons();</script>
+  </main>
+
+  <!-- FOOTER -->
+  <footer class="border-t border-zinc-800 bg-zinc-950 py-6 px-6 text-center text-xs font-mono text-zinc-500">
+    {{ agency_settings.agency_name }} Specialist Partner Network • Instant Wire/UPI Clearance
+  </footer>
+
 </body>
-</html> 
+</html>

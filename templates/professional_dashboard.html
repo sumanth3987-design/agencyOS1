@@ -1,275 +1,288 @@
+<!-- Save this directly into: templates/professional_dashboard.html -->
 <!DOCTYPE html>
-<html lang="en" class="dark scroll-smooth">
+<html lang="en" class="dark">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Specialist Executive Workspace — {{ agency_settings.agency_name }}</title>
-  
+  <title>Specialist Executive Workbench — {{ agency_settings.agency_name }}</title>
+
+  <!-- Typography: Plus Jakarta Sans & JetBrains Mono -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://unpkg.com/lucide@latest"></script>
-  
-  <style>
-    body { background-color: #09090b; font-family: 'Plus Jakarta Sans', sans-serif; color: #f4f4f5; }
-    .pro-card { background: #121215; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 20px; }
-    .pro-card:hover { border-color: rgba(255, 255, 255, 0.16); }
-    .opportunity-card { background: #15151a; border: 1px solid rgba(99, 102, 241, 0.25); border-radius: 20px; transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1); }
-    .opportunity-card:hover { border-color: rgba(99, 102, 241, 0.5); transform: translateY(-2px); }
-  </style>
+  <link rel="stylesheet" href="/static/style.css">
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace'],
+          },
+          colors: {
+            zinc: {
+              950: '#09090b',
+              900: '#101014',
+              850: '#18181b',
+              800: '#27272a',
+              700: '#3f3f46',
+            }
+          }
+        }
+      }
+    }
+  </script>
 </head>
-<body class="bg-zinc-950 text-zinc-100 min-h-screen p-6 sm:p-10 max-w-6xl mx-auto selection:bg-indigo-500 selection:text-white space-y-8" style="--agency-primary: {{ agency_settings.primary_color }}; --agency-on-primary: {{ agency_settings.primary_contrast }};">
-  {% include "includes/agency_brand.html" %}
+<body class="bg-zinc-950 text-zinc-100 min-h-screen selection:bg-zinc-100 selection:text-zinc-950 antialiased" style="--agency-primary: {{ agency_settings.primary_color }}; --agency-on-primary: {{ agency_settings.primary_contrast }};">
 
-  <!-- ==================== HEADER BAR ==================== -->
-  <header class="flex flex-col sm:flex-row sm:items-center justify-between pb-6 border-b border-zinc-800/80 gap-6">
-    <div>
-      <div class="flex items-center gap-2 mb-2">
-        <span class="px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-mono text-[10px] font-bold uppercase flex items-center gap-1.5">
-          <span class="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-          <span>Verified Specialist Partner</span>
-        </span>
-        <span class="text-zinc-600 font-mono text-[11px]">•</span>
-        <span class="text-zinc-400 font-mono text-[11px]">{{ profile.expertise or 'Full-Stack Developer' }}</span>
+  <!-- TOP HEADER -->
+  <header class="border-b border-zinc-800 bg-zinc-950/95 sticky top-0 z-50">
+    <div class="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        {% include "includes/agency_brand.html" %}
+        <span class="font-mono text-xs text-zinc-500">/</span>
+        <span class="font-mono text-xs text-zinc-400 font-bold uppercase">Specialist Workbench</span>
       </div>
-      <h1 class="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">Specialist Delivery Workspace</h1>
-      <p class="text-xs text-zinc-400 mt-1">Claim open client sprints, submit deliverable staging URLs, and reconcile instant UPI bank payouts.</p>
-    </div>
 
-    <!-- Quick Actions -->
-    <div class="flex items-center gap-3">
-      <a href="/professional/profile" class="px-4 py-2 rounded-xl bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-xs font-bold text-white transition flex items-center gap-2">
-        <i data-lucide="wallet" class="w-3.5 h-3.5 text-indigo-400"></i>
-        <span>Payout Settings (UPI)</span>
-      </a>
-      <form method="POST" action="/logout">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button type="submit" class="px-3.5 py-2 rounded-xl bg-zinc-900 text-xs font-bold text-zinc-400 hover:text-rose-400 transition cursor-pointer">
-          Sign Out
-        </button>
-      </form>
+      <div class="flex items-center gap-3">
+        <a href="{{ url_for('professional.professional_profile') }}" class="btn btn-secondary text-xs h-8">
+          Payout Settings (UPI)
+        </a>
+        <form method="POST" action="{{ url_for('auth.logout') }}" class="inline">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="btn btn-subtle text-xs h-8 cursor-pointer">Sign Out</button>
+        </form>
+      </div>
     </div>
   </header>
 
-  <!-- Flash Messages -->
-  {% with messages = get_flashed_messages(with_categories=true) %}
-    {% if messages %}
-      <div class="space-y-2">
-        {% for category, message in messages %}
-          <div class="p-3.5 rounded-xl border text-xs flex items-center justify-between {% if category == 'success' %}bg-emerald-500/10 border-emerald-500/20 text-emerald-300{% elif 'warning' in category %}bg-amber-500/10 border-amber-500/20 text-amber-300{% else %}bg-rose-500/10 border-rose-500/20 text-rose-300{% endif %}">
-            <span>{{ message }}</span>
-            <button onclick="this.parentElement.remove()" class="text-zinc-400 hover:text-white">×</button>
-          </div>
-        {% endfor %}
-      </div>
-    {% endif %}
-  {% endwith %}
+  <!-- MAIN WORKBENCH -->
+  <main class="max-w-6xl mx-auto px-6 py-8 space-y-8 font-sans">
 
-  <!-- ==================== FINANCIAL LEDGER & PERFORMANCE TILES ==================== -->
-  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-    <div class="pro-card p-5">
-      <div class="flex items-center justify-between text-xs text-zinc-400 font-mono uppercase">
-        <span>Settled Payouts</span>
-        <i data-lucide="check-circle" class="w-4 h-4 text-emerald-400"></i>
-      </div>
-      <div class="mt-3 space-y-1 font-mono text-xl font-extrabold text-emerald-400">
-        {% for currency, amount in total_earned|dictsort %}
-        <div>{{ amount|format_currency(currency) }}</div>
-        {% else %}
-        <div>{{ 0|format_currency('INR') }}</div>
-        {% endfor %}
-      </div>
-      <span class="mt-2 block text-[11px] text-zinc-500">Payout allocations grouped by project currency</span>
-    </div>
-
-    <div class="pro-card p-5">
-      <div class="flex items-center justify-between text-xs text-zinc-400 font-mono uppercase">
-        <span>Escrow In-Flight</span>
-        <i data-lucide="clock" class="w-4 h-4 text-amber-400"></i>
-      </div>
-      <div class="mt-3 space-y-1 font-mono text-xl font-extrabold text-amber-400">
-        {% for currency, amount in pending_payout|dictsort %}
-        <div>{{ amount|format_currency(currency) }}</div>
-        {% else %}
-        <div>{{ 0|format_currency('INR') }}</div>
-        {% endfor %}
-      </div>
-      <span class="mt-2 block text-[11px] text-zinc-500">Payout allocations grouped by project currency</span>
-    </div>
-
-    <div class="pro-card p-5">
-      <div class="flex items-center justify-between text-xs text-zinc-400 font-mono uppercase">
-        <span>Active Workspaces</span>
-        <i data-lucide="activity" class="w-4 h-4 text-sky-400"></i>
-      </div>
-      <div class="mt-3 font-mono text-3xl font-extrabold text-sky-400">{{ active_sprints }}</div>
-      <span class="mt-2 block text-[11px] text-zinc-500">{{ completed_sprints }} sprints completed</span>
-    </div>
-
-    <div class="pro-card p-5">
-      <div class="flex items-center justify-between text-xs text-zinc-400 font-mono uppercase">
-        <span>Payout Route</span>
-        <i data-lucide="credit-card" class="w-4 h-4 text-indigo-400"></i>
-      </div>
-      <div class="mt-3 font-mono text-sm font-bold text-white truncate">
-        {{ profile.upi_id or 'UPI Setup Needed' }}
-      </div>
-      <span class="mt-2 block text-[11px] text-zinc-500">Auto-reconciled with bank UTR</span>
-    </div>
-  </div>
-
-  {% if redeemable_invoices %}
-  <section class="pro-card p-6 border-emerald-500/30 bg-emerald-950/10 space-y-4">
-    <div class="flex items-center justify-between pb-3 border-b border-emerald-500/20">
-      <h2 class="text-sm font-bold text-white flex items-center gap-2">
-        <i data-lucide="indian-rupee" class="w-4 h-4 text-emerald-400"></i>
-        <span>Approved Payouts</span>
-      </h2>
-      <span class="text-[10px] font-mono text-emerald-400 uppercase font-bold">Client Approved</span>
-    </div>
-
-    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-      {% for inv in redeemable_invoices %}
-      <div class="p-4 rounded-xl bg-zinc-950 border border-zinc-800 flex items-center justify-between gap-4">
-        <div>
-          <span class="text-[10px] font-mono text-zinc-500">Project #{{ inv.project_id }}</span>
-          <div class="font-mono text-lg font-extrabold text-white mt-0.5">{{ inv.talent_payout|format_currency(inv.currency) }}</div>
+    <!-- Flash Messages Slot -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="space-y-2">
+          {% for category, message in messages %}
+            <div class="system-alert {{ 'system-alert-success' if category == 'success' else 'system-alert-error' }}">
+              <span class="font-mono">{{ message }}</span>
+              <button onclick="this.parentElement.remove()" class="text-zinc-400 hover:text-white ml-auto cursor-pointer">✕</button>
+            </div>
+          {% endfor %}
         </div>
+      {% endif %}
+    {% endwith %}
 
-        {% if inv.payout_status == 'Requested' %}
-          <span class="px-3 py-1.5 rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[10px] font-bold font-mono">Redemption Processing</span>
-        {% elif inv.payout_status == 'Settled' %}
-          <span class="px-3 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-bold font-mono">Settled (UTR: {{ inv.payout_utr or 'Recorded' }})</span>
-        {% else %}
-          <form method="POST" action="{{ url_for('professional.redeem_payout', invoice_id=inv.id) }}">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button type="submit" class="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-zinc-950 font-bold text-[11px] shadow-lg transition cursor-pointer">Redeem to UPI</button>
-          </form>
-        {% endif %}
-      </div>
-      {% endfor %}
-    </div>
-  </section>
-  {% endif %}
-
-  <!-- =========================================================================
-       SECTION 1: OPEN OPPORTUNITIES (AVAILABLE CLIENT SPRINTS)
-       ========================================================================= -->
-  <div class="space-y-4">
-    <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-zinc-800 gap-2">
+    <!-- Top Executive Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-6 border-b border-zinc-800 gap-4">
       <div>
-        <div class="flex items-center gap-2">
-          <span class="h-2 w-2 rounded-full bg-indigo-500 animate-pulse"></span>
-          <h2 class="text-lg font-bold text-white tracking-tight">Available Sprints (Open Client Orders)</h2>
+        <div class="flex items-center gap-2 mb-2 font-mono text-xs">
+          <span class="badge badge-emerald">VERIFIED SPECIALIST PARTNER</span>
+          <span class="text-zinc-600">•</span>
+          <span class="text-zinc-400">{{ profile.expertise or 'Full-Stack Software Specialist' }}</span>
         </div>
-        <p class="text-xs text-zinc-400 mt-0.5">Claim newly commissioned milestone packages. Each sprint pays a fixed 45% specialist revenue share.</p>
+        <h1 class="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">Specialist Allocation Ledger</h1>
+        <p class="text-xs font-mono text-zinc-400 mt-1">Claim open client orders, submit deliverable staging URLs, and reconcile instant 45% wire allocations.</p>
       </div>
 
-      <span class="text-xs font-mono text-indigo-400 px-3.5 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/20 self-start sm:self-auto">
-        {{ available_projects|length }} Open Sprint{% if available_projects|length != 1 %}s{% endif %}
-      </span>
+      <div>
+        <a href="#available-sprints" class="btn btn-primary text-xs h-9 px-4 font-semibold">
+          Claim Open Sprints ↓
+        </a>
+      </div>
     </div>
 
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-      {% for prj in available_projects if available_projects %}
-      <div class="opportunity-card p-6 flex flex-col justify-between space-y-4">
-        <div>
-          {% if prj.currency == 'INR' %}
-            {% set sprint_price = package_prices.get(prj.package) %}
+    <!-- 4 High-Impact Financial KPI Tiles -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 border-t border-l border-zinc-800 bg-zinc-950 font-mono text-xs">
+      <div class="p-5 border-b border-r border-zinc-800">
+        <span class="text-zinc-500 uppercase block mb-1">Settled Earnings</span>
+        <div class="text-2xl font-bold text-emerald-400">
+          {% for currency, amount in total_earned|dictsort %}
+          <div>{{ amount|format_currency(currency) }}</div>
           {% else %}
-            {% set sprint_price = international_package_prices.get(prj.currency, {}).get(prj.package) %}
-          {% endif %}
-          <div class="flex items-center justify-between text-xs mb-2">
-            <span class="font-mono font-bold text-indigo-400">#{{ prj.id }}</span>
-            <span class="px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-mono font-bold">
-              {% if sprint_price is not none %}Specialist Payout: {{ (sprint_price * 0.45)|format_currency(prj.currency) }}{% else %}Payout quote unavailable{% endif %}
-            </span>
-          </div>
-
-          <h3 class="text-base font-bold text-white">{{ prj.service }}</h3>
-          <p class="text-xs text-zinc-400 mt-1">Package: <strong class="text-zinc-200">{{ prj.package }}</strong> • Business: <strong class="text-zinc-200">{{ prj.business.name if prj.business else 'Direct Client' }}</strong></p>
-
-          <div class="mt-4 p-3.5 rounded-xl bg-zinc-950/80 border border-zinc-800 text-[11px] text-zinc-300 font-mono line-clamp-3 leading-relaxed">
-            {{ prj.requirements or 'Standard client milestone brief.' }}
-          </div>
+          <div>{{ 0|format_currency('INR') }}</div>
+          {% endfor %}
         </div>
+        <span class="text-[11px] text-zinc-500 mt-1 block">Cleared to registered account</span>
+      </div>
 
-        <div class="pt-4 border-t border-zinc-800 flex items-center justify-between">
-          <span class="text-[11px] font-mono text-zinc-500">Ordered: {{ prj.created_at.strftime('%d %b %Y') if prj.created_at else 'Today' }}</span>
-
-          {% if prj.id in my_applied_ids %}
-            <span class="px-3.5 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 font-mono text-xs font-bold">
-              Application Under Review ⏳
-            </span>
+      <div class="p-5 border-b border-r border-zinc-800">
+        <span class="text-zinc-500 uppercase block mb-1">In-Flight Escrow (45%)</span>
+        <div class="text-2xl font-bold text-amber-400">
+          {% for currency, amount in pending_payout|dictsort %}
+          <div>{{ amount|format_currency(currency) }}</div>
           {% else %}
-            <form method="POST" action="/professional/project/{{ prj.id }}/apply">
+          <div>{{ 0|format_currency('INR') }}</div>
+          {% endfor %}
+        </div>
+        <span class="text-[11px] text-zinc-500 mt-1 block">Active milestone reservations</span>
+      </div>
+
+      <div class="p-5 border-b border-r border-zinc-800">
+        <span class="text-zinc-500 uppercase block mb-1">Active Sprints</span>
+        <div class="text-2xl font-bold text-white">{{ active_sprints }}</div>
+        <span class="text-[11px] text-zinc-500 mt-1 block">{{ completed_sprints }} deliverables completed</span>
+      </div>
+
+      <div class="p-5 border-b border-r border-zinc-800">
+        <span class="text-zinc-500 uppercase block mb-1">Payout Endpoint</span>
+        <div class="text-sm font-bold text-white truncate mt-1">
+          {{ profile.upi_id or 'UPI Setup Required' }}
+        </div>
+        <span class="text-[11px] text-zinc-500 mt-1 block">Bank UTR verified reconciliation</span>
+      </div>
+    </div>
+
+    <!-- REDEEMABLE PAYOUTS ACCORDION -->
+    {% if redeemable_invoices %}
+    <section class="border border-zinc-800 bg-zinc-900 rounded-lg p-6 space-y-4">
+      <div class="flex items-center justify-between pb-3 border-b border-zinc-800 font-mono text-xs">
+        <h2 class="text-sm font-bold text-white uppercase tracking-wider">Client-Approved Milestone Payouts</h2>
+        <span class="badge badge-emerald">READY FOR CLEARANCE</span>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 font-mono text-xs">
+        {% for inv in redeemable_invoices %}
+        <div class="p-4 rounded border border-zinc-800 bg-zinc-950 flex items-center justify-between gap-4">
+          <div>
+            <span class="text-[10px] text-zinc-500">Project SOW #{{ inv.project_id }}</span>
+            <div class="text-lg font-bold text-white mt-0.5">{{ inv.talent_payout|format_currency(inv.currency) }}</div>
+          </div>
+
+          <div>
+            {% if inv.payout_status == 'Requested' %}
+            <span class="badge badge-amber">Redemption Processing</span>
+            {% elif inv.payout_status == 'Settled' %}
+            <span class="badge badge-emerald">Settled (UTR: {{ inv.payout_utr or 'Logged' }})</span>
+            {% else %}
+            <form method="POST" action="{{ url_for('professional.redeem_payout', invoice_id=inv.id) }}">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-              <button type="submit" class="px-4 py-2 rounded-xl font-bold text-xs shadow-lg transition flex items-center gap-1.5 cursor-pointer hover:brightness-110" style="background-color: var(--agency-primary); color: var(--agency-on-primary)">
-                <span>Claim Sprint ⚡</span>
+              <button type="submit" class="btn btn-primary text-xs h-8 px-3 font-semibold cursor-pointer">
+                Redeem Allocation →
               </button>
             </form>
-          {% endif %}
+            {% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </section>
+    {% endif %}
+
+    <!-- ASSIGNED WORKSPACES (IN DEVELOPMENT) -->
+    <div class="space-y-4">
+      <div class="flex items-center justify-between pb-3 border-b border-zinc-800 font-mono text-xs">
+        <div>
+          <h2 class="text-sm font-bold text-white uppercase tracking-wider">My Active Delivery Workspaces</h2>
+          <p class="text-zinc-400 font-sans mt-0.5">Projects assigned to you by agency administration. Submit deliverable staging URLs or review client feedback.</p>
+        </div>
+        <span class="text-zinc-400">{{ assigned_projects|length }} Assigned Sprints</span>
+      </div>
+
+      <div class="border border-zinc-800 bg-zinc-900 rounded-lg overflow-hidden">
+        <div class="divide-y divide-zinc-800">
+          {% for project in assigned_projects if assigned_projects %}
+          <article class="p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <div class="flex items-center gap-2.5 mb-1">
+                <span class="font-mono text-xs text-zinc-400 font-bold">#{{ project.id }}</span>
+                <h3 class="text-sm font-bold text-white">{{ project.service }}</h3>
+                <span class="badge
+                  {% if project.status == 'Completed' %}badge-emerald
+                  {% elif project.status == 'Revision' %}badge-amber
+                  {% elif project.status == 'Submitted' %}badge-indigo
+                  {% else %}badge-neutral{% endif %} font-mono text-[10px]">
+                  {{ project.status }}
+                </span>
+              </div>
+              <p class="text-xs font-mono text-zinc-400">
+                Package: <strong class="text-zinc-200">{{ project.package }}</strong> • 
+                Client: <strong class="text-zinc-200">{{ project.customer.name if project.customer else 'Direct Client' }}</strong>
+              </p>
+            </div>
+
+            <div class="flex items-center gap-3">
+              <a href="{{ url_for('professional.professional_project_workspace', project_id=project.id) }}" class="btn btn-primary text-xs h-8 font-semibold">
+                Open Delivery Workbench →
+              </a>
+            </div>
+          </article>
+          {% else %}
+          <div class="p-10 text-center font-mono text-xs text-zinc-500">
+            You have no assigned sprints in active development right now. Claim an open order below to start.
+          </div>
+          {% endfor %}
         </div>
       </div>
-      {% else %}
-      <div class="col-span-2 p-12 text-center rounded-2xl bg-[#121215] border border-zinc-800 text-xs text-zinc-500 font-mono">
-        <i data-lucide="check-circle" class="w-8 h-8 text-emerald-400 mx-auto mb-3"></i>
-        <p>All active client projects are currently staffed. New open sprints will appear here as soon as orders are booked.</p>
-      </div>
-      {% endfor %}
-    </div>
-  </div>
-
-  <!-- =========================================================================
-       SECTION 2: MY ASSIGNED SPRINTS (IN DEVELOPMENT)
-       ========================================================================= -->
-  <div class="space-y-4">
-    <div class="flex items-center justify-between pb-3 border-b border-zinc-800">
-      <div>
-        <h2 class="text-lg font-bold text-white tracking-tight">My Active Delivery Workspaces</h2>
-        <p class="text-xs text-zinc-400 mt-0.5">Projects assigned to you by {{ agency_settings.agency_name }}. Submit deliverable staging URLs or review client feedback.</p>
-      </div>
-      <span class="text-xs font-mono text-zinc-400">{{ assigned_projects|length }} Assigned</span>
     </div>
 
-    <div class="pro-card p-6">
-      <div class="divide-y divide-zinc-800/60">
-        {% for project in assigned_projects if assigned_projects %}
-        <article class="py-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <!-- OPEN OPPORTUNITIES MARKETPLACE -->
+    <div id="available-sprints" class="space-y-4 pt-4">
+      <div class="flex items-center justify-between pb-3 border-b border-zinc-800 font-mono text-xs">
+        <div>
+          <h2 class="text-sm font-bold text-white uppercase tracking-wider">Available Sprints (Open Client Orders)</h2>
+          <p class="text-zinc-400 font-sans mt-0.5">Claim newly commissioned milestone engagements. Fixed 45% revenue allocation per package.</p>
+        </div>
+        <span class="badge badge-indigo">{{ available_projects|length }} Open Engagements</span>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {% for prj in available_projects if available_projects %}
+        <div class="border border-zinc-800 bg-zinc-900 rounded-lg p-6 flex flex-col justify-between space-y-4">
           <div>
-            <div class="flex items-center gap-3">
-              <span class="font-mono text-xs font-bold text-indigo-400">#{{ project.id }}</span>
-              <h3 class="text-base font-bold text-white">{{ project.service }}</h3>
-              <span class="px-2.5 py-0.5 rounded text-[10px] font-mono border {% if project.status == 'Completed' %}bg-emerald-500/10 text-emerald-400 border-emerald-500/20{% elif project.status == 'Revision' %}bg-amber-500/10 text-amber-400 border-amber-500/20{% elif project.status == 'Submitted' %}bg-purple-500/10 text-purple-400 border-purple-500/20{% else %}bg-sky-500/10 text-sky-400 border-sky-500/20{% endif %}">
-                ● {{ project.status }}
+            {% if prj.currency == 'INR' %}
+              {% set sprint_price = package_prices.get(prj.package) %}
+            {% else %}
+              {% set sprint_price = international_package_prices.get(prj.currency, {}).get(prj.package) %}
+            {% endif %}
+
+            <div class="flex items-center justify-between font-mono text-xs mb-2">
+              <span class="text-zinc-400 font-bold">#{{ prj.id }}</span>
+              <span class="badge badge-emerald">
+                {% if sprint_price is not none %}Specialist Share (45%): {{ (sprint_price * 0.45)|format_currency(prj.currency) }}{% else %}Quote Pending{% endif %}
               </span>
             </div>
-            <p class="text-xs text-zinc-400 mt-1">
-              Package: <strong class="text-zinc-200">{{ project.package }}</strong> • 
-              Client: <strong class="text-zinc-200">{{ project.customer.name if project.customer else 'Direct Client' }}</strong>
-            </p>
+
+            <h3 class="text-base font-bold text-white font-sans">{{ prj.service }}</h3>
+            <p class="text-xs font-mono text-zinc-400 mt-1">Package: {{ prj.package }} • Entity: {{ prj.business.name if prj.business else 'Client Account' }}</p>
+
+            <div class="mt-4 p-3.5 rounded bg-zinc-950 border border-zinc-800 text-[11px] text-zinc-300 font-mono line-clamp-3 leading-relaxed">
+              {{ prj.requirements or 'Standard client milestone brief.' }}
+            </div>
           </div>
 
-          <div class="flex items-center gap-3">
-            <a href="/professional/project/{{ project.id }}/workspace" class="px-4 py-2 rounded-xl font-bold text-xs transition flex items-center gap-1.5 shadow cursor-pointer hover:brightness-110" style="background-color: var(--agency-primary); color: var(--agency-on-primary)">
-              <span>Open Delivery Workspace</span>
-              <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
-            </a>
+          <div class="pt-4 border-t border-zinc-800 flex items-center justify-between font-mono text-xs">
+            <span class="text-[11px] text-zinc-500">Ordered: {{ prj.created_at.strftime('%d %b %Y') if prj.created_at else 'Today' }}</span>
+
+            {% if prj.id in my_applied_ids %}
+            <span class="badge badge-amber">Application Under Review ⏳</span>
+            {% else %}
+            <form method="POST" action="{{ url_for('professional.apply_for_project', project_id=prj.id) }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="btn btn-primary text-xs h-8 px-4 font-semibold cursor-pointer">
+                Claim Sprint ⚡
+              </button>
+            </form>
+            {% endif %}
           </div>
-        </article>
+        </div>
         {% else %}
-        <div class="py-10 text-center text-xs text-zinc-500 font-mono">
-          You have no active projects assigned right now. Browse the Available Sprints above to apply!
+        <div class="col-span-2 p-12 text-center rounded border border-zinc-800 bg-zinc-900 font-mono text-xs text-zinc-500">
+          All client projects are currently staffed. New open orders will appear as clients fund Milestone 1 escrow.
         </div>
         {% endfor %}
       </div>
     </div>
-  </div>
 
-  <footer class="pt-6 border-t border-zinc-900 text-center text-xs font-mono text-zinc-600">
-    {{ agency_settings.agency_name }} Specialist Partner Network • Instant IMPS/UPI Payout Settlement
+  </main>
+
+  <!-- FOOTER -->
+  <footer class="border-t border-zinc-800 bg-zinc-950 py-6 px-6 text-center text-xs font-mono text-zinc-500">
+    {{ agency_settings.agency_name }} Specialist Partner Network • Instant Wire/UPI Clearance
   </footer>
-
-  <script>if (window.lucide) lucide.createIcons();</script>
 </body>
 </html>

@@ -1,112 +1,224 @@
+<!-- Save this directly into: templates/admin_professionals.html -->
 {% extends "admin_base.html" %}
-{% block title %}Specialist Talent & Payouts — AgencyOS{% endblock %}
+{% block title %}Specialist Talent & Payout Verification — AgencyOS{% endblock %}
 {% block content %}
-<main class="max-w-7xl mx-auto px-6 py-8">
-  <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-6 border-b border-zinc-800/80 gap-4 mb-8">
+<main class="max-w-7xl mx-auto px-6 py-8 space-y-8 font-sans">
+
+  <!-- Header -->
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-6 border-b border-zinc-800 gap-4">
     <div>
-      <h1 class="text-2xl font-extrabold text-white tracking-tight">Specialist Roster & Payout Verification</h1>
-      <p class="text-xs text-zinc-400 mt-1">Review specialist qualifications, approve onboarding, and inspect UPI payout rails.</p>
+      <div class="flex items-center gap-2 mb-1 font-mono text-xs">
+        <span class="badge badge-emerald">SPECIALIST MERITOCRACY LEDGER</span>
+        <span class="text-zinc-600">•</span>
+        <span class="text-zinc-400">45% Allocation Protocol</span>
+      </div>
+      <h1 class="text-2xl font-extrabold text-white tracking-tight">Specialist Talent & Verification</h1>
+      <p class="text-xs font-mono text-zinc-400 mt-1">Review specialist qualifications, audit performance metrics, and authorize UPI payout routes.</p>
     </div>
-    <span class="text-xs font-mono text-zinc-400 px-3.5 py-1.5 rounded-xl bg-zinc-900 border border-zinc-800">
-      {{ profiles|length if profiles else 0 }} Specialists Registered
+
+    <span class="badge badge-neutral font-mono">
+      {{ profiles|length if profiles else 0 }} Specialists Enrolled
     </span>
   </div>
 
-  <div class="rounded-2xl bg-[#121215] border border-zinc-800 overflow-hidden shadow-xl">
-    <table class="w-full text-left text-xs">
-      <thead class="bg-[#18181d] text-zinc-400 font-mono uppercase tracking-wider border-b border-zinc-800">
-        <tr>
-          <th class="p-4">Specialist</th>
-          <th class="p-4">Expertise / Skills</th>
-          <th class="p-4">UPI Payout ID</th>
-          <th class="p-4">Profile Strength</th>
-          <th class="p-4">Verification</th>
-          <th class="p-4 text-right">Actions</th>
-        </tr>
-      </thead>
-      <tbody class="divide-y divide-zinc-800/60 text-zinc-300">
-        {% for profile in profiles %}
-        <tr class="hover:bg-white/2 transition">
-          <td class="p-4">
-            <strong class="text-white block">{{ profile.user.name if profile.user else 'Specialist' }}</strong>
-            <span class="text-zinc-500 font-mono text-[11px]">{{ profile.user.email if profile.user else '' }}</span>
-            <div class="mt-2 flex flex-wrap items-center gap-1.5">
-              {% for badge in profile.get_badges(meritocracy_map.get(profile.id)) %}
-                <span class="rounded border px-2 py-0.5 font-mono text-[9px] {{ badge.color }}">
-                  {{ badge.name }}
-                </span>
-              {% endfor %}
-            </div>
-          </td>
-          <td class="p-4">
-            <span class="text-zinc-200 font-semibold block">{{ profile.expertise or 'General' }}</span>
-            {% set metrics = meritocracy_map.get(profile.id, {}) %}
-            <span class="text-zinc-500 text-[11px] block">{{ profile.experience or 'Experience not set' }}</span>
-            <span class="mt-1 block font-mono text-[10px] text-zinc-400">
-              {{ metrics.get('completed_sprints', 0) }} completed · {{ metrics.get('active_sprints', 0) }} active
-            </span>
-            <span class="mt-1 block font-mono text-[10px] text-zinc-500">
-              On-time:
-              {% if metrics.get('on_time_rate') is not none %}{{ '%.0f'|format(metrics.get('on_time_rate')) }}%{% else %}N/A{% endif %}
-              · Rating:
-              {% if metrics.get('average_rating') is not none %}{{ '%.1f'|format(metrics.get('average_rating')) }}/5{% else %}N/A{% endif %}
-              · Completion:
-              {% if metrics.get('completion_rate') is not none %}{{ '%.0f'|format(metrics.get('completion_rate')) }}%{% else %}N/A{% endif %}
-            </span>
-          </td>
-          <td class="p-4 font-mono">
-            {% if profile.upi_id %}
-              <span class="px-2.5 py-0.5 rounded text-[11px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                {{ profile.upi_id }}
-              </span>
-            {% else %}
-              <span class="text-zinc-600">Pending setup</span>
-            {% endif %}
-          </td>
-          <td class="p-4 font-mono">
-            {% set score = completion_map.get(profile.id, 0) %}
-            <span class="{% if score >= 80 %}text-emerald-400{% else %}text-amber-400{% endif %} font-bold">
-              {{ score }}%
-            </span>
-          </td>
-          <td class="p-4">
-            {% if profile.verification_status == 'Verified' %}
-              <span class="px-2.5 py-0.5 rounded text-[10px] font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Verified</span>
-            {% elif profile.verification_status == 'Rejected' %}
-              <span class="px-2.5 py-0.5 rounded text-[10px] font-mono bg-rose-500/10 text-rose-400 border border-rose-500/20">Rejected</span>
-            {% else %}
-              <span class="px-2.5 py-0.5 rounded text-[10px] font-mono bg-amber-500/10 text-amber-400 border border-amber-500/20">Pending Review</span>
-            {% endif %}
-          </td>
-          <td class="p-4 text-right">
-            <div class="flex items-center justify-end gap-2">
-              {% if profile.verification_status != 'Verified' %}
-              <form method="POST" action="/admin/professionals/{{ profile.id }}/verify" class="inline">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <button type="submit" class="px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-bold text-[11px] transition">
-                  Verify
-                </button>
-              </form>
-              {% endif %}
+  <!-- Specialist Roster Table -->
+  <div class="border border-zinc-800 bg-zinc-900 rounded-lg overflow-hidden">
+    <div class="p-4 border-b border-zinc-800 bg-zinc-950 flex items-center justify-between font-mono text-xs">
+      <span class="font-bold uppercase tracking-wider text-white">Talent Allocation Ledger</span>
+      <span class="text-zinc-500">Meritocracy Engine</span>
+    </div>
 
-              {% if profile.verification_status != 'Rejected' %}
-              <form method="POST" action="/admin/professionals/{{ profile.id }}/reject" class="inline">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <button type="submit" class="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-rose-500/20 hover:text-rose-400 text-zinc-400 font-bold text-[11px] transition">
-                  Reject
-                </button>
-              </form>
+    <div class="overflow-x-auto w-full">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Specialist / Performance Badges</th>
+            <th>Discipline & Velocity Metrics</th>
+            <th>UPI Payout Endpoint</th>
+            <th>Profile Health</th>
+            <th>Verification State</th>
+            <th class="text-right">Admin Actions</th>
+          </tr>
+        </thead>
+        <tbody class="font-mono text-xs">
+          {% for profile in profiles %}
+          {% set metrics = meritocracy_map.get(profile.id, {}) %}
+          <tr>
+            <td>
+              <strong class="text-white font-sans text-xs block">{{ profile.user.name if profile.user else 'Specialist' }}</strong>
+              <span class="text-zinc-500 text-[11px] block">{{ profile.user.email if profile.user else '' }}</span>
+              <div class="mt-2 flex flex-wrap items-center gap-1.5">
+                {% for badge in profile.get_badges(metrics) %}
+                  <span class="badge badge-neutral text-[9px]">
+                    {{ badge.name }}
+                  </span>
+                {% endfor %}
+              </div>
+            </td>
+            <td>
+              <span class="text-zinc-200 font-sans font-semibold block">{{ profile.expertise or 'General Specialist' }}</span>
+              <span class="text-zinc-400 text-[11px] block">{{ profile.experience or 'Experience unconfigured' }}</span>
+              <span class="mt-1 block text-[10px] text-zinc-500">
+                Sprints: {{ metrics.get('completed_sprints', 0) }} Delivered · {{ metrics.get('active_sprints', 0) }} In Flight
+              </span>
+            </td>
+            <td>
+              {% if profile.upi_id %}
+                <span class="badge badge-emerald font-mono text-[10px]">
+                  {{ profile.upi_id }}
+                </span>
+              {% else %}
+                <span class="text-zinc-500 text-[11px]">Pending UPI Setup</span>
               {% endif %}
-            </div>
-          </td>
-        </tr>
-        {% else %}
-        <tr>
-          <td colspan="6" class="p-12 text-center text-zinc-500">No specialists registered yet.</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+            </td>
+            <td>
+              {% set score = completion_map.get(profile.id, 0) %}
+              <span class="{% if score >= 80 %}text-emerald-400{% else %}text-amber-400{% endif %} font-bold">
+                {{ score }}%
+              </span>
+            </td>
+            <td>
+              {% if profile.verification_status == 'Verified' %}
+                <span class="badge badge-emerald">VERIFIED</span>
+              {% elif profile.verification_status == 'Rejected' %}
+                <span class="badge badge-neutral text-rose-400">REJECTED</span>
+              {% else %}
+                <span class="badge badge-amber">PENDING REVIEW</span>
+              {% endif %}
+            </td>
+            <td class="text-right">
+              <div class="flex items-center justify-end gap-1.5 flex-wrap">
+                <button
+                  type="button"
+                  class="btn btn-secondary text-xs h-7 px-2.5 view-pro-btn cursor-pointer"
+                  data-pro-name="{{ profile.user.name if profile.user else 'Specialist' }}"
+                  data-pro-email="{{ profile.user.email if profile.user else '' }}"
+                  data-pro-expertise="{{ profile.expertise }}"
+                  data-pro-experience="{{ profile.experience }}"
+                  data-pro-upi="{{ profile.upi_id or 'Not configured' }}"
+                  data-pro-pan="{{ profile.pan_number or 'Not provided' }}"
+                  data-pro-portfolio="{{ profile.portfolio or 'None' }}"
+                  data-pro-skills="{{ profile.skills or 'None' }}"
+                  data-pro-status="{{ profile.verification_status }}"
+                >
+                  View Details
+                </button>
+
+                {% if profile.verification_status != 'Verified' %}
+                <form method="POST" action="{{ url_for('admin.verify_professional', profile_id=profile.id) }}" class="inline">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <button type="submit" class="btn btn-primary text-xs h-7 px-2 font-semibold cursor-pointer">
+                    Verify
+                  </button>
+                </form>
+                {% endif %}
+
+                {% if profile.verification_status != 'Rejected' %}
+                <form method="POST" action="{{ url_for('admin.reject_professional', profile_id=profile.id) }}" class="inline">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <button type="submit" class="btn btn-secondary text-xs h-7 px-2 text-zinc-400 hover:text-rose-400 cursor-pointer">
+                    Reject
+                  </button>
+                </form>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="6" class="p-12 text-center text-zinc-500 font-mono text-xs">
+              No specialists registered in the network roster yet.
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
   </div>
+
 </main>
+
+<!-- SPECIALIST DETAILS MODAL -->
+<div id="proModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs hidden">
+  <div class="w-full max-w-lg p-6 bg-zinc-900 border border-zinc-800 rounded-lg shadow-2xl font-mono text-xs space-y-4">
+    <div class="flex items-center justify-between pb-3 border-b border-zinc-800">
+      <h3 class="font-bold text-white uppercase tracking-wider">Specialist Credentials &amp; Payout Profile</h3>
+      <button type="button" id="closeProModalBtn" class="text-zinc-400 hover:text-white text-sm cursor-pointer">✕</button>
+    </div>
+
+    <div class="space-y-3 p-4 rounded border border-zinc-800 bg-zinc-950 font-mono text-xs">
+      <div>
+        <span class="text-zinc-500 text-[10px] uppercase block">Specialist Name:</span>
+        <strong id="modalProName" class="text-white font-sans text-sm">Specialist Name</strong>
+      </div>
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <span class="text-zinc-500 text-[10px] uppercase block">Email Address:</span>
+          <span id="modalProEmail" class="text-zinc-200">email@domain.com</span>
+        </div>
+        <div>
+          <span class="text-zinc-500 text-[10px] uppercase block">Core Expertise:</span>
+          <span id="modalProExpertise" class="text-indigo-400 font-bold">Expertise</span>
+        </div>
+      </div>
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <span class="text-zinc-500 text-[10px] uppercase block">UPI Payout VPA:</span>
+          <span id="modalProUpi" class="text-emerald-400 font-bold">UPI ID</span>
+        </div>
+        <div>
+          <span class="text-zinc-500 text-[10px] uppercase block">PAN / Tax ID:</span>
+          <span id="modalProPan" class="text-zinc-200">PAN</span>
+        </div>
+      </div>
+      <div>
+        <span class="text-zinc-500 text-[10px] uppercase block">Portfolio / GitHub:</span>
+        <a id="modalProPortfolio" href="#" target="_blank" class="text-indigo-400 hover:underline truncate block font-sans">Portfolio URL</a>
+      </div>
+      <div>
+        <span class="text-zinc-500 text-[10px] uppercase block">Tech Stack &amp; Skills:</span>
+        <span id="modalProSkills" class="text-zinc-300 font-sans text-xs">Skills</span>
+      </div>
+    </div>
+
+    <div class="pt-2">
+      <button type="button" id="dismissProModalBtn" class="btn btn-secondary w-full text-xs h-9 cursor-pointer">
+        Close Profile
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    var modal = document.getElementById("proModal");
+    var closeBtn = document.getElementById("closeProModalBtn");
+    var dismissBtn = document.getElementById("dismissProModalBtn");
+
+    function closeModal() {
+      if (modal) modal.classList.add("hidden");
+    }
+
+    if (closeBtn) closeBtn.addEventListener("click", closeModal);
+    if (dismissBtn) dismissBtn.addEventListener("click", closeModal);
+
+    document.querySelectorAll(".view-pro-btn").forEach(function (button) {
+      button.addEventListener("click", function () {
+        var ds = this.dataset;
+        document.getElementById("modalProName").textContent = ds.proName;
+        document.getElementById("modalProEmail").textContent = ds.proEmail;
+        document.getElementById("modalProExpertise").textContent = ds.proExpertise;
+        document.getElementById("modalProUpi").textContent = ds.proUpi;
+        document.getElementById("modalProPan").textContent = ds.proPan;
+        document.getElementById("modalProSkills").textContent = ds.proSkills;
+        
+        var portLink = document.getElementById("modalProPortfolio");
+        portLink.href = ds.proPortfolio;
+        portLink.textContent = ds.proPortfolio;
+
+        if (modal) modal.classList.remove("hidden");
+      });
+    });
+  });
+</script>
 {% endblock %}

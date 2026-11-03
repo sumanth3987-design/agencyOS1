@@ -1,16 +1,15 @@
+<!-- Save this directly into: templates/admin_dashboard.html -->
 {% extends "admin_base.html" %}
 
-{% block title %}Corbel Executive Workspace — AgencyOS{% endblock %}
+{% block title %}AgencyOS Executive Command Center{% endblock %}
 
 {% block extra_css %}
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
 
 <style>
-  body { background-color: #09090b; font-family: 'Plus Jakarta Sans', sans-serif; color: #f4f4f5; }
-  .corbel-card { background: #121215; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 18px; }
-  .corbel-card:hover { border-color: rgba(255, 255, 255, 0.16); }
+  .admin-grid-card { background: #101014; border: 1px solid #27272a; border-radius: 8px; }
   .corbel-tab-active { background: #ffffff !important; color: #09090b !important; font-weight: 700 !important; }
   .corbel-tab-inactive { background: transparent; color: #a1a1aa; }
   .corbel-tab-inactive:hover { color: #ffffff; }
@@ -20,153 +19,138 @@
 {% endblock %}
 
 {% block content %}
-<main class="w-full max-w-[1600px] mx-auto px-6 py-8">
+<main class="w-full max-w-[1600px] mx-auto p-6 space-y-8 font-sans">
 
-  <!-- ==================== TOP CORBEL HEADER WITH TABS ==================== -->
-  <div class="flex flex-col md:flex-row md:items-center justify-between pb-6 border-b border-zinc-800/80 gap-6 w-full">
-    <div class="flex items-center gap-6">
+  <!-- TOP WORKBENCH HEADER WITH SEGMENTED TABS -->
+  <div class="flex flex-col md:flex-row md:items-center justify-between pb-6 border-b border-zinc-800 gap-6 w-full">
+    <div class="flex flex-col sm:flex-row sm:items-center gap-6">
       <div>
-        <h1 class="text-2xl font-extrabold text-white tracking-tight">Executive Workspace</h1>
-        <p class="text-xs text-zinc-400 mt-1">Live agency analytics, client pipelines, and delivery performance.</p>
+        <div class="flex items-center gap-2 mb-1">
+          <span class="badge badge-emerald">NODE: PRIMARY OPERATIONAL</span>
+          <span class="font-mono text-xs text-zinc-500">•</span>
+          <span class="font-mono text-xs text-zinc-400">SAC 998311</span>
+        </div>
+        <h1 class="text-2xl font-extrabold text-white tracking-tight">Executive Command Center</h1>
       </div>
 
-      <!-- Segmented Tab Pills -->
-      <div class="bg-zinc-900 border border-zinc-800 p-1 rounded-full flex items-center gap-1 text-xs font-semibold shrink-0">
-        <button type="button" onclick="switchCorbelTab('overview')" id="btn-tab-overview" class="corbel-tab-active px-5 py-2 rounded-full transition cursor-pointer flex items-center gap-2">
-          <i data-lucide="layout-grid" class="w-3.5 h-3.5"></i>
-          <span>Dashboard</span>
+      <!-- Segmented Navigation Pills -->
+      <div class="bg-zinc-900 border border-zinc-800 p-1 rounded flex items-center gap-1 text-xs font-mono font-semibold shrink-0">
+        <button type="button" onclick="switchCorbelTab('overview')" id="btn-tab-overview" class="corbel-tab-active px-4 py-1.5 rounded transition cursor-pointer">
+          [1] Directory
         </button>
-        <button type="button" onclick="switchCorbelTab('analytics')" id="btn-tab-analytics" class="corbel-tab-inactive px-5 py-2 rounded-full transition cursor-pointer flex items-center gap-2">
-          <i data-lucide="line-chart" class="w-3.5 h-3.5"></i>
-          <span>Analytics</span>
+        <button type="button" onclick="switchCorbelTab('analytics')" id="btn-tab-analytics" class="corbel-tab-inactive px-4 py-1.5 rounded transition cursor-pointer">
+          [2] Revenue Analytics
         </button>
-        <button type="button" onclick="switchCorbelTab('kanban')" id="btn-tab-kanban" class="corbel-tab-inactive px-5 py-2 rounded-full transition cursor-pointer flex items-center gap-2">
-          <i data-lucide="kanban" class="w-3.5 h-3.5"></i>
-          <span>Kanban Board</span>
+        <button type="button" onclick="switchCorbelTab('kanban')" id="btn-tab-kanban" class="corbel-tab-inactive px-4 py-1.5 rounded transition cursor-pointer">
+          [3] Gate Pipeline
         </button>
       </div>
     </div>
 
-    <!-- Right Header Actions -->
-    <div class="flex items-center gap-3 shrink-0">
-      <button type="button" onclick="openBroadcastModal()" class="px-4 py-2 rounded-xl bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/30 text-indigo-300 font-bold text-xs flex items-center gap-2 transition cursor-pointer">
-        <i data-lucide="megaphone" class="w-3.5 h-3.5 text-indigo-400"></i>
-        <span>Send Broadcast</span>
+    <!-- Right Header Actions (Strict CTA Hierarchy) -->
+    <div class="flex items-center gap-2.5 shrink-0">
+      <button type="button" id="openBroadcastBtn" class="btn btn-secondary text-xs h-9">
+        Dispatch Broadcast
       </button>
-      <!-- AI SOW Generator Trigger Button -->
-      <button type="button" onclick="openAiModal()" class="px-4 py-2 rounded-xl bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 text-purple-300 font-bold text-xs flex items-center gap-2 transition cursor-pointer">
-        <i data-lucide="sparkles" class="w-3.5 h-3.5 text-purple-400"></i>
-        <span>AI SOW Drafter</span>
+
+      <button type="button" id="openAiBtn" class="btn btn-secondary text-xs h-9">
+        AI SOW Drafter ⚡
       </button>
-      <span class="px-3.5 py-1.5 rounded-full border border-zinc-800 bg-zinc-900/60 text-xs font-mono text-emerald-400 flex items-center gap-2">
-        <span class="h-2 w-2 rounded-full bg-emerald-400 animate-pulse"></span>
-        <span>IST Operational</span>
-      </span>
-      <a href="{{ url_for('admin.admin_project_review') }}" class="px-4 py-2 rounded-xl bg-white text-zinc-950 font-bold text-xs hover:bg-zinc-200 transition">
-        Review Gate
+
+      <a href="{{ url_for('admin.admin_project_review') }}" class="btn btn-primary text-xs h-9 font-semibold">
+        Deliverable Review Gate →
       </a>
     </div>
   </div>
 
   <!-- =========================================================================
-       TAB 1: FULL-WIDTH DASHBOARD OVERVIEW & PROJECTS DIRECTORY
+       TAB 1: DIRECTORY & OPERATIONAL KPIS
        ========================================================================= -->
-  <div id="tab-pane-overview" class="tab-pane active mt-8 space-y-8 w-full">
-    
-    <!-- 4 Top KPI Cards -->
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 w-full">
-      <div class="corbel-card p-6">
-        <div class="flex items-center justify-between text-xs text-zinc-400 font-semibold uppercase tracking-wider">
-          <span>Registered Clients</span>
-          <span class="text-indigo-400 font-mono text-[11px] bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20">CRM</span>
-        </div>
-        <div class="mt-4 font-mono text-3xl font-extrabold text-white">{{ customer_count }}</div>
-        <div class="mt-4 text-xs text-zinc-500 pt-3 border-t border-zinc-800/60">Active client accounts</div>
+  <div id="tab-pane-overview" class="tab-pane active space-y-8 w-full">
+
+    <!-- 4 High-Impact KPI Tiles -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 border-t border-l border-zinc-800 bg-zinc-950">
+      <div class="p-6 border-b border-r border-zinc-800">
+        <span class="font-mono text-xs uppercase tracking-wider text-zinc-500 block mb-1">Client Accounts</span>
+        <div class="font-mono text-3xl font-bold text-white">{{ customer_count }}</div>
+        <span class="font-mono text-[11px] text-zinc-500 mt-2 block">Enterprise CRM records</span>
       </div>
 
-      <div class="corbel-card p-6">
-        <div class="flex items-center justify-between text-xs text-zinc-400 font-semibold uppercase tracking-wider">
-          <span>Specialists</span>
-          <span class="text-emerald-400 font-mono text-[11px] bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">{{ professional_count }} total</span>
+      <div class="p-6 border-b border-r border-zinc-800">
+        <div class="flex justify-between items-baseline mb-1">
+          <span class="font-mono text-xs uppercase tracking-wider text-zinc-500">Verified Specialists</span>
+          <span class="badge badge-amber text-[10px]">{{ pending_verification_count }} PENDING</span>
         </div>
-        <div class="mt-4 font-mono text-3xl font-extrabold text-white">{{ professional_count }}</div>
-        <div class="mt-4 text-xs text-zinc-500 pt-3 border-t border-zinc-800/60">
-          <span class="text-amber-400 font-bold font-mono">{{ pending_verification_count }} pending verification</span>
-        </div>
+        <div class="font-mono text-3xl font-bold text-white">{{ professional_count }}</div>
+        <span class="font-mono text-[11px] text-zinc-500 mt-2 block">45/55 Ledger Split Model</span>
       </div>
 
-      <div class="corbel-card p-6">
-        <div class="flex items-center justify-between text-xs text-zinc-400 font-semibold uppercase tracking-wider">
-          <span>Active Sprints</span>
-          <span class="text-sky-400 font-mono text-[11px] bg-sky-500/10 px-2 py-0.5 rounded border border-sky-500/20">{{ in_progress_project_count }} in dev</span>
+      <div class="p-6 border-b border-r border-zinc-800">
+        <div class="flex justify-between items-baseline mb-1">
+          <span class="font-mono text-xs uppercase tracking-wider text-zinc-500">In-Flight Sprints</span>
+          <span class="badge badge-neutral text-[10px]">{{ revision_project_count }} IN REVISION</span>
         </div>
-        <div class="mt-4 font-mono text-3xl font-extrabold text-sky-400">{{ in_progress_project_count }}</div>
-        <div class="mt-4 text-xs text-zinc-500 pt-3 border-t border-zinc-800/60">
-          <span class="text-amber-400 font-mono font-bold">{{ revision_project_count }} in revision (Cap 2)</span>
-        </div>
+        <div class="font-mono text-3xl font-bold text-white">{{ in_progress_project_count }}</div>
+        <span class="font-mono text-[11px] text-zinc-500 mt-2 block">Milestone 2 staging active</span>
       </div>
 
-      <div class="corbel-card p-6">
-        <div class="flex items-center justify-between text-xs text-zinc-400 font-semibold uppercase tracking-wider">
-          <span>Completed</span>
-          <span class="text-emerald-400 font-mono text-[11px] bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">Handed Over</span>
+      <div class="p-6 border-b border-r border-zinc-800">
+        <div class="flex justify-between items-baseline mb-1">
+          <span class="font-mono text-xs uppercase tracking-wider text-zinc-500">Delivered & Closed</span>
+          <span class="badge badge-emerald text-[10px]">100% IP HANDOVER</span>
         </div>
-        <div class="mt-4 font-mono text-3xl font-extrabold text-emerald-400">{{ completed_project_count }}</div>
-        <div class="mt-4 text-xs text-zinc-500 pt-3 border-t border-zinc-800/60">
-          <span class="text-rose-400 font-mono font-bold">{{ payment_pending_project_count }} pending payment</span>
-        </div>
+        <div class="font-mono text-3xl font-bold text-emerald-400">{{ completed_project_count }}</div>
+        <span class="font-mono text-[11px] text-zinc-500 mt-2 block">{{ payment_pending_project_count }} pending advance</span>
       </div>
     </div>
 
-    <!-- Gauge & Bar Chart Row -->
+    <!-- Chart & Gauge Row -->
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 w-full">
-      <div class="corbel-card p-6 flex flex-col justify-between">
+      <div class="admin-grid-card p-6 flex flex-col justify-between">
         <div>
-          <span class="text-xs font-mono uppercase text-zinc-400 tracking-wider">Operational Velocity</span>
-          <h3 class="text-lg font-bold text-white mt-1">Delivery Gauge</h3>
+          <span class="font-mono text-xs text-zinc-500 uppercase tracking-wider">Velocity Metrics</span>
+          <h3 class="text-base font-bold text-white mt-1">Milestone Velocity Gauge</h3>
         </div>
         <div class="py-4 flex justify-center">
           <div id="corbelGaugeChart"></div>
         </div>
-        <div class="p-4 rounded-xl bg-zinc-900 border border-zinc-800">
-          <div class="flex items-center gap-2 text-xs font-bold text-emerald-400">
-            <i data-lucide="check-circle" class="w-4 h-4"></i>
-            <span>Ahead of plan</span>
-          </div>
-          <p class="text-[11px] text-zinc-400 mt-1">Both Website milestones and SEO retainers beat projected delivery targets this month.</p>
+        <div class="p-3.5 rounded bg-zinc-950 border border-zinc-800 font-mono text-xs text-zinc-400 space-y-1">
+          <span class="text-emerald-400 font-bold block">✓ 86% Handover Velocity</span>
+          <p class="text-[11px]">Sprint delivery targets tracking ahead of 14-day schedule benchmark.</p>
         </div>
       </div>
 
-      <div class="lg:col-span-2 corbel-card p-6">
+      <div class="lg:col-span-2 admin-grid-card p-6">
         <div class="flex items-center justify-between mb-4">
           <div>
-            <span class="text-xs font-mono uppercase text-zinc-400 tracking-wider">Annual Growth</span>
-            <h3 class="text-lg font-bold text-white mt-1">Revenue Performance (INR)</h3>
+            <span class="font-mono text-xs text-zinc-500 uppercase tracking-wider">Financial Overview</span>
+            <h3 class="text-base font-bold text-white mt-1">Multi-Currency Clearance (INR Normalized)</h3>
           </div>
-          <span class="px-3 py-1 rounded-lg bg-zinc-800 text-xs font-mono font-bold text-white">2026</span>
+          <span class="badge badge-neutral">FISCAL 2026</span>
         </div>
         <div id="corbelBarChart" class="h-64"></div>
       </div>
     </div>
 
-    <!-- =========================================================================
-         ACTIVE PROJECTS & MANAGEMENT DIRECTORY (WITH FULL MANAGEMENT CONTROLS)
-         ========================================================================= -->
-    <div class="corbel-card p-6 w-full">
-      <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+    <!-- MANAGEMENT DIRECTORY & PROJECT TABLE -->
+    <div class="admin-grid-card overflow-hidden">
+      <div class="p-4 border-b border-zinc-800 bg-zinc-950 flex flex-col md:flex-row md:items-center justify-between gap-4 font-mono text-xs">
         <div>
-          <h3 class="text-lg font-bold text-white">Active Projects & Management Directory</h3>
-          <p class="text-xs text-zinc-400 mt-0.5">Filter, search, review, unassign specialists, or delete active client pipelines.</p>
+          <h3 class="font-bold uppercase tracking-wider text-white">Project Pipeline Ledger</h3>
+          <p class="text-[11px] text-zinc-400 mt-0.5">Filter by milestone state, execute offline settlement, or manage specialist allocation.</p>
         </div>
 
-        <!-- Filters Form Bar -->
-        <div class="flex items-center gap-3 flex-wrap">
-          <div class="relative">
-            <input type="text" id="projectSearch" placeholder="Search by title..." value="{{ search_query }}" 
-              class="bg-zinc-900 border border-zinc-800 rounded-xl px-3.5 py-2 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-700 w-48">
-          </div>
+        <!-- Filter Controls -->
+        <div class="flex items-center gap-2 flex-wrap">
+          <input
+            type="text"
+            id="projectSearch"
+            placeholder="Search service or client..."
+            value="{{ search_query }}"
+            class="form-control text-xs w-48 h-8"
+          >
 
-          <select id="statusFilter" class="bg-zinc-900 border border-zinc-800 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-zinc-700">
+          <select id="statusFilter" class="form-control text-xs w-44 h-8">
             <option value="all" {% if current_status == 'all' %}selected{% endif %}>All Statuses</option>
             <option value="Pending Assignment" {% if current_status == 'Pending Assignment' %}selected{% endif %}>Pending Assignment</option>
             <option value="Assigned" {% if current_status == 'Assigned' %}selected{% endif %}>Assigned</option>
@@ -176,418 +160,317 @@
             <option value="Revision" {% if current_status == 'Revision' %}selected{% endif %}>Revision</option>
           </select>
 
-          <button type="button" onclick="applyFilters()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-xl transition cursor-pointer">
-            Filter
+          <button type="button" id="applyFiltersBtn" class="btn btn-secondary text-xs h-8 px-3">
+            Apply Filter
           </button>
         </div>
       </div>
 
-      <!-- Projects Table List -->
+      <!-- Project Rows Table -->
       <div class="overflow-x-auto w-full">
-        <table class="w-full text-left border-collapse">
+        <table class="data-table">
           <thead>
-            <tr class="border-b border-zinc-800 text-[11px] font-mono uppercase text-zinc-400">
-              <th class="py-3 px-4 font-semibold">ID / Title</th>
-              <th class="py-3 px-4 font-semibold">Client</th>
-              <th class="py-3 px-4 font-semibold">Service / Package</th>
-              <th class="py-3 px-4 font-semibold">Status</th>
-              <th class="py-3 px-4 font-semibold text-right">Management Actions</th>
+            <tr>
+              <th>Engagement</th>
+              <th>Client Entity</th>
+              <th>Package / SOW</th>
+              <th>Status</th>
+              <th class="text-right">Actions</th>
             </tr>
           </thead>
-          <tbody class="divide-y divide-zinc-800/60 text-xs">
+          <tbody class="font-mono text-xs">
             {% for project in recent_projects %}
-            <tr class="hover:bg-zinc-900/40 transition">
-              <td class="py-3.5 px-4">
-                <div class="font-mono text-indigo-400 font-bold">#{{ project.id }}</div>
-                <div class="text-white font-semibold mt-0.5">{{ project.title }}</div>
+            <tr>
+              <td>
+                <span class="text-zinc-500 font-bold">#{{ project.id }}</span>
+                <span class="text-zinc-200 ml-1 font-sans font-semibold">{{ project.service }}</span>
               </td>
-              <td class="py-3.5 px-4 text-zinc-300">
-                {{ project.customer.name if project.customer else 'Direct Client' }}
-                <div class="text-[10px] text-zinc-500 font-mono">{{ project.customer.email if project.customer else '' }}</div>
+              <td>
+                <span class="text-zinc-300 font-sans">{{ project.customer.name if project.customer else 'Direct Client' }}</span>
+                <span class="text-zinc-500 text-[10px] block">{{ project.customer.email if project.customer else '' }}</span>
               </td>
-              <td class="py-3.5 px-4">
-                <div class="text-zinc-200">{{ project.service }}</div>
-                <span class="text-[10px] font-mono text-zinc-500 bg-zinc-800 px-2 py-0.5 rounded">{{ project.package }}</span>
+              <td>
+                <span class="text-zinc-200">{{ project.package }}</span>
+                <span class="text-zinc-500 text-[10px] block">{{ project.currency }}</span>
               </td>
-              <td class="py-3.5 px-4">
-                <span class="px-2.5 py-1 rounded-full text-[10px] font-mono font-bold
-                  {% if project.status == 'Completed' %} bg-emerald-500/10 text-emerald-400 border border-emerald-500/20
-                  {% elif project.status in ['In Progress', 'Assigned'] %} bg-sky-500/10 text-sky-400 border border-sky-500/20
-                  {% elif project.status in ['Submitted', 'Revision'] %} bg-amber-500/10 text-amber-400 border border-amber-500/30
-                  {% else %} bg-zinc-800 text-zinc-300 {% endif %}">
+              <td>
+                <span class="badge
+                  {% if project.status == 'Completed' %}badge-emerald
+                  {% elif project.status in ['In Progress', 'Assigned'] %}badge-indigo
+                  {% elif project.status in ['Submitted', 'Revision'] %}badge-amber
+                  {% else %}badge-neutral{% endif %}">
                   {{ project.status }}
                 </span>
               </td>
-              <td class="py-3.5 px-4 text-right">
+              <td class="text-right">
                 <div class="flex items-center justify-end gap-1.5 flex-wrap">
-                  <!-- Open Review Gate / Details -->
-                  <a href="{{ url_for('admin.admin_project_review') }}" class="px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-white font-bold text-[11px] transition">
-                  Open
-                </a>
+                  <a href="{{ url_for('customer.project_details', project_id=project.id) }}" class="btn btn-secondary text-xs h-7 px-2">
+                    Workbench
+                  </a>
 
-                  <!-- Unassign Professional Button -->
-                  <form action="{{ url_for('admin.unassign_professional', project_id=project.id) }}" method="POST" style="display: inline;" onsubmit="return confirm('Unassign specialist from this project?');">
+                  <!-- Offline Wire Settlement Action (If Unpaid) -->
+                  {% if project.status == 'Payment Pending' %}
+                  <form action="{{ url_for('admin.admin_mark_paid', project_id=project.id) }}" method="POST" class="inline" onsubmit="return confirm('Record offline wire receipt for Project #{{ project.id }}?');">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <button type="submit" class="px-2.5 py-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/20 font-bold text-[11px] transition cursor-pointer" title="Remove assigned specialist">
+                    <button type="submit" class="btn btn-secondary text-xs h-7 px-2 text-emerald-400">
+                      Clear Wire
+                    </button>
+                  </form>
+                  {% endif %}
+
+                  <!-- Specialist Unassignment -->
+                  {% if project.status in ['Assigned', 'In Progress'] %}
+                  <form action="{{ url_for('admin.unassign_professional', project_id=project.id) }}" method="POST" class="inline" onsubmit="return confirm('Unassign specialist from Project #{{ project.id }}?');">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-subtle text-xs h-7 px-2 text-amber-400">
                       Unassign
                     </button>
                   </form>
+                  {% endif %}
 
-                  <!-- Delete Project Button -->
-                  <form action="{{ url_for('admin.delete_project', project_id=project.id) }}" method="POST" style="display: inline;" onsubmit="return confirm('Permanently delete this project and its deliveries? This cannot be undone.');">
+                  <!-- Delete Draft -->
+                  {% if project.status in ['Payment Pending', 'Pending Assignment'] %}
+                  <form action="{{ url_for('admin.delete_project', project_id=project.id) }}" method="POST" class="inline" onsubmit="return confirm('Permanently delete project #{{ project.id }}?');">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <button type="submit" class="px-2.5 py-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 font-bold text-[11px] transition cursor-pointer" title="Permanently delete project">
+                    <button type="submit" class="btn btn-subtle text-xs h-7 px-2 text-red-400">
                       Delete
                     </button>
                   </form>
+                  {% endif %}
                 </div>
               </td>
             </tr>
             {% else %}
             <tr>
-              <td colspan="5" class="text-center py-12 text-zinc-500">No projects match the current filter criteria.</td>
+              <td colspan="5" class="text-center py-8 text-zinc-500 font-mono">
+                No active projects match the selected parameters.
+              </td>
             </tr>
             {% endfor %}
           </tbody>
         </table>
       </div>
 
-      <!-- PAGINATION BAR (< >) -->
+      <!-- Pagination -->
       {% if pagination and pagination.pages > 1 %}
-      <div class="flex items-center justify-between pt-6 mt-6 border-t border-zinc-800 text-xs text-zinc-400">
+      <div class="flex items-center justify-between p-4 border-t border-zinc-800 bg-zinc-950 font-mono text-xs text-zinc-500">
         <div>
-          Showing page <span class="font-mono font-bold text-white">{{ pagination.page }}</span> of <span class="font-mono font-bold text-white">{{ pagination.pages }}</span> (Total {{ pagination.total }} projects)
+          Page <span class="text-white font-bold">{{ pagination.page }}</span> of {{ pagination.pages }} ({{ pagination.total }} records)
         </div>
-        <div class="flex items-center gap-2">
+        <div class="flex gap-2">
           {% if pagination.has_prev %}
-            <a href="{{ url_for('admin.admin_dashboard', page=pagination.prev_num, status=current_status, search=search_query) }}" class="px-3.5 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 text-white font-mono transition">&lt; Prev</a>
-          {% else %}
-            <span class="px-3.5 py-1.5 rounded-lg bg-zinc-900/40 border border-zinc-800/40 text-zinc-600 font-mono cursor-not-allowed">&lt; Prev</span>
+          <a href="{{ url_for('admin.admin_dashboard', page=pagination.prev_num, status=current_status, search=search_query) }}" class="btn btn-secondary text-xs h-7 px-2">
+            &lt; Prev
+          </a>
           {% endif %}
-
           {% if pagination.has_next %}
-            <a href="{{ url_for('admin.admin_dashboard', page=pagination.next_num, status=current_status, search=search_query) }}" class="px-3.5 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 text-white font-mono transition">Next &gt;</a>
-          {% else %}
-            <span class="px-3.5 py-1.5 rounded-lg bg-zinc-900/40 border border-zinc-800/40 text-zinc-600 font-mono cursor-not-allowed">Next &gt;</span>
+          <a href="{{ url_for('admin.admin_dashboard', page=pagination.next_num, status=current_status, search=search_query) }}" class="btn btn-secondary text-xs h-7 px-2">
+            Next &gt;
+          </a>
           {% endif %}
         </div>
       </div>
       {% endif %}
-
     </div>
 
   </div>
 
   <!-- =========================================================================
-       TAB 2: LIVE ANALYTICS
+       TAB 2: REVENUE & MRR ANALYTICS
        ========================================================================= -->
-  <div id="tab-pane-analytics" class="tab-pane mt-8 space-y-8 w-full">
-    <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
-      <div class="corbel-card p-4">
-        <span class="text-[10px] font-mono uppercase text-zinc-500">Collected Revenue</span>
-        <div class="font-mono text-xl font-bold text-white mt-1">₹37,163</div>
-        <span class="text-[10px] text-emerald-400 font-mono">+7.8% vs previous</span>
+  <div id="tab-pane-analytics" class="tab-pane space-y-8 w-full">
+    <div class="grid grid-cols-2 md:grid-cols-4 border-t border-l border-zinc-800 bg-zinc-950 font-mono text-xs">
+      <div class="p-5 border-b border-r border-zinc-800">
+        <span class="text-zinc-500 uppercase block mb-1">Normalized Gross</span>
+        <div class="text-2xl font-bold text-white">₹37,163.00</div>
+        <span class="text-emerald-400 text-[11px] mt-1 block">+7.8% MoM Velocity</span>
       </div>
-      <div class="corbel-card p-4">
-        <span class="text-[10px] font-mono uppercase text-zinc-500">Completed Orders</span>
-        <div class="font-mono text-xl font-bold text-white mt-1">532</div>
-        <span class="text-[10px] text-emerald-400 font-mono">+7.8% vs previous</span>
+      <div class="p-5 border-b border-r border-zinc-800">
+        <span class="text-zinc-500 uppercase block mb-1">Closed Sprints</span>
+        <div class="text-2xl font-bold text-white">532</div>
+        <span class="text-emerald-400 text-[11px] mt-1 block">100% Tax Invoiced</span>
       </div>
-      <div class="corbel-card p-4">
-        <span class="text-[10px] font-mono uppercase text-zinc-500">Avg Milestone Value</span>
-        <div class="font-mono text-xl font-bold text-white mt-1">₹6,987</div>
-        <span class="text-[10px] text-emerald-400 font-mono">+0.1% vs previous</span>
+      <div class="p-5 border-b border-r border-zinc-800">
+        <span class="text-zinc-500 uppercase block mb-1">Average SOW Ticket</span>
+        <div class="text-2xl font-bold text-white">₹48,000.00</div>
+        <span class="text-zinc-400 text-[11px] mt-1 block">50/25/25 Gated</span>
       </div>
-      <div class="corbel-card p-4">
-        <span class="text-[10px] font-mono uppercase text-zinc-500">Client Sign-Offs</span>
-        <div class="font-mono text-xl font-bold text-white mt-1">4.53%</div>
-        <span class="text-[10px] text-rose-400 font-mono">-0.9% vs previous</span>
-      </div>
-      <div class="corbel-card p-4">
-        <span class="text-[10px] font-mono uppercase text-zinc-500">Retainer Renewals</span>
-        <div class="font-mono text-xl font-bold text-white mt-1">38.7%</div>
-        <span class="text-[10px] text-emerald-400 font-mono">+1.2% vs previous</span>
+      <div class="p-5 border-b border-r border-zinc-800">
+        <span class="text-zinc-500 uppercase block mb-1">Retainer MRR</span>
+        <div class="text-2xl font-bold text-emerald-400">₹14,999.00</div>
+        <span class="text-zinc-400 text-[11px] mt-1 block">Per Active Mandate</span>
       </div>
     </div>
 
     <!-- Dual Line Chart -->
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 w-full">
-      <div class="lg:col-span-2 corbel-card p-6">
-        <div class="flex items-center justify-between mb-4">
-          <div>
-            <h3 class="text-base font-bold text-white">Revenue Over Time — Last 30 Days</h3>
-            <p class="text-xs text-zinc-400">Comparing current sprint revenue against previous 30-day baseline.</p>
-          </div>
-          <div class="flex items-center gap-4 text-xs font-mono">
-            <span class="flex items-center gap-1.5 text-zinc-200"><span class="h-2 w-2 rounded-full bg-indigo-500"></span> This Period</span>
-            <span class="flex items-center gap-1.5 text-zinc-500"><span class="h-2 w-2 rounded-full bg-zinc-600"></span> Previous Period</span>
-          </div>
-        </div>
-        <div id="corbelDualLineChart" class="h-72"></div>
-      </div>
-
-      <!-- Channel Split -->
-      <div class="corbel-card p-6 flex flex-col justify-between">
+    <div class="admin-grid-card p-6">
+      <div class="flex items-center justify-between mb-4 font-mono text-xs">
         <div>
-          <h3 class="text-base font-bold text-white mb-2">Service Breakdown</h3>
-          <p class="text-xs text-zinc-400 mb-6">Revenue share by delivery archetype.</p>
-          <div class="space-y-4 text-xs">
-            <div class="p-4 rounded-xl bg-zinc-900 border border-zinc-800">
-              <div class="flex justify-between items-center mb-1">
-                <span class="font-bold text-white">Website Milestones</span>
-                <span class="font-mono text-emerald-400 font-bold">66% Share</span>
-              </div>
-              <div class="text-[11px] text-zinc-400 font-mono">₹24,331 total collected</div>
-            </div>
-            <div class="p-4 rounded-xl bg-zinc-900 border border-zinc-800">
-              <div class="flex justify-between items-center mb-1">
-                <span class="font-bold text-white">Monthly SEO Retainers</span>
-                <span class="font-mono text-sky-400 font-bold">34% Share</span>
-              </div>
-              <div class="text-[11px] text-zinc-400 font-mono">₹12,812 recurring MRR</div>
-            </div>
-          </div>
+          <h3 class="text-sm font-bold text-white uppercase tracking-wider">30-Day Escrow Ingestion Curve</h3>
+          <p class="text-zinc-400 mt-0.5">Reconciled Razorpay & wire clearances against previous baseline.</p>
         </div>
-        <div class="pt-6 border-t border-zinc-800 text-[11px] font-mono text-zinc-500">Auto-reconciled via Razorpay Webhooks</div>
+        <div class="flex items-center gap-4">
+          <span class="text-zinc-200">● Current Sprint Period</span>
+          <span class="text-zinc-500">● Prior Baseline</span>
+        </div>
       </div>
+      <div id="corbelDualLineChart" class="h-72"></div>
     </div>
   </div>
 
   <!-- =========================================================================
-       TAB 3: "SPRING LAUNCH" KANBAN WORKSPACE
+       TAB 3: SPRING LAUNCH KANBAN BOARD
        ========================================================================= -->
-  <div id="tab-pane-kanban" class="tab-pane mt-8 w-full">
-    <div class="flex items-center justify-between mb-6">
-      <h2 class="text-xl font-extrabold text-white">Spring Launch Delivery Board</h2>
-      <a href="{{ url_for('admin.admin_project_management') }}" class="px-4 py-2 rounded-xl bg-white text-zinc-950 font-bold text-xs hover:bg-zinc-200 transition">
-        Open Full Pipeline
+  <div id="tab-pane-kanban" class="tab-pane space-y-6 w-full">
+    <div class="flex items-center justify-between font-mono text-xs">
+      <h2 class="text-base font-bold text-white uppercase tracking-wider">Milestone Gate Pipeline</h2>
+      <a href="{{ url_for('admin.admin_project_management') }}" class="btn btn-secondary text-xs h-8">
+        Full Pipeline View →
       </a>
     </div>
 
-    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 w-full">
-      <div class="p-4 rounded-2xl bg-[#121215] border border-zinc-800">
-        <span class="text-xs font-bold text-zinc-300 uppercase tracking-wider block mb-4">1. To Do (Intake)</span>
-        <div class="space-y-3">
-          {% for p in recent_projects if p.status in ['Pending Assignment', 'Payment Pending'] %}
-          <div class="p-4 rounded-xl bg-[#18181d] border border-zinc-800">
-            <span class="text-[10px] font-mono text-indigo-400">#{{ p.id }}</span>
-            <h4 class="text-xs font-bold text-white mt-1">{{ p.service }}</h4>
-            <div class="mt-3 flex items-center justify-between pt-2 border-t border-zinc-800/60">
-              <span class="text-[10px] text-zinc-500">{{ p.package }}</span>
-              <a href="{{ url_for('admin.admin_project_review') }}" class="px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-white font-bold text-[11px] transition">
-                Open
-              </a>
-            </div>
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 font-mono text-xs">
+      <!-- Col 1 -->
+      <div class="admin-grid-card p-4 space-y-3">
+        <span class="text-zinc-400 font-bold uppercase block pb-2 border-b border-zinc-800">1. Intake & Advance</span>
+        {% for p in recent_projects if p.status in ['Pending Assignment', 'Payment Pending'] %}
+        <div class="p-3.5 rounded border border-zinc-800 bg-zinc-950 space-y-2">
+          <span class="text-zinc-500 text-[11px]">#{{ p.id }}</span>
+          <h4 class="text-zinc-200 font-sans font-semibold text-xs">{{ p.service }}</h4>
+          <div class="flex justify-between items-center pt-2 border-t border-zinc-800">
+            <span class="text-zinc-400 text-[11px]">{{ p.package }}</span>
+            <a href="{{ url_for('customer.project_details', project_id=p.id) }}" class="text-white hover:underline">Workbench →</a>
           </div>
-          {% else %}
-          <p class="text-xs text-zinc-600 text-center py-6">No intake cards</p>
-          {% endfor %}
         </div>
+        {% else %}
+        <p class="text-zinc-600 text-center py-6">No intake cards</p>
+        {% endfor %}
       </div>
 
-      <div class="p-4 rounded-2xl bg-[#121215] border border-zinc-800">
-        <span class="text-xs font-bold text-sky-400 uppercase tracking-wider block mb-4">2. In Progress</span>
-        <div class="space-y-3">
-          {% for p in recent_projects if p.status in ['Assigned', 'In Progress'] %}
-          <div class="p-4 rounded-xl bg-[#18181d] border border-sky-500/20">
-            <span class="text-[10px] font-mono text-sky-400">#{{ p.id }}</span>
-            <h4 class="text-xs font-bold text-white mt-1">{{ p.service }}</h4>
-            <div class="mt-3 flex items-center justify-between pt-2 border-t border-zinc-800/60">
-              <span class="text-[10px] text-zinc-500">{{ p.customer.name if p.customer else 'Client' }}</span>
-              <a href="{{ url_for('admin.admin_project_review') }}" class="text-[10px] text-sky-400 font-bold hover:underline">View</a>
-            </div>
+      <!-- Col 2 -->
+      <div class="admin-grid-card p-4 space-y-3">
+        <span class="text-indigo-400 font-bold uppercase block pb-2 border-b border-zinc-800">2. Active In Dev</span>
+        {% for p in recent_projects if p.status in ['Assigned', 'In Progress'] %}
+        <div class="p-3.5 rounded border border-zinc-800 bg-zinc-950 space-y-2">
+          <span class="text-zinc-500 text-[11px]">#{{ p.id }}</span>
+          <h4 class="text-zinc-200 font-sans font-semibold text-xs">{{ p.service }}</h4>
+          <div class="flex justify-between items-center pt-2 border-t border-zinc-800">
+            <span class="text-zinc-400 text-[11px]">{{ p.customer.name if p.customer else 'Client' }}</span>
+            <a href="{{ url_for('customer.project_details', project_id=p.id) }}" class="text-indigo-400 hover:underline">Inspect →</a>
           </div>
-          {% else %}
-          <p class="text-xs text-zinc-600 text-center py-6">No active sprints</p>
-          {% endfor %}
         </div>
+        {% else %}
+        <p class="text-zinc-600 text-center py-6">No active development</p>
+        {% endfor %}
       </div>
 
-      <div class="p-4 rounded-2xl bg-[#121215] border border-zinc-800">
-        <span class="text-xs font-bold text-amber-400 uppercase tracking-wider block mb-4">3. Review (Cap 2)</span>
-        <div class="space-y-3">
-          {% for p in recent_projects if p.status in ['Submitted', 'Revision'] %}
-          <div class="p-4 rounded-xl bg-[#18181d] border border-amber-500/30">
-            <span class="text-[10px] font-mono text-amber-400">#{{ p.id }}</span>
-            <h4 class="text-xs font-bold text-white mt-1">{{ p.service }}</h4>
-            <div class="mt-3 flex items-center justify-between pt-2 border-t border-zinc-800/60">
-              <span class="text-[10px] text-zinc-500">{{ p.status }}</span>
-              <a href="{{ url_for('admin.admin_project_review') }}" class="text-[10px] text-amber-300 font-bold hover:underline">Review Gate →</a>
-            </div>
+      <!-- Col 3 -->
+      <div class="admin-grid-card p-4 space-y-3">
+        <span class="text-amber-400 font-bold uppercase block pb-2 border-b border-zinc-800">3. Review Gate</span>
+        {% for p in recent_projects if p.status in ['Submitted', 'Revision'] %}
+        <div class="p-3.5 rounded border border-zinc-800 bg-zinc-950 space-y-2">
+          <span class="text-amber-400 text-[11px]">#{{ p.id }}</span>
+          <h4 class="text-zinc-200 font-sans font-semibold text-xs">{{ p.service }}</h4>
+          <div class="flex justify-between items-center pt-2 border-t border-zinc-800">
+            <span class="badge badge-amber text-[10px]">{{ p.status }}</span>
+            <a href="{{ url_for('admin.admin_project_review') }}" class="text-white hover:underline">Audit Gate →</a>
           </div>
-          {% else %}
-          <p class="text-xs text-zinc-600 text-center py-6">No deliverables in review</p>
-          {% endfor %}
         </div>
+        {% else %}
+        <p class="text-zinc-600 text-center py-6">No deliverables awaiting review</p>
+        {% endfor %}
       </div>
 
-      <div class="p-4 rounded-2xl bg-[#121215] border border-zinc-800">
-        <span class="text-xs font-bold text-emerald-400 uppercase tracking-wider block mb-4">4. Done</span>
-        <div class="space-y-3">
-          {% for p in recent_projects if p.status == 'Completed' %}
-          <div class="p-4 rounded-xl bg-[#18181d] border border-zinc-800 opacity-75">
-            <span class="text-[10px] font-mono text-emerald-400">#{{ p.id }} ✅</span>
-            <h4 class="text-xs font-bold text-white mt-1">{{ p.service }}</h4>
-            <div class="mt-3 text-[10px] text-zinc-500 pt-2 border-t border-zinc-800/60">Paid & Delivered</div>
-          </div>
-          {% else %}
-          <p class="text-xs text-zinc-600 text-center py-6">No completed items</p>
-          {% endfor %}
+      <!-- Col 4 -->
+      <div class="admin-grid-card p-4 space-y-3">
+        <span class="text-emerald-400 font-bold uppercase block pb-2 border-b border-zinc-800">4. Handed Over</span>
+        {% for p in recent_projects if p.status == 'Completed' %}
+        <div class="p-3.5 rounded border border-zinc-800 bg-zinc-950 space-y-2">
+          <span class="text-emerald-400 text-[11px]">#{{ p.id }} ✓</span>
+          <h4 class="text-zinc-200 font-sans font-semibold text-xs">{{ p.service }}</h4>
+          <span class="text-zinc-500 text-[11px] block pt-1 border-t border-zinc-800">100% IP Transferred</span>
         </div>
+        {% else %}
+        <p class="text-zinc-600 text-center py-6">No completed items</p>
+        {% endfor %}
       </div>
     </div>
   </div>
 
 </main>
 
-<!-- ==================== REAL CENTERED POPUP MODAL ==================== -->
-<div id="broadcastModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" style="display: none;">
-  <div class="relative w-full max-w-lg p-6 bg-[#121215] border border-zinc-800 rounded-2xl shadow-2xl">
+<!-- BROADCAST NOTIFICATION MODAL -->
+<div id="broadcastModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs hidden">
+  <div class="w-full max-w-lg p-6 bg-zinc-900 border border-zinc-800 rounded-lg shadow-2xl font-mono text-xs">
     <div class="flex items-center justify-between pb-4 border-b border-zinc-800">
-      <h3 class="text-sm font-bold text-white flex items-center gap-2">
-        <i data-lucide="megaphone" class="w-4 h-4 text-indigo-400"></i>
-        <span>Send In-App Broadcast</span>
-      </h3>
-      <button type="button" onclick="closeBroadcastModal()" class="text-zinc-400 hover:text-white text-base cursor-pointer">×</button>
+      <h3 class="font-bold text-white uppercase">System In-App Broadcast Dispatch</h3>
+      <button type="button" id="closeBroadcastBtn" class="text-zinc-400 hover:text-white text-sm cursor-pointer">✕</button>
     </div>
 
-    <form method="POST" action="/admin/notifications/broadcast" class="space-y-4 mt-4 text-xs">
+    <form method="POST" action="{{ url_for('admin.broadcast_notification') }}" class="space-y-4 mt-4">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
       <div>
-        <label class="block text-zinc-400 mb-1 font-semibold">Target Audience</label>
-        <select name="target_role" class="w-full p-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-white">
-          <option value="all">Broadcast to Everyone (Clients & Specialists)</option>
+        <label class="block text-zinc-400 mb-1">Target Cohort</label>
+        <select name="target_role" class="form-control text-xs">
+          <option value="all">Broadcast to All Users (Clients & Specialists)</option>
           <option value="customer">Clients Only</option>
           <option value="professional">Specialists Only</option>
         </select>
       </div>
+
       <div>
-        <label class="block text-zinc-400 mb-1 font-semibold">Announcement Title</label>
-        <input type="text" name="title" required placeholder="e.g., Scheduled Maintenance / Milestone Notice" class="w-full p-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-white">
+        <label class="block text-zinc-400 mb-1">Announcement Title</label>
+        <input type="text" name="title" required placeholder="e.g. Scheduled Gateway Maintenance Notice" class="form-control text-xs">
       </div>
+
       <div>
-        <label class="block text-zinc-400 mb-1 font-semibold">Message Body</label>
-        <textarea name="message" rows="3" required placeholder="Type announcement message..." class="w-full p-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-white"></textarea>
+        <label class="block text-zinc-400 mb-1">Message Body</label>
+        <textarea name="message" rows="3" required placeholder="Type operational brief..." class="w-full p-3 rounded bg-zinc-950 border border-zinc-800 text-white font-sans focus:outline-none focus:border-zinc-500"></textarea>
       </div>
+
       <div class="flex gap-2 pt-2">
-        <button type="submit" class="flex-1 py-2.5 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-bold transition cursor-pointer">Send Broadcast ⚡</button>
-        <button type="button" onclick="closeBroadcastModal()" class="px-4 py-2.5 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-400 cursor-pointer">Cancel</button>
+        <button type="submit" class="btn btn-primary flex-1 text-xs h-10 font-semibold cursor-pointer">Dispatch Broadcast ⚡</button>
+        <button type="button" id="cancelBroadcastBtn" class="btn btn-secondary text-xs h-10 px-4 cursor-pointer">Cancel</button>
       </div>
     </form>
   </div>
 </div>
 
-<script>
-  // Filter execution helper script
-  function applyFilters() {
-    const search = document.getElementById('projectSearch').value;
-    const status = document.getElementById('statusFilter').value;
-    window.location.href = "{{ url_for('admin.admin_dashboard') }}?page=1&status=" + encodeURIComponent(status) + "&search=" + encodeURIComponent(search);
-  }
-
-  // Tab Switcher
-  function switchCorbelTab(tabId) {
-    document.querySelectorAll('.tab-pane').forEach(el => el.classList.remove('active'));
-    document.getElementById('tab-pane-' + tabId).classList.add('active');
-
-    const tabs = ['overview', 'analytics', 'kanban'];
-    tabs.forEach(t => {
-      const btn = document.getElementById('btn-tab-' + t);
-      btn.className = (t === tabId)
-        ? 'corbel-tab-active px-5 py-2 rounded-full transition cursor-pointer flex items-center gap-2'
-        : 'corbel-tab-inactive px-5 py-2 rounded-full transition cursor-pointer flex items-center gap-2';
-    });
-    window.dispatchEvent(new Event('resize'));
-  }
-
-  // Center Modal Controls
-  function openBroadcastModal() { document.getElementById('broadcastModal').style.display = 'flex'; }
-  function closeBroadcastModal() { document.getElementById('broadcastModal').style.display = 'none'; }
-
-  // Charts initialization (ApexCharts)
-  var gaugeOptions = {
-    chart: { type: 'radialBar', height: 200, sparkline: { enabled: true } },
-    series: [86],
-    colors: ['#4f46e5'],
-    plotOptions: {
-      radialBar: {
-        startAngle: -90, endAngle: 90,
-        track: { background: "#27272a", strokeWidth: '97%' },
-        dataLabels: { name: { show: false }, value: { offsetY: -2, fontSize: '24px', fontWeight: 800, color: '#ffffff', formatter: function(val) { return val + '%'; } } }
-      }
-    },
-    stroke: { lineCap: "round" }
-  };
-  new ApexCharts(document.querySelector("#corbelGaugeChart"), gaugeOptions).render();
-
-  var barOptions = {
-    chart: { type: 'bar', height: 240, toolbar: { show: false }, background: 'transparent' },
-    series: [{ name: 'Revenue', data: [18000, 24000, 32000, 28000, 42000, 37500] }],
-    colors: ['#4f46e5'],
-    plotOptions: { bar: { borderRadius: 6, columnWidth: '40%' } },
-    xaxis: { categories: ['May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct'], labels: { style: { colors: '#71717a', fontSize: '11px' } }, axisBorder: { show: false } },
-    yaxis: { labels: { style: { colors: '#71717a' }, formatter: function(v) { return '₹' + (v/1000) + 'k'; } } },
-    grid: { borderColor: '#1f1f23', strokeDashArray: 4 },
-    theme: { mode: 'dark' }
-  };
-  new ApexCharts(document.querySelector("#corbelBarChart"), barOptions).render();
-
-  var dualLineOptions = {
-    chart: { type: 'area', height: 280, toolbar: { show: false }, background: 'transparent' },
-    series: [
-      { name: 'This Period', data: [1200, 1800, 1400, 2600, 2200, 3400, 3100, 3700] },
-      { name: 'Previous Period', data: [900, 1100, 1200, 1800, 1900, 2400, 2600, 2900] }
-    ],
-    colors: ['#6366f1', '#52525b'],
-    stroke: { curve: 'smooth', width: [3, 2], dashArray: [0, 5] },
-    fill: { type: 'gradient', gradient: { opacityFrom: 0.25, opacityTo: 0.0 } },
-    xaxis: { categories: ['Week 1', 'Week 2', 'Week 3', 'Week 4', 'Week 5', 'Week 6', 'Week 7', 'Week 8'], labels: { style: { colors: '#71717a' } } },
-    yaxis: { labels: { style: { colors: '#71717a' }, formatter: function(v) { return '₹' + v; } } },
-    grid: { borderColor: '#1f1f23', strokeDashArray: 4 },
-    theme: { mode: 'dark' }
-  };
-  new ApexCharts(document.querySelector("#corbelDualLineChart"), dualLineOptions).render();
-</script>
-<!-- ==================== AI SOW COPILOT MODAL ==================== -->
-<div id="aiModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" style="display: none;">
-  <div class="relative w-full max-w-2xl p-6 bg-[#121215] border border-zinc-800 rounded-2xl shadow-2xl">
+<!-- AI SOW DRAFTER MODAL -->
+<div id="aiModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs hidden">
+  <div class="w-full max-w-2xl p-6 bg-zinc-900 border border-zinc-800 rounded-lg shadow-2xl font-mono text-xs">
     <div class="flex items-center justify-between pb-4 border-b border-zinc-800">
-      <h3 class="text-sm font-bold text-white flex items-center gap-2">
-        <i data-lucide="sparkles" class="w-4 h-4 text-purple-400"></i>
-        <span>Google Gemini AI Proposal Drafter</span>
-      </h3>
-      <button type="button" onclick="closeAiModal()" class="text-zinc-400 hover:text-white text-base cursor-pointer">×</button>
+      <h3 class="font-bold text-white uppercase">Gemini AI SOW Proposal Drafter</h3>
+      <button type="button" id="closeAiBtn" class="text-zinc-400 hover:text-white text-sm cursor-pointer">✕</button>
     </div>
 
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4 text-xs">
-      <!-- Input Column -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
       <div class="space-y-3">
         <div>
-          <label class="block text-zinc-400 font-semibold mb-1">Client / Business Name</label>
-          <input type="text" id="aiClientName" placeholder="e.g., Tata Retail / Bombay Spices" class="w-full p-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-white">
+          <label class="block text-zinc-400 mb-1">Client Entity Name</label>
+          <input type="text" id="aiClientName" placeholder="e.g. Tata Retail Ltd" class="form-control text-xs">
         </div>
         <div>
-          <label class="block text-zinc-400 font-semibold mb-1">Service</label>
-          <select id="aiServiceType" class="w-full p-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-white">
+          <label class="block text-zinc-400 mb-1">Service Category</label>
+          <select id="aiServiceType" class="form-control text-xs">
             <option value="Website Design & Development">Website Design & Development</option>
             <option value="SEO Retainer & Growth">SEO Retainer & Growth</option>
           </select>
         </div>
         <div>
-          <label class="block text-zinc-400 font-semibold mb-1">Raw Brief / Bullet Points</label>
-          <textarea id="aiNotes" rows="5" placeholder="E-commerce store, 15 pages, Razorpay UPI, modern dark theme, 14-day timeline..." class="w-full p-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-white"></textarea>
+          <label class="block text-zinc-400 mb-1">Scope Brief Notes</label>
+          <textarea id="aiNotes" rows="5" placeholder="E-commerce store, 15 pages, Razorpay UPI, 14-day timeline..." class="w-full p-3 rounded bg-zinc-950 border border-zinc-800 text-white font-sans focus:outline-none focus:border-zinc-500"></textarea>
         </div>
-        <button type="button" onclick="generateAiSow()" id="aiGenerateBtn" class="w-full py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold transition flex items-center justify-center gap-2 cursor-pointer">
-          <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
-          <span>Draft SOW with Gemini ⚡</span>
+        <button type="button" id="aiGenerateBtn" class="btn btn-primary w-full text-xs h-10 font-semibold cursor-pointer">
+          Generate Proposal Draft ⚡
         </button>
       </div>
 
-      <!-- Output Column -->
       <div class="flex flex-col">
-        <label class="block text-zinc-400 font-semibold mb-1">Generated Scope of Work (Markdown)</label>
-        <textarea id="aiResult" readonly placeholder="Your structured proposal will appear here..." class="flex-1 w-full p-3 rounded-xl bg-zinc-950 border border-zinc-800 text-zinc-200 font-mono text-[11px] resize-none focus:outline-none"></textarea>
-        <button type="button" onclick="copyAiResult()" class="mt-2 py-2 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-300 hover:text-white font-bold text-xs transition">
+        <label class="block text-zinc-400 mb-1">Structured Proposal Output</label>
+        <textarea id="aiResult" readonly placeholder="Markdown Statement of Work will generate here..." class="flex-1 w-full p-3 rounded bg-zinc-950 border border-zinc-800 text-zinc-200 font-mono text-[11px] resize-none focus:outline-none"></textarea>
+        <button type="button" id="copyAiBtn" class="btn btn-secondary text-xs h-9 mt-2">
           Copy SOW to Clipboard
         </button>
       </div>
@@ -596,49 +479,151 @@
 </div>
 
 <script>
-  function openAiModal() { document.getElementById('aiModal').style.display = 'flex'; }
-  function closeAiModal() { document.getElementById('aiModal').style.display = 'none'; }
+  function switchCorbelTab(tabId) {
+    document.querySelectorAll('.tab-pane').forEach(function (el) { el.classList.remove('active'); });
+    var target = document.getElementById('tab-pane-' + tabId);
+    if (target) target.classList.add('active');
 
-  function generateAiSow() {
-    const client = document.getElementById('aiClientName').value;
-    const service = document.getElementById('aiServiceType').value;
-    const notes = document.getElementById('aiNotes').value;
-    const resultArea = document.getElementById('aiResult');
-    const btn = document.getElementById('aiGenerateBtn');
+    ['overview', 'analytics', 'kanban'].forEach(function (t) {
+      var btn = document.getElementById('btn-tab-' + t);
+      if (btn) {
+        btn.className = (t === tabId)
+          ? 'corbel-tab-active px-4 py-1.5 rounded transition cursor-pointer'
+          : 'corbel-tab-inactive px-4 py-1.5 rounded transition cursor-pointer';
+      }
+    });
+    window.dispatchEvent(new Event('resize'));
+  }
 
-    if (!notes.trim()) { alert('Please enter project notes or bullet points.'); return; }
+  document.addEventListener("DOMContentLoaded", function () {
+    // Tab switching
+    var tabOverview = document.getElementById('btn-tab-overview');
+    var tabAnalytics = document.getElementById('btn-tab-analytics');
+    var tabKanban = document.getElementById('btn-tab-kanban');
 
-    btn.disabled = true;
-    btn.innerHTML = '<span>Thinking...</span>';
-    resultArea.value = 'Connecting to Gemini AI engine...';
+    if (tabOverview) tabOverview.addEventListener('click', function () { switchCorbelTab('overview'); });
+    if (tabAnalytics) tabAnalytics.addEventListener('click', function () { switchCorbelTab('analytics'); });
+    if (tabKanban) tabKanban.addEventListener('click', function () { switchCorbelTab('kanban'); });
 
-    const formData = new FormData();
-    formData.append('csrf_token', '{{ csrf_token() }}');
-    formData.append('client_name', client);
-    formData.append('service_type', service);
-    formData.append('notes', notes);
-
-    fetch('/admin/ai/generate-sow', { method: 'POST', body: formData })
-      .then(res => res.json())
-      .then(data => {
-        btn.disabled = false;
-        btn.innerHTML = '<i data-lucide="sparkles" class="w-3.5 h-3.5"></i><span>Draft SOW with Gemini ⚡</span>';
-        if (data.error) { resultArea.value = 'Error: ' + data.error; }
-        else { resultArea.value = data.sow; }
-        if (window.lucide) lucide.createIcons();
-      })
-      .catch(err => {
-        btn.disabled = false;
-        btn.innerHTML = '<span>Generate with Gemini</span>';
-        resultArea.value = 'Network error: ' + err;
+    // Filter Trigger
+    var filterBtn = document.getElementById('applyFiltersBtn');
+    if (filterBtn) {
+      filterBtn.addEventListener('click', function () {
+        var search = document.getElementById('projectSearch').value;
+        var status = document.getElementById('statusFilter').value;
+        window.location.href = "{{ url_for('admin.admin_dashboard') }}?page=1&status=" + encodeURIComponent(status) + "&search=" + encodeURIComponent(search);
       });
-  }
+    }
 
-  function copyAiResult() {
-    const text = document.getElementById('aiResult').value;
-    if (!text) return;
-    navigator.clipboard.writeText(text);
-    alert('Copied SOW to clipboard!');
-  }
+    // Broadcast Modal
+    var broadcastModal = document.getElementById('broadcastModal');
+    var openBroadcast = document.getElementById('openBroadcastBtn');
+    var closeBroadcast = document.getElementById('closeBroadcastBtn');
+    var cancelBroadcast = document.getElementById('cancelBroadcastBtn');
+
+    if (openBroadcast) openBroadcast.addEventListener('click', function () { broadcastModal.classList.remove('hidden'); });
+    if (closeBroadcast) closeBroadcast.addEventListener('click', function () { broadcastModal.classList.add('hidden'); });
+    if (cancelBroadcast) cancelBroadcast.addEventListener('click', function () { broadcastModal.classList.add('hidden'); });
+
+    // AI Modal
+    var aiModal = document.getElementById('aiModal');
+    var openAi = document.getElementById('openAiBtn');
+    var closeAi = document.getElementById('closeAiBtn');
+
+    if (openAi) openAi.addEventListener('click', function () { aiModal.classList.remove('hidden'); });
+    if (closeAi) closeAi.addEventListener('click', function () { aiModal.classList.add('hidden'); });
+
+    var aiGenerateBtn = document.getElementById('aiGenerateBtn');
+    if (aiGenerateBtn) {
+      aiGenerateBtn.addEventListener('click', async function () {
+        var client = document.getElementById('aiClientName').value;
+        var service = document.getElementById('aiServiceType').value;
+        var notes = document.getElementById('aiNotes').value;
+        var resultArea = document.getElementById('aiResult');
+
+        if (!notes.trim()) { alert('Enter scope notes or requirements.'); return; }
+
+        aiGenerateBtn.disabled = true;
+        aiGenerateBtn.textContent = 'Generating proposal...';
+        resultArea.value = 'Connecting to Gemini AI Engine...';
+
+        var formData = new FormData();
+        formData.append('csrf_token', '{{ csrf_token() }}');
+        formData.append('client_name', client);
+        formData.append('service_type', service);
+        formData.append('notes', notes);
+
+        try {
+          var res = await fetch('/api/ai/generate-scope', { method: 'POST', body: formData });
+          var data = await res.json();
+          aiGenerateBtn.disabled = false;
+          aiGenerateBtn.textContent = 'Generate Proposal Draft ⚡';
+          if (data.error) {
+            resultArea.value = 'Error: ' + data.error;
+          } else {
+            resultArea.value = data.scope;
+          }
+        } catch (err) {
+          aiGenerateBtn.disabled = false;
+          aiGenerateBtn.textContent = 'Generate Proposal Draft ⚡';
+          resultArea.value = 'Network failure: ' + err;
+        }
+      });
+    }
+
+    var copyAiBtn = document.getElementById('copyAiBtn');
+    if (copyAiBtn) {
+      copyAiBtn.addEventListener('click', function () {
+        var text = document.getElementById('aiResult').value;
+        if (!text) return;
+        navigator.clipboard.writeText(text);
+        alert('SOW copied to clipboard.');
+      });
+    }
+
+    // ApexCharts Render
+    var gaugeOptions = {
+      chart: { type: 'radialBar', height: 200, sparkline: { enabled: true } },
+      series: [86],
+      colors: ['#f4f4f5'],
+      plotOptions: {
+        radialBar: {
+          startAngle: -90, endAngle: 90,
+          track: { background: "#27272a", strokeWidth: '97%' },
+          dataLabels: { name: { show: false }, value: { offsetY: -2, fontSize: '24px', fontWeight: 700, color: '#ffffff', formatter: function(val) { return val + '%'; } } }
+        }
+      },
+      stroke: { lineCap: "round" }
+    };
+    new ApexCharts(document.querySelector("#corbelGaugeChart"), gaugeOptions).render();
+
+    var barOptions = {
+      chart: { type: 'bar', height: 240, toolbar: { show: false }, background: 'transparent' },
+      series: [{ name: 'Escrow Ingested', data: [18000, 24000, 32000, 28000, 42000, 37500] }],
+      colors: ['#f4f4f5'],
+      plotOptions: { bar: { borderRadius: 4, columnWidth: '35%' } },
+      xaxis: { categories: ['May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct'], labels: { style: { colors: '#71717a', fontSize: '11px', fontFamily: 'JetBrains Mono' } }, axisBorder: { show: false } },
+      yaxis: { labels: { style: { colors: '#71717a', fontFamily: 'JetBrains Mono' }, formatter: function(v) { return '₹' + (v/1000) + 'k'; } } },
+      grid: { borderColor: '#27272a', strokeDashArray: 3 },
+      theme: { mode: 'dark' }
+    };
+    new ApexCharts(document.querySelector("#corbelBarChart"), barOptions).render();
+
+    var dualLineOptions = {
+      chart: { type: 'area', height: 280, toolbar: { show: false }, background: 'transparent' },
+      series: [
+        { name: 'Current Period', data: [1200, 1800, 1400, 2600, 2200, 3400, 3100, 3700] },
+        { name: 'Prior Baseline', data: [900, 1100, 1200, 1800, 1900, 2400, 2600, 2900] }
+      ],
+      colors: ['#f4f4f5', '#52525b'],
+      stroke: { curve: 'straight', width: [2, 1], dashArray: [0, 4] },
+      fill: { type: 'solid', opacity: [0.05, 0.0] },
+      xaxis: { categories: ['W1', 'W2', 'W3', 'W4', 'W5', 'W6', 'W7', 'W8'], labels: { style: { colors: '#71717a', fontFamily: 'JetBrains Mono' } } },
+      yaxis: { labels: { style: { colors: '#71717a', fontFamily: 'JetBrains Mono' }, formatter: function(v) { return '₹' + v; } } },
+      grid: { borderColor: '#27272a', strokeDashArray: 3 },
+      theme: { mode: 'dark' }
+    };
+    new ApexCharts(document.querySelector("#corbelDualLineChart"), dualLineOptions).render();
+  });
 </script>
 {% endblock %}

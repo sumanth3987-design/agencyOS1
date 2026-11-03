@@ -1,83 +1,96 @@
 <!-- Save this directly into: templates/dashboard.html -->
 <!DOCTYPE html>
-<html lang="en" class="dark scroll-smooth">
+<html lang="en" class="dark">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Client Workspace — {{ agency_settings.agency_name }}</title>
-  
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://unpkg.com/lucide@latest"></script>
-  
-  <style>
-    body { background-color: #09090b; font-family: 'Plus Jakarta Sans', sans-serif; color: #f4f4f5; }
-    .portal-card { background: #121215; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 20px; }
-    .portal-card:hover { border-color: rgba(255, 255, 255, 0.16); }
-    .spotlight-card { background: #15151a; border: 1px solid rgba(99, 102, 241, 0.25); border-radius: 20px; }
-    .agency-action { background-color: var(--agency-primary); color: var(--agency-on-primary); }
-    .agency-action:hover { filter: brightness(.92); }
-  </style>
-</head>
-<body class="bg-zinc-950 text-zinc-100 min-h-screen flex flex-col selection:bg-indigo-500 selection:text-white" style="--agency-primary: {{ agency_settings.primary_color }}; --agency-on-primary: {{ agency_settings.primary_contrast }};">
+  <title>Client Executive Workspace — {{ agency_settings.agency_name }}</title>
 
-  <!-- ==================== TOP FLOATING NAVBAR ==================== -->
-  <header class="border-b border-zinc-800/80 bg-zinc-950/80 backdrop-blur-md sticky top-0 z-50">
-    <div class="max-w-7xl mx-auto px-6 h-18 flex items-center justify-between">
-      <div class="flex items-center gap-6">
-        <a href="{{ url_for('customer.dashboard') }}" class="flex min-w-0 items-center gap-2.5 rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white">
+  <!-- Typography: Plus Jakarta Sans & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="/static/style.css">
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace'],
+          },
+          colors: {
+            zinc: {
+              950: '#09090b',
+              900: '#101014',
+              850: '#18181b',
+              800: '#27272a',
+              700: '#3f3f46',
+            }
+          }
+        }
+      }
+    }
+  </script>
+</head>
+<body class="bg-zinc-950 text-zinc-100 min-h-screen selection:bg-zinc-100 selection:text-zinc-950 antialiased font-sans" style="--agency-primary: {{ agency_settings.primary_color }}; --agency-on-primary: {{ agency_settings.primary_contrast }};">
+
+  <!-- TOP CONSOLIDATED NAVBAR -->
+  <header class="border-b border-zinc-800 bg-zinc-950/95 sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
+      <div class="flex items-center gap-8">
+        <a href="{{ url_for('customer.dashboard') }}" class="flex items-center gap-2.5">
           {% if agency_settings.logo_url %}
-          <img src="{{ agency_settings.logo_url }}" alt="{{ agency_settings.agency_name }} logo" onerror="this.hidden=true; this.nextElementSibling.hidden=false; this.nextElementSibling.classList.remove('hidden');" class="h-9 w-9 rounded-xl border border-zinc-700 bg-zinc-900 object-contain p-1">
-          <span class="hidden h-9 w-9 shrink-0 items-center justify-center rounded-xl text-xs font-extrabold shadow-lg" style="background-color: var(--agency-primary); color: var(--agency-on-primary);" aria-hidden="true">{{ agency_settings.agency_name[:2]|upper }}</span>
+          <img src="{{ agency_settings.logo_url }}" alt="{{ agency_settings.agency_name }} logo" onerror="this.hidden=true; this.nextElementSibling.classList.remove('hidden');" class="h-7 w-7 rounded object-contain border border-zinc-700">
+          <span class="hidden h-7 w-7 rounded bg-white text-zinc-950 font-bold font-mono text-xs flex items-center justify-center">{{ agency_settings.agency_name[:2]|upper }}</span>
           {% else %}
-          <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-xs font-extrabold shadow-lg" style="background-color: var(--agency-primary); color: var(--agency-on-primary);">{{ agency_settings.agency_name[:2]|upper }}</span>
+          <span class="h-7 w-7 rounded bg-white text-zinc-950 font-bold font-mono text-xs flex items-center justify-center">{{ agency_settings.agency_name[:2]|upper }}</span>
           {% endif %}
-          <span class="truncate font-extrabold text-base tracking-tight text-white">{{ agency_settings.agency_name }}<span class="ml-1 inline-block h-1.5 w-1.5 rounded-full align-middle" style="background-color: var(--agency-primary)" aria-hidden="true"></span></span>
+          <span class="font-bold text-sm tracking-tight text-white font-mono uppercase">{{ agency_settings.agency_name }}</span>
         </a>
 
-        <!-- Segmented Navigation Tabs -->
-        <nav class="hidden md:flex bg-zinc-900 border border-zinc-800 p-1 rounded-full text-xs font-semibold">
-          <a href="{{ url_for('customer.dashboard') }}" class="px-4 py-1.5 rounded-full bg-white text-zinc-950 font-bold shadow">Workspace</a>
-          <a href="{{ url_for('customer.businesses') }}" class="px-4 py-1.5 rounded-full text-zinc-400 hover:text-white transition">Businesses</a>
-          <a href="{{ url_for('customer.customer_profile') }}" class="px-4 py-1.5 rounded-full text-zinc-400 hover:text-white transition">Profile</a>
+        <!-- Desktop Nav Links -->
+        <nav class="hidden md:flex items-center gap-6 text-xs font-semibold uppercase tracking-wider text-zinc-400 font-mono">
+          <a href="{{ url_for('customer.dashboard') }}" class="text-white border-b-2 border-white pb-0.5">Workspace</a>
+          <a href="{{ url_for('customer.businesses') }}" class="hover:text-white transition">Entities</a>
+          <a href="{{ url_for('customer.invoices_list') }}" class="hover:text-white transition">Invoices</a>
+          <a href="{{ url_for('customer.customer_profile') }}" class="hover:text-white transition">Profile</a>
         </nav>
       </div>
-      
-      <nav class="hidden md:flex bg-zinc-900 border border-zinc-800 p-1 rounded-full text-xs font-semibold">
-        <a href="{{ url_for('customer.dashboard') }}" class="...">Workspace</a>
-        <a href="{{ url_for('customer.businesses') }}" class="...">Businesses</a>
-        <a href="{{ url_for('customer.invoices_list') }}" class="px-4 py-1.5 rounded-full text-zinc-400 hover:text-white transition">Invoices</a>
-        <a href="{{ url_for('customer.customer_profile') }}" class="...">Profile</a>
-      </nav>
 
       <!-- Quick Actions -->
       <div class="flex items-center gap-4">
         {% include "includes/client_notification_center.html" %}
-        <a href="https://wa.me/{{ agency_settings.whatsapp_support_number|replace('+', '') }}" target="_blank" rel="noopener noreferrer" class="hidden sm:flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-bold hover:bg-emerald-500/20 transition">
-          <i data-lucide="message-square" class="w-3.5 h-3.5"></i>
-          <span>WhatsApp Lead</span>
+        
+        {% if agency_settings.whatsapp_support_number %}
+        <a href="https://wa.me/{{ agency_settings.whatsapp_support_number|replace('+', '') }}" target="_blank" rel="noopener noreferrer" class="hidden sm:inline-flex btn btn-secondary text-xs h-8">
+          Support Lead ⚡
         </a>
+        {% endif %}
 
-        <form method="POST" action="{{ url_for('auth.logout') }}">
+        <form method="POST" action="{{ url_for('auth.logout') }}" class="inline">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <button type="submit" class="text-xs font-bold text-zinc-400 hover:text-rose-400 transition cursor-pointer">Sign Out</button>
+          <button type="submit" class="btn btn-subtle text-xs h-8 cursor-pointer">Sign Out</button>
         </form>
       </div>
     </div>
   </header>
 
-  <!-- ==================== MAIN CONTENT ==================== -->
+  <!-- WORKSPACE CONTAINER -->
   <main class="max-w-7xl mx-auto px-6 py-8 flex-1 w-full space-y-8">
     
-    <!-- Flash Messages -->
+    <!-- Flash Messages Slot -->
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}
         <div class="space-y-2">
           {% for category, message in messages %}
-            <div class="p-3.5 rounded-xl border text-xs flex items-center justify-between {% if category == 'success' %}bg-emerald-500/10 border-emerald-500/20 text-emerald-300{% elif 'warning' in category %}bg-amber-500/10 border-amber-500/20 text-amber-300{% else %}bg-rose-500/10 border-rose-500/20 text-rose-300{% endif %}">
-              <span>{{ message }}</span>
-              <button onclick="this.parentElement.remove()" class="text-zinc-400 hover:text-white">×</button>
+            <div class="system-alert {{ 'system-alert-success' if category == 'success' else 'system-alert-error' }}">
+              <span class="font-mono text-xs">{{ message }}</span>
+              <button onclick="this.parentElement.remove()" class="text-zinc-400 hover:text-white ml-auto cursor-pointer">✕</button>
             </div>
           {% endfor %}
         </div>
@@ -85,319 +98,300 @@
     {% endwith %}
 
     <!-- Top Executive Welcome Bar -->
-    <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-6 border-b border-zinc-800 gap-6">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-6 border-b border-zinc-800 gap-4">
       <div>
-        <div class="flex items-center gap-2 mb-2">
-          <span class="px-2.5 py-0.5 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 font-mono text-[10px] font-bold">
-            {{ profile.business_name if profile and profile.business_name else 'Client Enterprise' }}
+        <div class="flex items-center gap-2 mb-2 font-mono text-xs">
+          <span class="badge badge-indigo">
+            {{ profile.business_name if profile and profile.business_name else 'DIRECT CLIENT' }}
           </span>
-          <span class="text-zinc-600 font-mono text-[11px]">•</span>
-          <span class="text-emerald-400 font-mono text-[11px] flex items-center gap-1.5">
-            <span class="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-            <span>All Sprints On Schedule</span>
-          </span>
+          <span class="text-zinc-600">•</span>
+          <span class="badge badge-emerald">SPRINT VELOCITY NORMAL</span>
         </div>
         <h1 class="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">Client Executive Workspace</h1>
-        <p class="text-xs text-zinc-400 mt-1">Review live deliverable previews, inspect SEO rank gains, authorize milestone gates, and post direct team notes.</p>
+        <p class="text-xs font-mono text-zinc-400 mt-1">Sequential milestone gates, real-time code staging, and SAC 998311 tax clearance.</p>
       </div>
 
-      <div class="flex items-center gap-3">
-        <a href="{{ url_for('customer.start_project', service_slug='website-development') }}" class="agency-action px-5 py-2.5 rounded-xl font-bold text-xs shadow-xl transition flex items-center gap-2 shrink-0">
-          <i data-lucide="plus" class="w-4 h-4"></i>
-          <span>Commission New Project</span>
+      <div>
+        <a href="{{ url_for('customer.start_project', service_slug='website-development') }}" class="btn btn-primary text-xs h-10 px-5 font-semibold">
+          + Commission New SOW
         </a>
       </div>
     </div>
 
-    <!-- 4 High-Impact KPI Tiles -->
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-      <div class="portal-card p-5">
-        <span class="text-xs font-mono uppercase text-zinc-400">Commissioned Projects</span>
-        <div class="mt-3 font-mono text-3xl font-extrabold text-white">{{ projects|length }}</div>
-        <span class="mt-2 block text-[11px] text-zinc-500">Active milestones & retainers</span>
+    <!-- 4 High-Impact KPI Metrics -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 border-t border-l border-zinc-800 bg-zinc-950 font-mono text-xs">
+      <div class="p-5 border-b border-r border-zinc-800">
+        <span class="text-zinc-500 uppercase tracking-wider block mb-1">Total Commissioned</span>
+        <div class="text-3xl font-bold text-white">{{ projects|length }}</div>
+        <span class="text-[11px] text-zinc-500 mt-1 block">Active contracts &amp; retainers</span>
       </div>
 
-      <div class="portal-card p-5">
-        <span class="text-xs font-mono uppercase text-zinc-400">In-Flight Sprints</span>
-        <div class="mt-3 font-mono text-3xl font-extrabold text-indigo-400">
+      <div class="p-5 border-b border-r border-zinc-800">
+        <span class="text-zinc-500 uppercase tracking-wider block mb-1">In-Flight Sprints</span>
+        <div class="text-3xl font-bold text-white">
           {{ projects|selectattr("status", "in", ["Assigned", "In Progress", "Submitted", "Revision"])|list|length }}
         </div>
-        <span class="mt-2 block text-[11px] text-zinc-500">Under active development</span>
+        <span class="text-[11px] text-zinc-500 mt-1 block">Sequentially gated</span>
       </div>
 
-      <div class="portal-card p-5">
-        <span class="text-xs font-mono uppercase text-zinc-400">Completed & Handed Over</span>
-        <div class="mt-3 font-mono text-3xl font-extrabold text-emerald-400">
+      <div class="p-5 border-b border-r border-zinc-800">
+        <span class="text-zinc-500 uppercase tracking-wider block mb-1">Handed Over</span>
+        <div class="text-3xl font-bold text-emerald-400">
           {{ projects|selectattr("status", "equalto", "Completed")|list|length }}
         </div>
-        <span class="mt-2 block text-[11px] text-zinc-500">100% IP & code delivered</span>
+        <span class="text-[11px] text-zinc-500 mt-1 block">100% IP &amp; Repo Handover</span>
       </div>
 
-      <div class="portal-card p-5">
-        <span class="text-xs font-mono uppercase text-zinc-400">Delivery Velocity</span>
-        <div class="mt-3 font-mono text-2xl font-bold text-emerald-400 flex items-center gap-2">
-          <i data-lucide="shield-check" class="w-5 h-5"></i>
-          <span>100% On-Track</span>
+      <div class="p-5 border-b border-r border-zinc-800">
+        <span class="text-zinc-500 uppercase tracking-wider block mb-1">Scope Integrity</span>
+        <div class="text-2xl font-bold text-emerald-400 mt-1">
+          100% GATED
         </div>
-        <span class="mt-2 block text-[11px] text-zinc-500">2-Revision scope guarantee</span>
+        <span class="text-[11px] text-zinc-500 mt-1 block">2-Revision protocol active</span>
       </div>
     </div>
 
-    <!-- ACTIVE SPRINT SPOTLIGHT (Current Primary Focus) -->
+    <!-- ACTIVE SPRINT SPOTLIGHT -->
     {% set active_spotlight = projects|selectattr("status", "in", ["Assigned", "In Progress", "Submitted", "Revision", "Payment Pending"])|list|first %}
     {% if active_spotlight %}
-    <div class="spotlight-card p-6 relative overflow-hidden">
-      <div class="flex flex-col md:flex-row md:items-center justify-between pb-4 border-b border-indigo-500/20 gap-4">
+    <div class="border border-zinc-800 bg-zinc-900 rounded-lg overflow-hidden font-mono text-xs">
+      <div class="p-5 border-b border-zinc-800 bg-zinc-950 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <div class="flex items-center gap-2 mb-1">
-            <span class="px-2.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 font-mono text-[10px] font-bold uppercase">Active Sprint Spotlight</span>
-            <span class="text-zinc-500 text-xs font-mono">#{{ active_spotlight.id }}</span>
+            <span class="badge badge-emerald">PRIMARY ACTIVE SOW</span>
+            <span class="text-zinc-400">#{{ active_spotlight.id }}</span>
           </div>
-          <h2 class="text-xl font-bold text-white">{{ active_spotlight.service }}</h2>
-          <p class="text-xs text-zinc-300 mt-1">Package: <strong class="text-white">{{ active_spotlight.package }}</strong> • Status: <span class="text-indigo-400 font-mono font-bold">{{ active_spotlight.status }}</span></p>
+          <h2 class="text-lg font-bold text-white font-sans">{{ active_spotlight.service }}</h2>
+          <p class="text-zinc-400 mt-0.5">
+            Package: <strong class="text-zinc-200">{{ active_spotlight.package }}</strong> • 
+            Status: <span class="text-white font-semibold">{{ active_spotlight.status }}</span>
+          </p>
         </div>
 
-        <a href="{{ url_for('customer.project_details', project_id=active_spotlight.id) }}" class="agency-action px-5 py-2.5 rounded-xl font-bold text-xs shadow-lg transition flex items-center gap-2 self-start md:self-auto shrink-0">
-          <span>Open Interactive Workspace</span>
-          <i data-lucide="arrow-right" class="w-4 h-4"></i>
+        <a href="{{ url_for('customer.project_details', project_id=active_spotlight.id) }}" class="btn btn-secondary text-xs h-9 font-semibold">
+          Open Project Workbench →
         </a>
       </div>
 
-      <!-- 3-Milestone Phase Gates -->
-      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-4 text-xs">
-        <div class="p-3.5 rounded-xl bg-zinc-900/80 border border-zinc-800">
-          <div class="flex justify-between items-center text-[11px]">
-            <span class="font-bold text-white">Milestone 1: Kickoff</span>
-            <span class="text-emerald-400 font-mono font-bold">50% Advance</span>
+      <div class="grid grid-cols-1 sm:grid-cols-3 border-t border-zinc-800">
+        <div class="p-4 border-r border-b sm:border-b-0 border-zinc-800 bg-zinc-950 space-y-1">
+          <div class="flex justify-between items-center text-zinc-400">
+            <span>GATE 1: KICKOFF</span>
+            <span class="text-white font-bold">50% ADVANCE</span>
           </div>
-          <span class="text-[10px] text-emerald-400 mt-1 block font-mono">
-            {% if active_spotlight.status != 'Payment Pending' %}Settled & Active ✅{% else %}Payment Pending ⚡{% endif %}
+          <span class="block text-[11px] {% if active_spotlight.status != 'Payment Pending' %}text-emerald-400 font-bold{% else %}text-amber-400 font-bold{% endif %}">
+            {% if active_spotlight.status != 'Payment Pending' %}✓ Cleared &amp; Escrow Bound{% else %}⚡ Awaiting Settlement{% endif %}
           </span>
         </div>
 
-        <div class="p-3.5 rounded-xl bg-zinc-900/80 border {% if active_spotlight.status in ['Assigned', 'In Progress', 'Submitted', 'Revision'] %}border-indigo-500/40 bg-indigo-950/20{% else %}border-zinc-800{% endif %}">
-          <div class="flex justify-between items-center text-[11px]">
-            <span class="font-bold text-white">Milestone 2: Production UI</span>
-            <span class="text-indigo-400 font-mono font-bold">25% Sign-Off</span>
+        <div class="p-4 border-r border-b sm:border-b-0 border-zinc-800 bg-zinc-900 space-y-1">
+          <div class="flex justify-between items-center text-zinc-400">
+            <span>GATE 2: STAGING</span>
+            <span class="text-white font-bold">25% STAGING</span>
           </div>
-          <span class="text-[10px] text-indigo-400 mt-1 block font-mono">Current Active Gate ⚡</span>
+          <span class="block text-[11px] text-indigo-400 font-bold">
+            {% if active_spotlight.status in ['Assigned', 'In Progress', 'Submitted', 'Revision'] %}⚡ Active Sprint Gate{% else %}Locked{% endif %}
+          </span>
         </div>
 
-        <div class="p-3.5 rounded-xl bg-zinc-900/80 border border-zinc-800 opacity-60">
-          <div class="flex justify-between items-center text-[11px]">
-            <span class="font-bold text-white">Milestone 3: Deployment</span>
-            <span class="text-zinc-400 font-mono font-bold">25% Final</span>
+        <div class="p-4 bg-zinc-950 text-zinc-500 space-y-1">
+          <div class="flex justify-between items-center">
+            <span>GATE 3: RELEASE</span>
+            <span>25% HANDOVER</span>
           </div>
-          <span class="text-[10px] text-zinc-500 mt-1 block font-mono">Handover & DNS Setup</span>
+          <span class="block text-[11px]">DNS &amp; Final IP Transfer</span>
         </div>
       </div>
     </div>
     {% endif %}
 
-    <!-- ==================== 2-COLUMN BALANCED WORKSPACE ==================== -->
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 w-full">
+    <!-- 2-COLUMN BALANCED WORKSPACE -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
       
-      <!-- LEFT 2 COLUMNS: Projects Directory & SEO Analytics (65% Width) -->
+      <!-- LEFT 2 COLUMNS: Projects Directory & Analytics -->
       <div class="lg:col-span-2 space-y-8">
         
-        <!-- Active Projects List -->
-        <div class="portal-card p-6">
-          <div class="flex items-center justify-between pb-4 border-b border-zinc-800 mb-4">
-            <div>
-              <h2 class="text-base font-bold text-white">Commissioned Delivery Sprints</h2>
-              <p class="text-xs text-zinc-400 mt-0.5">Click into any milestone to inspect staging links or submit revision requests.</p>
-            </div>
-            <span class="text-xs font-mono text-zinc-400">{{ projects|length }} Total</span>
+        <!-- Commissioned Delivery Sprints -->
+        <div class="border border-zinc-800 bg-zinc-900 rounded-lg overflow-hidden">
+          <div class="p-4 border-b border-zinc-800 bg-zinc-950 flex items-center justify-between font-mono text-xs">
+            <span class="font-bold uppercase tracking-wider text-white">Commissioned Engagements</span>
+            <span class="text-zinc-400">{{ projects|length }} Records</span>
           </div>
 
-          <div class="divide-y divide-zinc-800/60">
+          <div class="divide-y divide-zinc-800 font-mono text-xs">
             {% for project in projects if projects %}
-            <article class="py-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <article class="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
-                <div class="flex items-center gap-3">
-                  <span class="font-mono text-xs font-bold text-indigo-400">#{{ project.id }}</span>
-                  <h3 class="text-sm font-bold text-white">{{ project.service }}</h3>
-                  <span class="px-2.5 py-0.5 rounded text-[10px] font-mono border {% if project.status == 'Completed' %}bg-emerald-500/10 text-emerald-400 border-emerald-500/20{% elif project.status == 'Payment Pending' %}bg-rose-500/10 text-rose-400 border-rose-500/20{% elif project.status == 'Revision' %}bg-amber-500/10 text-amber-400 border-amber-500/20{% else %}bg-zinc-800 text-zinc-300 border-zinc-700{% endif %}">
+                <div class="flex items-center gap-2.5 mb-1">
+                  <span class="text-zinc-400 font-bold">#{{ project.id }}</span>
+                  <h3 class="text-sm font-bold text-white font-sans">{{ project.service }}</h3>
+                  <span class="badge {% if project.status == 'Completed' %}badge-emerald{% elif project.status == 'Payment Pending' %}badge-amber{% else %}badge-neutral{% endif %}">
                     {{ project.status }}
                   </span>
                 </div>
-                <p class="text-xs text-zinc-400 mt-1">
-                  Package: <strong class="text-zinc-200">{{ project.package }}</strong> • 
-                  Business: <strong class="text-zinc-200">{{ project.business.name if project.business else 'Direct Client' }}</strong>
+                <p class="text-xs text-zinc-400">
+                  Package: <span class="text-zinc-200">{{ project.package }}</span> • 
+                  Entity: <span class="text-zinc-200">{{ project.business.name if project.business else 'Direct Client' }}</span>
                 </p>
               </div>
 
               <div class="flex items-center gap-2 shrink-0">
                 {% if project.status == 'Payment Pending' %}
-                <a href="{{ url_for('payments.payment_page', project_id=project.id) }}" class="px-3.5 py-1.5 rounded-xl bg-rose-500 text-white font-bold text-xs shadow hover:bg-rose-600 transition">
-                  Pay Advance
+                <a href="{{ url_for('payments.payment_page', project_id=project.id) }}" class="btn btn-primary text-xs h-7 px-3">
+                  Authorize Advance
                 </a>
-                <form method="POST" action="{{ url_for('customer.cancel_project', project_id=project.id) }}" class="inline" onsubmit="return confirm('Cancel this unpaid draft?');">
+                <form method="POST" action="{{ url_for('customer.cancel_project', project_id=project.id) }}" class="inline" onsubmit="return confirm('Cancel this draft?');">
                   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                  <button type="submit" class="px-2.5 py-1.5 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-rose-400 text-xs font-semibold transition cursor-pointer" title="Cancel Draft">
-                    ✕
-                  </button>
+                  <button type="submit" class="btn btn-secondary text-xs h-7 px-2" title="Cancel Draft">✕</button>
                 </form>
                 {% endif %}
-                <a href="{{ url_for('customer.view_invoice', project_id=project.id) }}" target="_blank" class="px-3.5 py-1.5 rounded-xl bg-zinc-900 border border-zinc-800 text-xs text-zinc-300 font-bold hover:text-white transition">
+                <a href="{{ url_for('customer.view_invoice', project_id=project.id) }}" target="_blank" class="btn btn-secondary text-xs h-7 px-3">
                   Invoice
                 </a>
-                <a href="{{ url_for('customer.project_details', project_id=project.id) }}" class="px-4 py-1.5 rounded-xl bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-xs font-bold text-white transition">
-                  Workspace →
+                <a href="{{ url_for('customer.project_details', project_id=project.id) }}" class="btn btn-secondary text-xs h-7 px-3">
+                  Workbench →
                 </a>
               </div>
             </article>
             {% else %}
-            <div class="py-12 text-center text-xs text-zinc-500 font-mono">
-              <i data-lucide="folder-plus" class="w-8 h-8 text-zinc-600 mx-auto mb-3"></i>
-              <p>No active projects commissioned yet.</p>
-              <a href="{{ url_for('customer.start_project', service_slug='website-development') }}" class="agency-action mt-4 inline-block px-4 py-2 rounded-xl font-bold">Commission First Sprint</a>
+            <div class="p-12 text-center text-xs text-zinc-500 font-mono">
+              <p>No active engagements commissioned yet.</p>
+              <a href="{{ url_for('customer.start_project', service_slug='website-development') }}" class="btn btn-primary mt-4 text-xs h-8">
+                Commission First SOW
+              </a>
             </div>
             {% endfor %}
           </div>
         </div>
 
-        <!-- Google Maps & Local SEO Retainer Widget -->
-        <div class="portal-card p-6">
-          <div class="flex items-center justify-between pb-4 border-b border-zinc-800 mb-6">
+        <!-- Search Performance & Growth Engine -->
+        <div class="border border-zinc-800 bg-zinc-900 rounded-lg overflow-hidden">
+          <div class="p-4 border-b border-zinc-800 bg-zinc-950 flex items-center justify-between font-mono text-xs">
             <div>
-              <span class="text-xs font-mono uppercase text-sky-400 font-bold">Search Performance Engine</span>
-              <h3 class="text-base font-bold text-white mt-1">Local Google Maps & Search Ranking Metrics</h3>
+              <span class="badge badge-emerald mb-1">SEARCH RUNTIME</span>
+              <h3 class="text-sm font-bold text-white uppercase tracking-wider font-sans">Organic Impression &amp; Lead Analytics</h3>
             </div>
-            <span class="px-3 py-1 rounded-full text-xs font-mono bg-sky-500/10 border border-sky-500/20 text-sky-400">
-              Live Google Data
-            </span>
+            <span class="text-zinc-400">Synced Real-Time</span>
           </div>
 
-          <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs mb-6">
-            <div class="p-4 rounded-xl bg-zinc-900 border border-zinc-800">
-              <span class="text-[10px] font-mono text-zinc-500 uppercase block">Local Pack Rank</span>
-              <div class="font-mono text-2xl font-extrabold text-emerald-400 mt-1">#1 Rank</div>
-              <span class="text-[10px] text-zinc-400">Primary keyword target</span>
+          <div class="grid grid-cols-1 sm:grid-cols-3 border-b border-zinc-800 font-mono text-xs">
+            <div class="p-4 border-r border-zinc-800 bg-zinc-950">
+              <span class="text-[10px] text-zinc-500 uppercase block">Local Pack Rank</span>
+              <div class="text-2xl font-bold text-emerald-400 mt-1">#1 Rank</div>
+              <span class="text-[10px] text-zinc-500">Core Keyword Target</span>
             </div>
-            <div class="p-4 rounded-xl bg-zinc-900 border border-zinc-800">
-              <span class="text-[10px] font-mono text-zinc-500 uppercase block">Organic Impressions</span>
-              <div class="font-mono text-2xl font-extrabold text-white mt-1">14,820</div>
-              <span class="text-[10px] text-emerald-400 font-mono">+34.8% vs last month</span>
+            <div class="p-4 border-r border-zinc-800 bg-zinc-950">
+              <span class="text-[10px] text-zinc-500 uppercase block">Organic Impressions</span>
+              <div class="text-2xl font-bold text-white mt-1">14,820</div>
+              <span class="text-[10px] text-emerald-400">+34.8% MoM</span>
             </div>
-            <div class="p-4 rounded-xl bg-zinc-900 border border-zinc-800">
-              <span class="text-[10px] font-mono text-zinc-500 uppercase block">Customer Inquiries</span>
-              <div class="font-mono text-2xl font-extrabold text-indigo-400 mt-1">184 Calls</div>
-              <span class="text-[10px] text-zinc-400">Tracked via Google Profile</span>
-            </div>
-          </div>
-
-          <div class="p-4 rounded-xl bg-zinc-900/60 border border-zinc-800 text-xs">
-            <span class="font-bold text-white block mb-2 font-mono uppercase text-[10px]">Monthly SEO Deliverables Checklist:</span>
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-zinc-300">
-              <span class="flex items-center gap-1.5"><i data-lucide="check" class="w-3.5 h-3.5 text-emerald-400"></i> Core Web Vitals Speed Audit Completed</span>
-              <span class="flex items-center gap-1.5"><i data-lucide="check" class="w-3.5 h-3.5 text-emerald-400"></i> Google Business Profile Optimized</span>
-              <span class="flex items-center gap-1.5"><i data-lucide="check" class="w-3.5 h-3.5 text-emerald-400"></i> 4 High-Intent SEO Articles Published</span>
-              <span class="flex items-center gap-1.5"><i data-lucide="check" class="w-3.5 h-3.5 text-emerald-400"></i> Local Authority Backlinks Verified</span>
+            <div class="p-4 bg-zinc-950">
+              <span class="text-[10px] text-zinc-500 uppercase block">Direct Inquiries</span>
+              <div class="text-2xl font-bold text-white mt-1">184 Leads</div>
+              <span class="text-[10px] text-zinc-500">GMB Call Conversions</span>
             </div>
           </div>
         </div>
 
       </div>
 
-      <!-- RIGHT COLUMN: Direct Chat & Brand Vault (35% Width) -->
-      <div class="space-y-8">
+      <!-- RIGHT COLUMN: Direct Team Dispatch & Enhanced Entity Vault -->
+      <div class="space-y-8 font-mono text-xs">
         
-        <!-- DIRECT AGENCY CHAT STREAM -->
-        <div class="portal-card p-6">
-          <div class="flex items-center justify-between pb-3 border-b border-zinc-800 mb-4">
-            <h3 class="text-sm font-bold text-white flex items-center gap-2">
-              <i data-lucide="message-circle" class="w-4 h-4 text-indigo-400"></i>
-              <span>Direct Agency Chat</span>
-            </h3>
-            <span class="text-[10px] font-mono text-emerald-400">● Lead Active</span>
+        <!-- Direct Agency Chat Dispatch -->
+        <div class="border border-zinc-800 bg-zinc-900 rounded-lg overflow-hidden">
+          <div class="p-4 border-b border-zinc-800 bg-zinc-950 flex items-center justify-between">
+            <h3 class="font-bold text-white uppercase tracking-wider">Direct Dispatch</h3>
+            <span class="badge badge-emerald">LEAD ONLINE</span>
           </div>
 
-          <!-- Message History Container -->
-          <div class="space-y-3 max-h-60 overflow-y-auto pr-1 text-xs">
+          <div class="p-4 space-y-3 max-h-64 overflow-y-auto">
             {% for msg in recent_messages %}
-            <div class="p-3 rounded-xl bg-zinc-900 border border-zinc-800">
-              <div class="flex justify-between items-center text-[10px] text-zinc-500 mb-1">
-                <span class="font-bold text-zinc-300">{{ msg.sender.name if msg.sender else 'User' }}</span>
+            <div class="p-3 rounded border border-zinc-800 bg-zinc-950">
+              <div class="flex justify-between text-[10px] text-zinc-500 mb-1">
+                <span class="text-zinc-300 font-bold">{{ msg.sender.name if msg.sender else 'Agency Lead' }}</span>
                 <span>{{ msg.created_at.strftime('%d %b') if msg.created_at else '' }}</span>
               </div>
-              <p class="text-zinc-300">{{ msg.message }}</p>
+              <p class="text-zinc-300 font-sans text-xs leading-relaxed">{{ msg.message }}</p>
             </div>
             {% else %}
-            <p class="text-center py-6 text-xs text-zinc-600 font-mono">No recent notes. Message your team below.</p>
+            <p class="text-center py-6 text-zinc-600">No recent notes. Post a direct dispatch below.</p>
             {% endfor %}
           </div>
 
-          <!-- Post Quick Note Form -->
-          <form method="POST" action="{{ url_for('customer.dashboard_quick_message') }}" class="mt-4 space-y-3 text-xs">
+          <form method="POST" action="{{ url_for('customer.dashboard_quick_message') }}" class="p-4 border-t border-zinc-800 bg-zinc-950 space-y-3">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            
+
             {% if projects %}
             <div>
-              <label class="block text-[11px] text-zinc-400 mb-1 font-semibold">Select Project</label>
-              <select name="project_id" class="w-full p-2 rounded-xl bg-zinc-950 border border-zinc-800 text-white">
+              <label class="block text-[11px] text-zinc-400 mb-1">Target Engagement</label>
+              <select name="project_id" class="form-control text-xs">
                 {% for p in projects %}
                 <option value="{{ p.id }}">#{{ p.id }} — {{ p.service }}</option>
                 {% endfor %}
               </select>
             </div>
             <div>
-              <input type="text" name="message" required placeholder="Type a note to your agency lead..." class="w-full p-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-white placeholder-zinc-500 focus:outline-none focus:border-indigo-500">
+              <input type="text" name="message" required placeholder="Type operational brief or revision note..." class="form-control text-xs">
             </div>
-            <button type="submit" class="agency-action w-full py-2.5 rounded-xl font-bold transition cursor-pointer">
-              Send Direct Note ⚡
+            <button type="submit" class="btn btn-primary w-full text-xs h-9 font-semibold cursor-pointer">
+              Dispatch Note ⚡
             </button>
             {% else %}
-            <p class="text-center text-[11px] text-zinc-500">Commission a project to chat with your team.</p>
+            <p class="text-center text-[11px] text-zinc-500 font-sans">Commission an engagement to dispatch notes.</p>
             {% endif %}
           </form>
         </div>
 
-        <!-- BRAND ASSETS & STRATEGIC VAULT -->
-        <div class="portal-card p-6">
-          <div class="flex items-center justify-between pb-3 border-b border-zinc-800 mb-4">
-            <h3 class="text-sm font-bold text-white">Brand & Strategy Vault</h3>
-            <a href="{{ url_for('customer.customer_profile') }}" class="text-[11px] text-[var(--agency-primary)] hover:underline">Edit Context</a>
+        <!-- ENHANCED ENTITY VAULT & GSTIN VERIFICATION CARD -->
+        <div class="border border-zinc-800 bg-zinc-900 rounded-lg overflow-hidden">
+          <div class="p-4 border-b border-zinc-800 bg-zinc-950 flex items-center justify-between">
+            <h3 class="font-bold text-white uppercase tracking-wider">Entity &amp; Tax Vault</h3>
+            <a href="{{ url_for('customer.customer_profile') }}" class="text-indigo-400 hover:underline">Edit Profile</a>
           </div>
 
-          <div class="space-y-3 text-xs">
+          <div class="p-4 space-y-3">
             <div>
-              <span class="text-[10px] font-mono uppercase text-zinc-500 block">Registered Business</span>
-              <strong class="text-white">{{ profile.business_name if profile and profile.business_name else 'Direct Client' }}</strong>
+              <span class="text-[10px] text-zinc-500 uppercase block">Registered Entity</span>
+              <strong class="text-white font-sans text-xs">{{ profile.business_name if profile and profile.business_name else 'Direct Client Account' }}</strong>
             </div>
             <div>
-              <span class="text-[10px] font-mono uppercase text-zinc-500 block">Official Website</span>
-              <a href="{{ profile.website }}" target="_blank" class="text-[var(--agency-primary)] hover:underline truncate block">{{ profile.website or 'Not specified' }}</a>
+              <span class="text-[10px] text-zinc-500 uppercase block">Client GSTIN / Tax ID</span>
+              {% if profile and profile.gstin %}
+              <span class="text-emerald-400 font-bold">{{ profile.gstin }}</span>
+              {% else %}
+              <span class="text-amber-400 italic">Unregistered (Consumer)</span>
+              {% endif %}
             </div>
             <div>
-              <span class="text-[10px] font-mono uppercase text-zinc-500 block">WhatsApp Notification Target</span>
-              <span class="font-mono text-zinc-300">{{ profile.phone or 'Not configured' }}</span>
+              <span class="text-[10px] text-zinc-500 uppercase block">WhatsApp Notification Line</span>
+              <span class="text-zinc-200">{{ profile.phone or 'Not configured' }}</span>
             </div>
             <div>
-              <span class="text-[10px] font-mono uppercase text-zinc-500 block">Operating City</span>
-              <span class="text-zinc-300">{{ profile.location or 'India' }}</span>
+              <span class="text-[10px] text-zinc-500 uppercase block">Place of Supply</span>
+              <span class="text-zinc-300 font-sans">{{ profile.location or 'India (State 29)' }}</span>
             </div>
           </div>
         </div>
 
         <!-- REGISTERED BUSINESSES -->
-        <div class="portal-card p-6">
-          <div class="flex items-center justify-between pb-3 border-b border-zinc-800 mb-4">
-            <h3 class="text-sm font-bold text-white">Registered Businesses</h3>
-            <a href="{{ url_for('customer.add_business') }}" class="text-[11px] text-[var(--agency-primary)] hover:underline">+ Add</a>
+        <div class="border border-zinc-800 bg-zinc-900 rounded-lg overflow-hidden">
+          <div class="p-4 border-b border-zinc-800 bg-zinc-950 flex items-center justify-between">
+            <h3 class="font-bold text-white uppercase tracking-wider">Auxiliary Entities ({{ businesses|length }})</h3>
+            <a href="{{ url_for('customer.add_business') }}" class="btn btn-subtle text-xs h-7 px-2">+ Add</a>
           </div>
 
-          <div class="space-y-2 text-xs">
+          <div class="p-4 space-y-2">
             {% for b in businesses %}
-            <div class="p-3 rounded-xl bg-zinc-900 border border-zinc-800 flex justify-between items-center">
+            <div class="p-2.5 rounded border border-zinc-800 bg-zinc-950 flex justify-between items-center">
               <div>
-                <strong class="text-white block">{{ b.name }}</strong>
-                <span class="text-[10px] text-zinc-400">{{ b.business_type or 'General' }}</span>
+                <strong class="text-white font-sans text-xs block">{{ b.name }}</strong>
+                <span class="text-[10px] text-zinc-500 font-sans">{{ b.business_type or 'General' }}</span>
               </div>
-              <span class="text-[10px] font-mono text-indigo-400">Active</span>
+              <span class="badge badge-neutral">Active</span>
             </div>
             {% else %}
-            <p class="text-zinc-500 text-[11px] text-center py-4">No businesses registered yet.</p>
+            <p class="text-zinc-500 text-[11px] text-center py-4 font-sans">No auxiliary entities registered.</p>
             {% endfor %}
           </div>
         </div>
@@ -406,8 +400,8 @@
     </div>
   </main>
 
-  <footer class="border-t border-zinc-900 py-6 text-center text-xs font-mono text-zinc-600">
-    {{ agency_settings.agency_name }} Client Portal • GST 100% Tax Invoiced (SAC 998311) • IST Operational
+  <footer class="border-t border-zinc-800 bg-zinc-950 py-6 text-center text-xs font-mono text-zinc-600">
+    {{ agency_settings.agency_name }} Client Portal • 100% SAC 998311 Tax Invoiced • IST Operational
   </footer>
 
   <script>if (window.lucide) lucide.createIcons();</script>

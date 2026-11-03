@@ -1,6 +1,8 @@
+"""ReportLab Statement of Work PDF Generation Engine for AgencyOS."""
+
 import re
 from io import BytesIO
-from typing import NamedTuple
+from typing import Any, NamedTuple
 from xml.sax.saxutils import escape
 
 from reportlab.lib import colors
@@ -31,7 +33,7 @@ _SIGNATURE_PATTERN = re.compile(
 )
 
 
-def extract_sow_signature(requirements):
+def extract_sow_signature(requirements: str | None) -> SowSignature | None:
     """Return the recorded SOW signature, if requirements contain one."""
     match = _SIGNATURE_PATTERN.search((requirements or "").rstrip())
     if not match or not match.group("name").strip() or not match.group("title").strip():
@@ -45,12 +47,12 @@ def extract_sow_signature(requirements):
     )
 
 
-def _plain_paragraph(value, style):
+def _plain_paragraph(value: Any, style: ParagraphStyle) -> Paragraph:
     text = escape(str(value or "")).replace("\r\n", "\n").replace("\n", "<br/>")
     return Paragraph(text, style)
 
 
-def generate_sow_pdf(project, customer, business, signature):
+def generate_sow_pdf(project: Any, customer: Any, business: Any, signature: SowSignature) -> BytesIO:
     buffer = BytesIO()
     doc = SimpleDocTemplate(
         buffer,
@@ -64,7 +66,7 @@ def generate_sow_pdf(project, customer, business, signature):
     )
 
     styles = getSampleStyleSheet()
-    primary = colors.HexColor("#4f46e5")
+    primary = colors.HexColor("#09090b")
     dark_text = colors.HexColor("#18181b")
     muted_text = colors.HexColor("#71717a")
     light_background = colors.HexColor("#f4f4f5")
@@ -114,9 +116,9 @@ def generate_sow_pdf(project, customer, business, signature):
     )
     stored_signature = extract_sow_signature(project.requirements)
     if stored_signature:
-        project_brief = project.requirements[
-            : _SIGNATURE_PATTERN.search(project.requirements.rstrip()).start()
-        ].rstrip()
+        sig_match = _SIGNATURE_PATTERN.search(project.requirements.rstrip())
+        if sig_match:
+            project_brief = project.requirements[: sig_match.start()].rstrip()
         if not project_brief:
             project_brief = (
                 "Standard milestone website sprint and technical performance optimization."
@@ -210,7 +212,7 @@ def generate_sow_pdf(project, customer, business, signature):
     milestones_table.setStyle(
         TableStyle(
             [
-                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#e0e7ff")),
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f4f4f5")),
                 ("TEXTCOLOR", (0, 0), (-1, 0), primary),
                 ("PADDING", (0, 0), (-1, -1), 7),
                 ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#cbd5e1")),

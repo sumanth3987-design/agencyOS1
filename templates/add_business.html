@@ -1,100 +1,152 @@
+<!-- Save this directly into: templates/add_business.html -->
 <!DOCTYPE html>
-<html lang="en" class="dark scroll-smooth">
+<html lang="en" class="dark">
 <head>
   <meta charset="UTF-8">
-  <title>Add Business Profile — {{ agency_settings.agency_name }}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Add Business Entity — {{ agency_settings.agency_name }}</title>
+
+  <!-- Typography: Plus Jakarta Sans & JetBrains Mono -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://unpkg.com/lucide@latest"></script>
-  <style>body { background-color: #09090b; font-family: 'Plus Jakarta Sans', sans-serif; }</style>
+  <link rel="stylesheet" href="/static/style.css">
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace'],
+          },
+          colors: {
+            zinc: {
+              950: '#09090b',
+              900: '#101014',
+              850: '#18181b',
+              800: '#27272a',
+              700: '#3f3f46',
+            }
+          }
+        }
+      }
+    }
+  </script>
 </head>
-<body class="bg-zinc-950 text-zinc-100 min-h-screen p-6 sm:p-12 max-w-3xl mx-auto selection:bg-[var(--agency-primary)] selection:text-[var(--agency-on-primary)]" style="--agency-primary: {{ agency_settings.primary_color }}; --agency-on-primary: {{ agency_settings.primary_contrast }};">
+<body class="bg-zinc-950 text-zinc-100 min-h-screen selection:bg-zinc-100 selection:text-zinc-950 antialiased font-sans" style="--agency-primary: {{ agency_settings.primary_color }}; --agency-on-primary: {{ agency_settings.primary_contrast }};">
 
-  {% include "includes/agency_brand.html" %}
-
-  <a href="{{ url_for('customer.businesses') }}" class="text-xs font-mono text-[var(--agency-primary)] hover:underline flex items-center gap-1.5">
-    <i data-lucide="arrow-left" class="w-3.5 h-3.5"></i>
-    <span>Return to Businesses</span>
-  </a>
-
-  <div class="mt-6 pb-6 border-b border-zinc-800">
-    <span class="text-xs font-mono uppercase text-[var(--agency-primary)] font-bold">Client Onboarding</span>
-    <h1 class="text-3xl font-extrabold text-white mt-1">Register Business Profile</h1>
-    <p class="text-xs text-zinc-400 mt-1">Provide business context so our specialists and Gemini AI can calibrate website designs and SEO keyword targets.</p>
-  </div>
-
-  <form method="POST" action="{{ url_for('customer.add_business') }}" class="mt-8 space-y-6 text-xs">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-
-    <!-- 1. Identity & Online Presence -->
-    <div class="p-6 rounded-2xl bg-[#121215] border border-zinc-800 space-y-4">
-      <h3 class="text-sm font-bold text-white uppercase tracking-wider font-mono">1. Brand Identity & Presence</h3>
-      
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div>
-          <label class="block text-zinc-400 font-semibold mb-1.5">Business / Legal Entity Name *</label>
-          <input type="text" name="name" required placeholder="e.g. Bombay Spice Co. Pvt Ltd" class="w-full px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-white focus:outline-none focus:border-[var(--agency-primary)]">
-        </div>
-        <div>
-          <label class="block text-zinc-400 font-semibold mb-1.5">Industry / Business Category *</label>
-          <input type="text" name="business_type" required placeholder="e.g. D2C Retail, Restaurant, SaaS, Real Estate" class="w-full px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-white focus:outline-none focus:border-[var(--agency-primary)]">
-        </div>
-        <div>
-          <label class="block text-zinc-400 font-semibold mb-1.5">Operating City & State *</label>
-          <input type="text" name="location" required placeholder="e.g. Mumbai, Maharashtra" class="w-full px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-white focus:outline-none focus:border-[var(--agency-primary)]">
-        </div>
-        <div>
-          <label class="block text-zinc-400 font-semibold mb-1.5">Current Website or Google Maps URL</label>
-          <input type="url" name="website" placeholder="https://yourbusiness.com" class="w-full px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-white focus:outline-none focus:border-[var(--agency-primary)]">
-        </div>
+  <!-- TOP WORKBENCH HEADER -->
+  <header class="border-b border-zinc-800 bg-zinc-950/95 sticky top-0 z-50">
+    <div class="max-w-4xl mx-auto px-6 h-16 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        {% include "includes/agency_brand.html" %}
+        <span class="font-mono text-xs text-zinc-500">/</span>
+        <span class="font-mono text-xs text-zinc-400 font-bold uppercase">Configure Entity</span>
       </div>
 
-      <div>
-        <label class="block text-zinc-400 font-semibold mb-1.5">Social Profiles (Instagram, LinkedIn, Facebook)</label>
-        <input type="text" name="social_links" placeholder="instagram.com/brand, linkedin.com/company/brand" class="w-full px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-white focus:outline-none focus:border-[var(--agency-primary)]">
-      </div>
+      <a href="{{ url_for('customer.businesses') }}" class="btn btn-secondary text-xs h-8">
+        ← Return to Entities
+      </a>
+    </div>
+  </header>
+
+  <!-- MAIN FORM SHELL -->
+  <main class="max-w-4xl mx-auto px-6 py-10 space-y-8">
+
+    <!-- Flash Messages Slot -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="space-y-2">
+          {% for category, message in messages %}
+            <div class="system-alert {{ 'system-alert-success' if category == 'success' else 'system-alert-error' }}">
+              <span class="font-mono text-xs">{{ message }}</span>
+              <button onclick="this.parentElement.remove()" class="text-zinc-400 hover:text-white ml-auto cursor-pointer">✕</button>
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    <!-- Top Executive Header -->
+    <div class="border-b border-zinc-800 pb-6">
+      <span class="badge badge-indigo mb-2">CORPORATE PROFILE SETUP</span>
+      <h1 class="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">Register Business Profile</h1>
+      <p class="text-xs font-mono text-zinc-400 mt-1">Associate this legal entity with project statements of work, SEO engines, and GST invoices.</p>
     </div>
 
-    <!-- 2. Strategic Context & Growth Objectives -->
-    <div class="p-6 rounded-2xl bg-[#121215] border border-zinc-800 space-y-4">
-      <h3 class="text-sm font-bold text-white uppercase tracking-wider font-mono">2. Strategy & Target Audience</h3>
+    <form method="POST" action="{{ url_for('customer.add_business') }}" class="space-y-6 font-mono text-xs">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
-      <div>
-        <label class="block text-zinc-400 font-semibold mb-1.5">Ideal Target Audience & Geography</label>
-        <input type="text" name="target_audience" placeholder="e.g. Young professionals in Bangalore seeking organic food, ages 25-40" class="w-full px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-white focus:outline-none focus:border-[var(--agency-primary)]">
+      <!-- 1. Legal Identity & Digital Coordinates -->
+      <div class="border border-zinc-800 bg-zinc-900 rounded-lg p-6 space-y-4">
+        <div class="flex items-center justify-between pb-3 border-b border-zinc-800">
+          <h2 class="font-bold text-white uppercase tracking-wider text-sm">1. Legal Entity & Coordinates</h2>
+          <span class="badge badge-neutral">SOW RECIPIENT</span>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-zinc-400 mb-1">Business / Legal Name *</label>
+            <input
+              type="text"
+              name="name"
+              required
+              placeholder="e.g. Apex Hospitality Pvt Ltd"
+              class="form-control text-xs"
+            >
+          </div>
+          <div>
+            <label class="block text-zinc-400 mb-1">Industry / Category *</label>
+            <input
+              type="text"
+              name="business_type"
+              required
+              placeholder="e.g. Retail, FinTech, SaaS, Healthcare"
+              class="form-control text-xs"
+            >
+          </div>
+          <div>
+            <label class="block text-zinc-400 mb-1">City & State (Place of Supply) *</label>
+            <input
+              type="text"
+              name="location"
+              required
+              placeholder="e.g. Mumbai, Maharashtra"
+              class="form-control text-xs"
+            >
+          </div>
+          <div>
+            <label class="block text-zinc-400 mb-1">Website or Domain URL</label>
+            <input
+              type="url"
+              name="website"
+              placeholder="https://apexorganization.com"
+              class="form-control text-xs"
+            >
+          </div>
+        </div>
       </div>
 
-      <div>
-        <label class="block text-zinc-400 font-semibold mb-1.5">Primary Growth Objective / Goal</label>
-        <select name="goals" class="w-full px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-white focus:outline-none focus:border-[var(--agency-primary)]">
-          <option value="Rank #1 on Google Local Pack & Drive Phone Calls">Rank #1 on Google Local Pack & Drive Customer Calls</option>
-          <option value="High-Converting E-Commerce Store with UPI Rails">High-Converting E-Commerce Store with UPI Rails</option>
-          <option value="Modern Corporate Website for B2B Client Trust">Modern Corporate Website for B2B Client Trust</option>
-          <option value="Complete Brand Overhaul & Lead Generation Engine">Complete Brand Overhaul & Lead Generation Engine</option>
-        </select>
+      <!-- Submit Action -->
+      <div class="pt-4 flex items-center justify-between border-t border-zinc-800">
+        <span class="text-[11px] text-zinc-500 font-sans">Entity details will automatically populate in future project intake wizards.</span>
+        <button type="submit" class="btn btn-primary text-xs h-11 px-6 font-semibold cursor-pointer">
+          Register Business Profile →
+        </button>
       </div>
 
-      <div>
-        <label class="block text-zinc-400 font-semibold mb-1.5">Company Description & Offerings</label>
-        <textarea name="description" rows="3" placeholder="Briefly describe what your business sells, your USP, and competitor websites you admire..." class="w-full p-3 rounded-xl bg-zinc-950 border border-zinc-800 text-white focus:outline-none focus:border-[var(--agency-primary)]"></textarea>
-      </div>
+    </form>
 
-      <div>
-        <label class="block text-zinc-400 font-semibold mb-1.5">Preferred Monthly / Milestone Budget Tier</label>
-        <select name="preferred_budget" class="w-full px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-white font-mono focus:outline-none focus:border-[var(--agency-primary)]">
-          <option value="₹25,000 – ₹50,000 (Growth Sprint)">₹25,000 – ₹50,000 (Growth Sprint)</option>
-          <option value="₹50,000 – ₹1,00,000 (Scale Package)">₹50,000 – ₹1,00,000 (Scale Package)</option>
-          <option value="₹1,00,000+ (Full Enterprise Overhaul)">₹1,00,000+ (Full Enterprise Overhaul)</option>
-        </select>
-      </div>
-    </div>
+  </main>
 
-    <button type="submit" class="w-full py-3.5 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-bold text-xs shadow-xl transition cursor-pointer">
-      Register Business Context →
-    </button>
-  </form>
+  <!-- FOOTER -->
+  <footer class="border-t border-zinc-800 bg-zinc-950 py-6 px-6 text-center text-xs font-mono text-zinc-500">
+    {{ agency_settings.agency_name }} Corporate Vault • SAC 998311 Compliant
+  </footer>
 
-  <script>if (window.lucide) lucide.createIcons();</script>
 </body>
 </html>
