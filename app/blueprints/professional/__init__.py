@@ -668,3 +668,23 @@ def professional_profile() -> ResponseReturnValue:
         return redirect(url_for("professional.professional_profile"))
 
     return render_template("professional_profile.html", profile=profile)
+
+@professional_bp.route("/professional/api/project/<int:project_id>/messages")
+@login_required
+def api_get_professional_messages(project_id: int):
+    project = Project.query.get_or_404(project_id)
+    is_assigned = ProfessionalProjectApplication.query.filter_by(
+        project_id=project.id, professional_id=current_user.id, status="Assigned"
+    ).first()
+    if not is_assigned and getattr(current_user, "role", "").lower() != "admin":
+        return jsonify({"error": "Unauthorized"}), 403
+
+    messages = ChatMessage.query.filter_by(project_id=project.id).order_by(ChatMessage.created_at.asc()).all()
+    data = [{
+        "id": m.id,
+        "sender_name": m.sender.name if m.sender else "Agency Team",
+        "message": m.message,
+        "time": m.created_at.strftime("%d %b %I:%M %p"),
+        "is_me": m.sender_id == current_user.id
+    } for m in messages]
+    return jsonify({"success": True, "messages": data})

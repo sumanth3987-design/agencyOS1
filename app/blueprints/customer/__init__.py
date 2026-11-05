@@ -28,6 +28,7 @@ from app.models import (
     Business,
     ChatMessage,
     CustomerProfile,
+    Dispute,
     Invoice,
     Milestone,
     Notification,
@@ -1022,3 +1023,64 @@ def cancel_project(project_id: int) -> ResponseReturnValue:
 
     flash(f"Draft Project #{project_id} cancelled.", "info")
     return redirect(url_for("customer.dashboard"))
+
+@customer_bp.route("/project/<int:project_id>/raise-dispute", methods=["POST"])
+@login_required
+def raise_dispute(project_id: int):
+    project = Project.query.get_or_404(project_id)
+    if project.customer_id != current_user.id and getattr(current_user, "role", "").lower() != "admin":
+        flash("Unauthorized action.", "danger")
+        return redirect(url_for("customer.dashboard"))
+
+    reason = request.form.get("reason", "").strip()
+    if not reason:
+        flash("Please provide a reason for raising this dispute.", "warning")
+        return redirect(url_for("customer.project_details", project_id=project.id))
+
+    project.status = "Disputed"
+    dispute = Dispute(
+        project_id=project.id,
+        raised_by_user_id=current_user.id,
+        reason=reason,
+        status="OPEN"
+    )
+    db.session.add(dispute)
+
+    ActivityLog.log_event(
+        project_id=project.id,
+        action="DISPUTE_RAISED",
+        description=f"Escrow dispute raised by client: {reason}",
+        user_id=current_user.id,
+        category="danger",
+    )
+
+    for admin in User.query.filter_by(role="admin").all():
+        notif = Notification(
+            user_id=admin.id,
+            title=f"⚠️ Escrow Dispute Raised: Project #{project.id}",
+            message=f"{current_user.name} raised a dispute on Project #{project.id}. Admin arbitration required.",
+            link=url_for("admin.admin_disputes")
+        )
+        db.session.add(notif)
+
+    db.session.commit()
+    flash("Escrow dispute logged. Agency administration has frozen funds and stepped in for arbitration.", "warning")
+    return redirect(url_for("customer.project_details", project_id=project.id))
+
+
+@customer_bp.route("/api/project/<int:project_id>/messages")
+@login_required
+def api_get_messages(project_id: int):
+    project = Project.query.get_or_404(project_id)
+    if project.customer_id != current_user.id and getattr(current_user, "role", "").lower() != "admin":
+        return jsonify({"error": "Unauthorized"}), 403
+    
+    messages = ChatMessage.query.filter_by(project_id=project.id).order_by(ChatMessage.created_at.asc()).all()
+    data = [{
+        "id": m.id,
+        "sender_name": m.sender.name if m.sender else "Agency Team",
+        "message": m.message,
+        "time": m.created_at.strftime("%d %b %I:%M %p"),
+        "is_me": m.sender_id == current_user.id
+    } for m in messages]
+    return jsonify({"success": True, "messages": data})

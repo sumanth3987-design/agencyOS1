@@ -587,37 +587,44 @@
     {{ agency_settings.agency_name if agency_settings else 'AgencyOS' }} Workbench Node IST • SAC 998311 Compliant Billing
   </footer>
 
+  <!-- Live Chat Auto-Polling Script -->
   <script>
     document.addEventListener("DOMContentLoaded", function () {
+      var projectId = "{{ project.id }}";
+      var apiEndpoint = "/api/project/" + projectId + "/messages"; // or professional/api/...
       var chatStream = document.getElementById("chatStream");
-      if (chatStream) {
-        chatStream.scrollTop = chatStream.scrollHeight;
+      var lastMessageCount = 0;
+
+      function pollChat() {
+        fetch(apiEndpoint)
+          .then(res => res.json())
+          .then(data => {
+            if (data.success && data.messages) {
+              if (data.messages.length !== lastMessageCount) {
+                lastMessageCount = data.messages.length;
+                var html = "";
+                data.messages.forEach(function (msg) {
+                  var bgClass = msg.is_me ? "bg-zinc-850" : "bg-zinc-950";
+                  html += `
+                    <div class="p-3 rounded-lg border border-zinc-800 ${bgClass}">
+                      <div class="flex justify-between items-center text-[10px] text-zinc-500 mb-1">
+                        <span class="font-bold text-zinc-300">${msg.sender_name}</span>
+                        <span>${msg.time}</span>
+                      </div>
+                      <p class="text-zinc-200 font-sans text-xs leading-relaxed whitespace-pre-wrap">${msg.message}</p>
+                    </div>
+                  `;
+                });
+                chatStream.innerHTML = html;
+                chatStream.scrollTop = chatStream.scrollHeight;
+              }
+            }
+          })
+          .catch(err => console.error("Chat sync error:", err));
       }
 
-      // Revision Modal
-      var openBtn = document.getElementById("openRevisionBtn");
-      var closeBtn = document.getElementById("closeRevisionBtn");
-      var cancelBtn = document.getElementById("cancelRevisionBtn");
-      var modal = document.getElementById("revisionModal");
-
-      if (openBtn && modal) {
-        openBtn.addEventListener("click", function () { modal.classList.remove("hidden"); });
-      }
-      function hideModal() { if (modal) modal.classList.add("hidden"); }
-      if (closeBtn) closeBtn.addEventListener("click", hideModal);
-      if (cancelBtn) cancelBtn.addEventListener("click", hideModal);
-
-      // Invoices Modal
-      var openInvBtn = document.getElementById("openInvoicesModalBtn");
-      var closeInvBtn = document.getElementById("closeInvoicesModalBtn");
-      var invModal = document.getElementById("invoicesModal");
-
-      if (openInvBtn && invModal) {
-        openInvBtn.addEventListener("click", function () { invModal.classList.remove("hidden"); });
-      }
-      if (closeInvBtn && invModal) {
-        closeInvBtn.addEventListener("click", function () { invModal.classList.add("hidden"); });
-      }
+      // Poll every 3 seconds for lightning-fast real-time chat
+      setInterval(pollChat, 3000);
     });
   </script>
 </body>

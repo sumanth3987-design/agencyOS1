@@ -1,0 +1,107 @@
+<!-- Save this directly into: templates/admin_disputes.html -->
+{% extends "admin_base.html" %}
+{% block title %}Escrow Arbitration Center — AgencyOS{% endblock %}
+{% block content %}
+<main class="max-w-7xl mx-auto px-6 py-8 space-y-8 font-sans">
+
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-6 border-b border-zinc-800 gap-4">
+    <div>
+      <div class="flex items-center gap-2 mb-1 font-mono text-xs">
+        <span class="badge badge-amber">ESCROW ARBITRATION CENTER</span>
+        <span class="text-zinc-600">•</span>
+        <span class="text-zinc-400">Mediation & Verdict Rails</span>
+      </div>
+      <h1 class="text-2xl font-extrabold text-white tracking-tight">Active Dispute Cases</h1>
+      <p class="text-xs font-mono text-zinc-400 mt-1">Inspect frozen escrow disputes, review project deliverables, and issue binding arbitration verdicts.</p>
+    </div>
+
+    <span class="badge badge-neutral font-mono text-xs px-3 py-1">
+      {{ disputes|length if disputes else 0 }} Total Dispute Cases
+    </span>
+  </div>
+
+  <div class="space-y-6">
+    {% for d in disputes %}
+    <div class="border border-zinc-800 bg-zinc-900 rounded-xl p-6 space-y-4 shadow-xl font-mono text-xs">
+      <div class="flex flex-col md:flex-row md:items-center justify-between pb-4 border-b border-zinc-800 gap-4">
+        <div>
+          <div class="flex items-center gap-2 mb-1">
+            <span class="text-indigo-400 font-bold">Case #{{ d.id }}</span>
+            <span class="text-white font-semibold">Project Ref #{{ d.project_id }} · {{ d.project.service }}</span>
+            <span class="badge {% if d.status == 'OPEN' %}badge-amber{% else %}badge-emerald{% endif %}">
+              {{ d.status }}
+            </span>
+          </div>
+          <p class="text-zinc-400 font-mono text-[11px]">
+            Raised By: <strong class="text-zinc-200">{{ d.raised_by.name if d.raised_by else 'User' }}</strong> • 
+            Date: {{ d.created_at.strftime('%d %b %Y, %H:%M') if d.created_at else '—' }}
+          </p>
+        </div>
+
+        <div>
+          <a href="{{ url_for('customer.project_details', project_id=d.project_id) }}" target="_blank" class="btn btn-secondary text-xs h-8">
+            Inspect Project Workbench ↗
+          </a>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="p-4 rounded-lg bg-zinc-950 border border-zinc-800 space-y-1">
+          <span class="text-[10px] text-zinc-500 uppercase font-bold block">Dispute Reason / Grievance</span>
+          <p class="text-zinc-300 font-sans text-xs leading-relaxed whitespace-pre-wrap">{{ d.reason }}</p>
+        </div>
+
+        <div class="p-4 rounded-lg bg-zinc-950 border border-zinc-800 space-y-1">
+          <span class="text-[10px] text-zinc-500 uppercase font-bold block">Arbitration Verdict &amp; Notes</span>
+          {% if d.status == 'OPEN' %}
+            <p class="text-amber-400 font-sans text-xs">Escrow frozen. Awaiting admin binding verdict.</p>
+          {% else %}
+            <p class="text-emerald-400 font-sans text-xs font-bold">Resolved: {{ d.status }}</p>
+            <p class="text-zinc-300 font-sans text-xs mt-1">{{ d.admin_verdict_notes or 'No notes provided.' }}</p>
+          {% endif %}
+        </div>
+      </div>
+
+      {% if d.status == 'OPEN' %}
+      <div class="pt-4 border-t border-zinc-800">
+        <form method="POST" action="{{ url_for('admin.resolve_dispute', dispute_id=d.id) }}" class="space-y-4">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <label class="p-3 rounded-lg border border-zinc-800 bg-zinc-950 flex items-center gap-2 cursor-pointer hover:border-emerald-500">
+              <input type="radio" name="verdict" value="RELEASED_SPECIALIST" required class="accent-emerald-500">
+              <span class="text-emerald-400 font-bold">Release to Specialist (Favor Pro)</span>
+            </label>
+            <label class="p-3 rounded-lg border border-zinc-800 bg-zinc-950 flex items-center gap-2 cursor-pointer hover:border-rose-500">
+              <input type="radio" name="verdict" value="REFUNDED_CLIENT" required class="accent-rose-500">
+              <span class="text-rose-400 font-bold">Refund to Client (Favor Client)</span>
+            </label>
+            <label class="p-3 rounded-lg border border-zinc-800 bg-zinc-950 flex items-center gap-2 cursor-pointer hover:border-indigo-500">
+              <input type="radio" name="verdict" value="SPLIT" required class="accent-indigo-500">
+              <span class="text-indigo-400 font-bold">Split 50 / 50 Mediation</span>
+            </label>
+          </div>
+
+          <div>
+            <label class="block text-zinc-400 mb-1">Binding Verdict Rationale &amp; Admin Notes *</label>
+            <textarea name="admin_notes" rows="2" required placeholder="Explain the binding arbitration decision..." class="w-full p-2.5 rounded bg-zinc-950 border border-zinc-800 text-white font-sans text-xs focus:outline-none focus:border-indigo-500"></textarea>
+          </div>
+
+          <div class="flex justify-end">
+            <button type="submit" class="btn btn-primary text-xs h-9 px-6 font-semibold cursor-pointer shadow-md">
+              Execute Binding Verdict &amp; Unfreeze Escrow ⚡
+            </button>
+          </div>
+        </form>
+      </div>
+      {% endif %}
+    </div>
+    {% else %}
+    <div class="p-16 text-center rounded-xl border border-zinc-800 bg-zinc-900 font-mono text-xs text-zinc-500">
+      Arbitration Queue Clean. There are no active escrow disputes.
+    </div>
+    {% endfor %}
+  </div>
+
+</main>
+{% endblock %}

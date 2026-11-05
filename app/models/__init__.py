@@ -685,28 +685,6 @@ class ChatMessage(db.Model):
 
 
 # =========================================================
-# NOTIFICATIONS ENGINE
-# =========================================================
-
-class Notification(db.Model):
-    __tablename__ = "notification"
-
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
-    title = db.Column(db.String(200), nullable=False)
-    message = db.Column(db.Text, nullable=False)
-    link = db.Column(db.String(500), nullable=True)
-    is_read = db.Column(db.Boolean, default=False, nullable=False)
-    created_at = db.Column(db.DateTime, default=get_ist_now, nullable=False)
-
-    user = db.relationship(
-        "User",
-        backref=db.backref("notifications", lazy=True, order_by="Notification.created_at.desc()"),
-        foreign_keys=[user_id],
-    )
-
-
-# =========================================================
 # TWO-STAGE WITHDRAWAL & WALLET REDEMPTION MODEL
 # =========================================================
 
@@ -1045,3 +1023,69 @@ def get_latest_project_delivery(project_id: int) -> ProjectDelivery | None:
         .order_by(ProjectDelivery.submission_number.desc())
         .first()
     )
+
+# =========================================================
+# NOTIFICATIONS ENGINE
+# =========================================================
+
+class Notification(db.Model):
+    __tablename__ = "notification"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    title = db.Column(db.String(200), nullable=False)
+    message = db.Column(db.Text, nullable=False)
+    link = db.Column(db.String(500), nullable=True)
+    is_read = db.Column(db.Boolean, default=False, nullable=False)
+    created_at = db.Column(db.DateTime, default=get_ist_now, nullable=False)
+
+    user = db.relationship(
+        "User",
+        backref=db.backref("notifications", lazy=True, order_by="Notification.created_at.desc()"),
+        foreign_keys=[user_id],
+    )
+
+    def __init__(self, user_id: int | None = None, title: str | None = None, message: str | None = None, link: str | None = None, **kwargs):
+        super().__init__(**kwargs)
+        if user_id is not None:
+            self.user_id = user_id
+        if title is not None:
+            self.title = title
+        if message is not None:
+            self.message = message
+        if link is not None:
+            self.link = link
+
+
+# =========================================================
+# ESCROW DISPUTE & ARBITRATION MODEL
+# =========================================================
+
+class Dispute(db.Model):
+    __tablename__ = "disputes"
+
+    id = db.Column(db.Integer, primary_key=True)
+    project_id = db.Column(
+        db.Integer, db.ForeignKey("project.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    raised_by_user_id = db.Column(
+        db.Integer, db.ForeignKey("user.id"), nullable=False, index=True
+    )
+    reason = db.Column(db.Text, nullable=False)
+    status = db.Column(db.String(30), default="OPEN", nullable=False)  # OPEN, RELEASED_SPECIALIST, REFUNDED_CLIENT, SPLIT
+    admin_verdict_notes = db.Column(db.Text, nullable=True)
+    resolved_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, default=get_ist_now, nullable=False)
+
+    project = db.relationship("Project", backref=db.backref("disputes", cascade="all, delete-orphan", lazy=True))
+    raised_by = db.relationship("User", foreign_keys=[raised_by_user_id])
+
+    def __init__(self, project_id: int | None = None, raised_by_user_id: int | None = None, reason: str | None = None, status: str = "OPEN", **kwargs):
+        super().__init__(**kwargs)
+        if project_id is not None:
+            self.project_id = project_id
+        if raised_by_user_id is not None:
+            self.raised_by_user_id = raised_by_user_id
+        if reason is not None:
+            self.reason = reason
+        self.status = status

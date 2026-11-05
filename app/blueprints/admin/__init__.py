@@ -40,6 +40,7 @@ from app.models import (
     Business,
     ChatMessage,
     CustomerProfile,
+    Dispute,
     Invoice,
     Milestone,
     Notification,
@@ -975,23 +976,30 @@ def approve_withdrawal(request_id: int) -> ResponseReturnValue:
         flash("This withdrawal request has already been processed.", "warning")
         return redirect(url_for("admin.admin_transactions"))
 
-    utr_number = request.form.get("utr_number", "").strip() or "UPI_SETTLED"
+    # Execute automated RazorpayX payout (or sandbox simulation fallback)
+    from app.services.payouts import disburse_payout
+    success, utr_reference, message = disburse_payout(req)
+
+    if not success:
+        flash(f"Payout transfer failed: {message}", "danger")
+        return redirect(url_for("admin.admin_transactions"))
+
     req.status = "Processed"
-    req.utr_reference = utr_number
+    req.utr_reference = utr_reference
     req.processed_at = get_ist_now()
 
     # Notify Specialist
     notif = Notification()
     notif.user_id = req.user_id
-    notif.title = f"Payout Processed! ₹{req.amount} Sent 🚀"
-    destination = req.upi_id if req.payout_mode == "UPI" else f"Bank Acc ending {str(req.bank_account_number or '')[-4:]}"
-    notif.message = f"Your withdrawal of ₹{req.amount} has been settled via {req.payout_mode} to {destination}. UTR: {utr_number}."
+    notif.title = f"Payout Disbursed! ₹{req.amount} Sent 🚀"
+    destination = req.upi_id if req.payout_mode == "UPI" else f"Bank A/C ending {str(req.bank_account_number or '')[-4:]}"
+    notif.message = f"Your withdrawal of ₹{req.amount} has been successfully transferred via RazorpayX ({req.payout_mode}) to {destination}. UTR: {utr_reference}."
     notif.link = "/professional/dashboard"
     notif.created_at = get_ist_now()
     db.session.add(notif)
 
     db.session.commit()
-    flash(f"Withdrawal #{req.id} for ₹{req.amount} marked as Processed. UTR logged: {utr_number}", "success")
+    flash(f"Withdrawal #{req.id} for ₹{req.amount} successfully disbursed via RazorpayX! UTR: {utr_reference}", "success")
     return redirect(url_for("admin.admin_transactions"))
 
 
@@ -1208,3 +1216,81 @@ def ai_generate_sow() -> ResponseReturnValue:
             return jsonify({"sow": res_body["candidates"][0]["content"]["parts"][0]["text"]})
     except Exception as e:
         return jsonify({"error": f"AI service error: {str(e)}"}), 500
+
+@admin_bp.route("/admin/disputes")
+@login_required
+def admin_disputes():
+    if getattr(current_user, "role", "").lower() != "admin":
+        flash("Admin access required.", "danger")
+        return redirect(url_for("customer.dashboard"))
+
+    disputes = Dispute.query.order_by(Dispute.created_at.desc()).all()
+    return render_template("admin_disputes.html", disputes=disputes)
+
+
+@admin_bp.route("/admin/disputes/<int:dispute_id>/resolve", methods=["POST"])
+@login_required
+def resolve_dispute(dispute_id: int):
+    if getattr(current_user, "role", "").lower() != "admin":
+        flash("Admin access required.", "danger")
+        return redirect(url_for("customer.dashboard"))
+
+    dispute = Dispute.query.get_or_404(dispute_id)
+    verdict = request.form.get("verdict")  # 'RELEASED_SPECIALIST', 'REFUNDED_CLIENT', 'SPLIT'
+    notes = request.form.get("admin_notes", "").strip()
+
+    dispute.status = verdict
+    dispute.admin_verdict_notes = notes
+    dispute.resolved_at = get_ist_now()
+
+    project = dispute.project
+    assigned_app = ProfessionalProjectApplication.query.filter_by(project_id=project.id, status="Assigned").first()
+    specialist_profile = ProfessionalProfile.query.filter_by(user_id=assigned_app.professional_id).first() if assigned_app else None
+
+    currency = sanitize_currency(project.currency)
+    gross = get_package_price(project.package, currency, PACKAGE_PRICES)
+    talent_share, _, _ = compute_financial_split(gross, currency)
+    amount = assigned_app.proposed_rate or talent_share if assigned_app else talent_share
+
+    if verdict == "RELEASED_SPECIALIST":
+        project.status = "Completed"
+        if specialist_profile:
+            specialist_profile.pending_balance = max(Decimal("0.00"), Decimal(str(specialist_profile.pending_balance or 0)) - amount)
+            specialist_profile.available_balance = Decimal(str(specialist_profile.available_balance or 0)) + amount
+        
+        if assigned_app:
+            db.session.add(Notification(
+                user_id=assigned_app.professional_id,
+                title="⚖️ Dispute Resolved in Your Favor",
+                message=f"Admin resolved dispute for Project #{project.id}. Full escrow of ₹{amount} released to your available balance.",
+                link="/professional/dashboard"
+            ))
+    elif verdict == "REFUNDED_CLIENT":
+        project.status = "Cancelled"
+        if specialist_profile:
+            specialist_profile.pending_balance = max(Decimal("0.00"), Decimal(str(specialist_profile.pending_balance or 0)) - amount)
+
+        db.session.add(Notification(
+            user_id=project.customer_id,
+            title="⚖️ Dispute Resolved — Refund Issued",
+            message=f"Admin resolved dispute for Project #{project.id}. Refund verdict executed.",
+            link=f"/project/{project.id}"
+        ))
+    elif verdict == "SPLIT":
+        project.status = "Completed"
+        half_amount = (amount / Decimal("2")).quantize(Decimal("0.01"))
+        if specialist_profile:
+            specialist_profile.pending_balance = max(Decimal("0.00"), Decimal(str(specialist_profile.pending_balance or 0)) - amount)
+            specialist_profile.available_balance = Decimal(str(specialist_profile.available_balance or 0)) + half_amount
+
+    ActivityLog.log_event(
+        project_id=project.id,
+        action="DISPUTE_RESOLVED",
+        description=f"Admin resolved dispute with verdict '{verdict}': {notes}",
+        user_id=current_user.id,
+        category="success",
+    )
+
+    db.session.commit()
+    flash(f"Dispute resolved with binding verdict: {verdict}", "success")
+    return redirect(url_for("admin.admin_disputes"))
