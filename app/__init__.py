@@ -3,12 +3,23 @@
 import logging
 import os
 import re
+import sqlite3
 from logging.handlers import RotatingFileHandler
 from types import SimpleNamespace
 from typing import Any
 from urllib.parse import urlsplit
 
-from flask import Flask, flash, jsonify, redirect, request, send_from_directory, session, url_for
+from flask import (
+    Flask,
+    flash,
+    jsonify,
+    redirect,
+    render_template,
+    request,
+    send_from_directory,
+    session,
+    url_for,
+)
 
 from app.config import (
     config_by_name,
@@ -52,6 +63,85 @@ def configure_logging(app: Flask) -> None:
     app.logger.addHandler(file_handler)
     app.logger.setLevel(logging.INFO)
     app.logger.info("AgencyOS startup")
+
+
+def _auto_sync_sqlite_columns(app: Flask) -> None:
+    """Inspects and automatically adds missing columns to existing SQLite tables."""
+    uri = app.config.get("SQLALCHEMY_DATABASE_URI", "")
+    if not uri.startswith("sqlite"):
+        return
+
+    path = uri.replace("sqlite:///", "")
+    if not os.path.isabs(path):
+        candidate = os.path.join(app.instance_path, os.path.basename(path))
+        if os.path.exists(candidate):
+            path = candidate
+        else:
+            path = os.path.abspath(path)
+
+    if not os.path.exists(path):
+        candidate = os.path.join(app.instance_path, "agencyos.db")
+        if os.path.exists(candidate):
+            path = candidate
+        else:
+            return
+
+    try:
+        conn = sqlite3.connect(path)
+        cur = conn.cursor()
+
+        def cols(tbl: str) -> list[str]:
+            try:
+                cur.execute(f"PRAGMA table_info({tbl});")
+                return [r[1] for r in cur.fetchall()]
+            except Exception:
+                return []
+
+        # 1. Update user table
+        u_cols = cols("user")
+        if u_cols:
+            if "is_verified" not in u_cols:
+                cur.execute("ALTER TABLE user ADD COLUMN is_verified BOOLEAN DEFAULT 0;")
+            if "verification_status" not in u_cols:
+                cur.execute("ALTER TABLE user ADD COLUMN verification_status VARCHAR(30) DEFAULT 'Pending';")
+            if "verified_at" not in u_cols:
+                cur.execute("ALTER TABLE user ADD COLUMN verified_at DATETIME;")
+            if "rejection_reason" not in u_cols:
+                cur.execute("ALTER TABLE user ADD COLUMN rejection_reason TEXT;")
+            cur.execute("UPDATE user SET is_verified = 1, verification_status = 'Verified' WHERE role = 'admin';")
+
+        # 2. Update project table
+        p_cols = cols("project")
+        if p_cols:
+            if "required_skills" not in p_cols:
+                cur.execute("ALTER TABLE project ADD COLUMN required_skills TEXT;")
+            if "assigned_professional_id" not in p_cols:
+                cur.execute("ALTER TABLE project ADD COLUMN assigned_professional_id INTEGER;")
+
+        # 3. Update professional_profile table
+        pp_cols = cols("professional_profile")
+        if pp_cols:
+            if "pending_balance" not in pp_cols:
+                cur.execute("ALTER TABLE professional_profile ADD COLUMN pending_balance NUMERIC(12, 2) DEFAULT 0.00;")
+            if "available_balance" not in pp_cols:
+                cur.execute("ALTER TABLE professional_profile ADD COLUMN available_balance NUMERIC(12, 2) DEFAULT 0.00;")
+            if "bank_beneficiary_name" not in pp_cols:
+                cur.execute("ALTER TABLE professional_profile ADD COLUMN bank_beneficiary_name VARCHAR(120);")
+
+        # 4. Update professional_project_application table
+        ppa_cols = cols("professional_project_application")
+        if ppa_cols:
+            if "proposal" not in ppa_cols:
+                cur.execute("ALTER TABLE professional_project_application ADD COLUMN proposal TEXT;")
+            if "proposed_rate" not in ppa_cols:
+                cur.execute("ALTER TABLE professional_project_application ADD COLUMN proposed_rate NUMERIC(12, 2);")
+            if "estimated_days" not in ppa_cols:
+                cur.execute("ALTER TABLE professional_project_application ADD COLUMN estimated_days INTEGER;")
+
+        conn.commit()
+        conn.close()
+    except Exception as exc:
+        app.logger.warning(f"Auto SQLite sync note: {exc}")
 
 
 def create_app(config_name: str = "default", config_overrides: dict[str, Any] | None = None) -> Flask:
@@ -101,8 +191,11 @@ def create_app(config_name: str = "default", config_overrides: dict[str, Any] | 
     csrf.init_app(app)
     limiter.init_app(app)
 
+    # Automatic Table & Column Synchronization
     with app.app_context():
+        os.makedirs(app.instance_path, exist_ok=True)
         db.create_all()
+        _auto_sync_sqlite_columns(app)
 
     configure_logging(app)
 
@@ -260,6 +353,9 @@ def create_app(config_name: str = "default", config_overrides: dict[str, Any] | 
         index_file = os.path.join(dist_dir, "index.html")
         if os.path.exists(index_file):
             return send_from_directory(dist_dir, "index.html")
-        return jsonify({"error": "Page not found", "code": "NOT_FOUND"}), 404
+        try:
+            return render_template("404.html"), 404
+        except Exception:
+            return jsonify({"error": "Page not found", "code": "NOT_FOUND"}), 404
 
     return app

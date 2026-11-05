@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{{ project.service }} — Milestone Workbench | {{ agency_settings.agency_name }}</title>
+  <title>{{ project.service }} — Milestone Workbench | {{ agency_settings.agency_name if agency_settings else 'AgencyOS' }}</title>
 
   <!-- Typography: Plus Jakarta Sans & JetBrains Mono -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -37,7 +37,7 @@
     }
   </script>
 </head>
-<body class="bg-zinc-950 text-zinc-100 min-h-screen selection:bg-zinc-100 selection:text-zinc-950 antialiased font-sans" style="--agency-primary: {{ agency_settings.primary_color }}; --agency-on-primary: {{ agency_settings.primary_contrast }};">
+<body class="bg-zinc-950 text-zinc-100 min-h-screen selection:bg-zinc-100 selection:text-zinc-950 antialiased font-sans" style="--agency-primary: {{ agency_settings.primary_color if agency_settings else '#09090b' }};">
 
   <!-- TOP WORKBENCH HEADER -->
   <header class="border-b border-zinc-800 bg-zinc-950/95 sticky top-0 z-50">
@@ -52,9 +52,10 @@
       <div class="flex items-center gap-2.5 font-mono text-xs">
         {% include "includes/client_notification_center.html" %}
 
-        <a href="{{ url_for('customer.view_invoice', project_id=project.id) }}" target="_blank" class="btn btn-secondary text-xs h-8">
-          Tax Invoice (PDF)
-        </a>
+        <!-- All Invoices Modal Trigger -->
+        <button type="button" id="openInvoicesModalBtn" class="btn btn-secondary text-xs h-8 cursor-pointer">
+          Invoices ({{ project.invoice_records|length }}) 📄
+        </button>
 
         {% if sow_signed %}
         <a href="{{ url_for('customer.download_sow_pdf', project_id=project.id) }}" class="btn btn-secondary text-xs h-8">
@@ -66,7 +67,7 @@
         </a>
         {% endif %}
 
-        {% if agency_settings.whatsapp_support_number %}
+        {% if agency_settings and agency_settings.whatsapp_support_number %}
         <a href="https://wa.me/{{ agency_settings.whatsapp_support_number|replace('+', '') }}?text=Hi%20{{ agency_settings.agency_name|urlencode }},%20checking%20status%20for%20Project%20%23{{ project.id }}" target="_blank" rel="noopener noreferrer" class="hidden sm:inline-flex btn btn-secondary text-xs h-8 text-emerald-400 border-emerald-500/30">
           WhatsApp Lead ⚡
         </a>
@@ -85,7 +86,7 @@
           {% for category, message in messages %}
             <div class="system-alert {{ 'system-alert-success' if category == 'success' else 'system-alert-error' }}">
               <span class="font-mono text-xs">{{ message }}</span>
-              <button onclick="this.parentElement.remove()" class="text-zinc-400 hover:text-white ml-auto cursor-pointer">✕</button>
+              <button onclick="this.parentElement.remove()" class="text-zinc-400 hover:text-white ml-auto cursor-pointer">&times;</button>
             </div>
           {% endfor %}
         </div>
@@ -93,6 +94,7 @@
     {% endwith %}
 
     <!-- Top Executive Header -->
+    {% set paid_payments_count = project.payments|selectattr('status', 'equalto', 'Paid')|list|length %}
     <div class="border-b border-zinc-800 pb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
       <div>
         <div class="flex items-center gap-2.5 mb-1 font-mono text-xs">
@@ -106,18 +108,42 @@
           Client Entity: <strong class="text-zinc-200">{{ project.business.name if project.business else 'Direct Client Account' }}</strong> • 
           Billing Currency: <strong class="text-zinc-200">{{ project.currency }}</strong>
         </p>
+
+        <!-- Required Skills Tags -->
+        {% set skills = project.get_required_skills_list() %}
+        {% if skills %}
+          <div class="flex flex-wrap items-center gap-1.5 mt-2.5">
+            <span class="text-[10px] font-mono uppercase text-zinc-500">Tech Stack:</span>
+            {% for s in skills %}
+              <span class="px-2 py-0.5 rounded text-[10px] font-mono bg-zinc-900 border border-zinc-800 text-indigo-400">
+                #{{ s }}
+              </span>
+            {% endfor %}
+          </div>
+        {% endif %}
       </div>
 
-      <div>
-        <span class="badge {% if project.status == 'Completed' %}badge-emerald{% elif project.status == 'Payment Pending' %}badge-amber{% elif project.status == 'Revision' %}badge-amber{% else %}badge-indigo{% endif %} font-mono">
-          ● {{ project.status|upper }}
+      <div class="flex flex-col sm:items-end gap-2">
+        <span class="badge {% if project.status == 'Completed' and paid_payments_count >= 3 %}badge-emerald{% elif paid_payments_count == 0 %}badge-amber{% elif project.status == 'Revision' %}badge-amber{% else %}badge-indigo{% endif %} font-mono">
+          ● {% if paid_payments_count == 0 %}PAYMENT PENDING{% elif paid_payments_count >= 3 and project.status == 'Completed' %}COMPLETED{% else %}IN PROGRESS (STAGE {{ paid_payments_count }}/3){% endif %}
         </span>
+
+        <!-- Assigned Lead Specialist Display -->
+        {% if project.assigned_professional %}
+          <span class="text-[11px] font-mono text-zinc-400">
+            Assigned Specialist: <strong class="text-emerald-400">{{ project.assigned_professional.name }}</strong> 🛡️
+          </span>
+        {% else %}
+          <span class="text-[11px] font-mono text-zinc-500">
+            Awaiting Specialist Assignment
+          </span>
+        {% endif %}
       </div>
     </div>
 
     <!-- STARTER RETAINER RECURRING MANDATE WIDGET (IF APPLICABLE) -->
     {% if project.package == 'Starter Retainer' %}
-    <section class="border border-zinc-800 bg-zinc-900 rounded-lg p-6">
+    <section class="border border-zinc-800 bg-zinc-900 rounded-xl p-6 shadow-xl">
       <div class="grid gap-6 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
         <div>
           <div class="flex items-center gap-2 mb-2 font-mono text-xs">
@@ -173,68 +199,108 @@
     {% endif %}
 
     <!-- CHRONOLOGICAL MILESTONE GATES (50/25/25 ARCHITECTURE) -->
-    <div class="border border-zinc-800 bg-zinc-900 rounded-lg overflow-hidden font-mono text-xs">
+    <div class="border border-zinc-800 bg-zinc-900 rounded-xl overflow-hidden font-mono text-xs shadow-xl">
       <div class="p-4 border-b border-zinc-800 bg-zinc-950 flex items-center justify-between">
         <span class="text-white font-bold uppercase tracking-wider">Sequential Escrow Milestone Gates</span>
         <span class="text-zinc-500">50% / 25% / 25% Split</span>
       </div>
 
       <div class="grid grid-cols-1 sm:grid-cols-3 border-t border-zinc-800">
-        <!-- Milestone 1 -->
+        <!-- Step 1: Milestone 1 -->
         <div class="p-5 border-r border-b sm:border-b-0 border-zinc-800 bg-zinc-950 space-y-1.5">
           <div class="flex justify-between items-center">
-            <span class="text-zinc-300 font-bold">M1: KICKOFF</span>
+            <span class="text-zinc-300 font-bold">STEP 1: UI/UX &amp; SPECS</span>
             <span class="text-emerald-400 font-bold">50% ADVANCE</span>
           </div>
-          <p class="text-[11px] text-zinc-400 font-sans">Discovery, architecture specs, and UI wireframes.</p>
-          <span class="block mt-2 text-[11px] {% if project.status != 'Payment Pending' %}text-emerald-400 font-bold{% else %}text-amber-400 font-bold{% endif %}">
-            {% if project.status != 'Payment Pending' %}✓ Settled &amp; Escrow Held{% else %}⚡ Advance Payment Pending{% endif %}
+          <p class="text-[11px] text-zinc-400 font-sans">Discovery, architecture specifications, and Figma / Wireframe prototypes.</p>
+          <span class="block mt-2 text-[11px] {% if paid_payments_count >= 1 %}text-emerald-400 font-bold{% else %}text-amber-400 font-bold{% endif %}">
+            {% if paid_payments_count >= 1 %}✓ Settled &amp; Escrow Held{% else %}⚡ 50% Advance Pending{% endif %}
           </span>
         </div>
 
-        <!-- Milestone 2 -->
-        <div class="p-5 border-r border-b sm:border-b-0 border-zinc-800 bg-zinc-900 space-y-1.5">
+        <!-- Step 2: Milestone 2 -->
+        <div class="p-5 border-r border-b sm:border-b-0 border-zinc-800 bg-zinc-950 space-y-1.5">
           <div class="flex justify-between items-center">
-            <span class="text-zinc-300 font-bold">M2: STAGING</span>
-            <span class="text-indigo-400 font-bold">25% RELEASE</span>
+            <span class="text-zinc-300 font-bold">STEP 2: STAGING BUILD</span>
+            <span class="text-indigo-400 font-bold">25% ESCROW</span>
           </div>
-          <p class="text-[11px] text-zinc-400 font-sans">Functional deployment on staging domain with responsive polish.</p>
-          <span class="block mt-2 text-[11px] {% if project.status == 'Completed' %}text-emerald-400 font-bold{% elif project.status in ['Assigned', 'In Progress', 'Submitted', 'Revision'] %}text-indigo-400 font-bold{% else %}text-zinc-500{% endif %}">
-            {% if project.status == 'Completed' %}✓ Cleared{% elif project.status in ['Assigned', 'In Progress', 'Submitted', 'Revision'] %}⚡ Active Gate{% else %}Locked{% endif %}
+          <p class="text-[11px] text-zinc-400 font-sans">Functional deployment on staging domain with responsive polish &amp; bug review.</p>
+          <span class="block mt-2 text-[11px] {% if paid_payments_count >= 2 %}text-emerald-400 font-bold{% elif paid_payments_count == 1 and latest_delivery %}text-indigo-400 font-bold animate-pulse{% elif paid_payments_count == 1 %}text-zinc-400{% else %}text-zinc-600{% endif %}">
+            {% if paid_payments_count >= 2 %}✓ Settled &amp; Escrow Held{% elif paid_payments_count == 1 and latest_delivery %}⚡ Staging Build Ready for 25% Funding{% elif paid_payments_count == 1 %}Awaiting Staging URL{% else %}Locked{% endif %}
           </span>
         </div>
 
-        <!-- Milestone 3 -->
+        <!-- Step 3: Milestone 3 -->
         <div class="p-5 bg-zinc-950 text-zinc-500 space-y-1.5">
           <div class="flex justify-between items-center">
-            <span class="font-bold">M3: RELEASE</span>
+            <span class="font-bold">STEP 3: LIVE &amp; HANDOVER</span>
             <span class="font-bold">25% FINAL</span>
           </div>
-          <p class="text-[11px] font-sans">DNS cutover, SSL provisioning, and IP ownership handover.</p>
-          <span class="block mt-2 text-[11px] {% if project.status == 'Completed' %}text-emerald-400 font-bold{% else %}text-zinc-500{% endif %}">
-            {% if project.status == 'Completed' %}✓ Live in Production{% else %}Pending Gate 2 Sign-off{% endif %}
+          <p class="text-[11px] font-sans">Production DNS cutover, SSL provisioning, and full GitHub code handover.</p>
+          <span class="block mt-2 text-[11px] {% if paid_payments_count >= 3 %}text-emerald-400 font-bold{% elif paid_payments_count == 2 and latest_delivery and latest_delivery.live_url %}text-emerald-400 font-bold animate-pulse{% elif paid_payments_count == 2 %}text-zinc-400{% else %}text-zinc-600{% endif %}">
+            {% if paid_payments_count >= 3 %}✓ 100% Settled &amp; Handed Over{% elif paid_payments_count == 2 and latest_delivery and latest_delivery.live_url %}⚡ Production Ready for 25% Handover{% elif paid_payments_count == 2 %}Awaiting Production Live URL{% else %}Locked{% endif %}
           </span>
         </div>
       </div>
     </div>
 
-    <!-- DYNAMIC MILESTONE PAYMENT TRIGGER -->
-    {% if project.status == 'Payment Pending' %}
-    <div class="border border-amber-500/30 bg-amber-500/5 rounded-lg p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 font-mono text-xs">
-      <div>
-        <h4 class="text-sm font-bold text-white">Milestone 1 Advance Escrow Deposit Required</h4>
-        <p class="text-xs text-zinc-400 mt-0.5">Specialist sprint allocation unlocks immediately upon gateway confirmation.</p>
+    <!-- DYNAMIC 3-TIER MILESTONE ESCROW PAYMENT GATES (50 / 25 / 25) -->
+    {% if paid_payments_count == 0 %}
+      <!-- GATE 1: 50% ADVANCE REQUIRED -->
+      <div class="border border-amber-500/40 bg-amber-500/10 rounded-xl p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 font-mono text-xs shadow-lg">
+        <div class="space-y-1">
+          <div class="flex items-center gap-2">
+            <span class="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping"></span>
+            <h4 class="text-sm font-bold text-white uppercase tracking-wider">Gate 1: Milestone 1 Advance Escrow Deposit Required (50%)</h4>
+          </div>
+          <p class="text-xs text-zinc-300 font-sans">
+            Deposit is held in secure agency escrow. Specialist sprint allocation unlocks immediately to begin UI/UX design &amp; architecture.
+          </p>
+        </div>
+        <a href="{{ url_for('payments.payment_page', project_id=project.id, milestone=1) }}" class="btn btn-primary text-xs h-10 px-6 font-semibold whitespace-nowrap shadow-md shadow-indigo-600/30">
+          Authorize Milestone 1 Advance (50%) →
+        </a>
       </div>
-      <a href="{{ url_for('payments.payment_page', project_id=project.id, milestone=1) }}" class="btn btn-primary text-xs h-9 px-5 font-semibold">
-        Authorize Milestone 1 Advance →
-      </a>
-    </div>
+
+    {% elif paid_payments_count == 1 and latest_delivery %}
+      <!-- GATE 2: 25% STAGING PAYMENT UNLOCKED -->
+      <div class="border border-indigo-500/40 bg-indigo-500/10 rounded-xl p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 font-mono text-xs shadow-lg">
+        <div class="space-y-1">
+          <div class="flex items-center gap-2">
+            <span class="w-2.5 h-2.5 rounded-full bg-indigo-400 animate-pulse"></span>
+            <h4 class="text-sm font-bold text-white uppercase tracking-wider">Gate 2: Functional Staging Escrow Deposit (25%)</h4>
+          </div>
+          <p class="text-xs text-zinc-300 font-sans">
+            Specialist has completed the staging build. Authorize Gate 2 (25%) escrow to test the interactive build and request revisions.
+          </p>
+        </div>
+        <a href="{{ url_for('payments.payment_page', project_id=project.id, milestone=2) }}" class="btn btn-primary text-xs h-10 px-6 font-semibold whitespace-nowrap shadow-md shadow-indigo-600/30">
+          Authorize Milestone 2 (25% Staging) →
+        </a>
+      </div>
+
+    {% elif paid_payments_count == 2 %}
+      <!-- GATE 3: 25% FINAL PRODUCTION CUTOVER -->
+      <div class="border border-emerald-500/40 bg-emerald-500/10 rounded-xl p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 font-mono text-xs shadow-lg">
+        <div class="space-y-1">
+          <div class="flex items-center gap-2">
+            <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
+            <h4 class="text-sm font-bold text-white uppercase tracking-wider">Gate 3: Final Production &amp; DNS Handover (25%)</h4>
+          </div>
+          <p class="text-xs text-zinc-300 font-sans">
+            Authorize final 25% balance to trigger production deployment, SSL certificates, and intellectual property code release.
+          </p>
+        </div>
+        <a href="{{ url_for('payments.payment_page', project_id=project.id, milestone=3) }}" class="btn btn-primary text-xs h-10 px-6 font-semibold whitespace-nowrap shadow-md shadow-indigo-600/30">
+          Authorize Milestone 3 (25% Final) →
+        </a>
+      </div>
     {% endif %}
 
     <!-- SCOPE ADD-ONS -->
     {% if project.add_ons %}
       {% for addon in project.add_ons|sort(attribute='created_at', reverse=true) %}
-      <div class="border border-zinc-800 bg-zinc-900 rounded-lg p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 font-mono text-xs">
+      <div class="border border-zinc-800 bg-zinc-900 rounded-xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 font-mono text-xs">
         <div>
           <span class="badge {% if addon.status == 'Paid' %}badge-emerald{% else %}badge-amber{% endif %} mb-1">
             {% if addon.status == 'Paid' %}PAID CHANGE ORDER{% else %}CHANGE ORDER PAYMENT REQUIRED{% endif %}
@@ -257,12 +323,12 @@
       {% endfor %}
     {% endif %}
 
-    <!-- DELIVERABLES & ASSETS DOWNLOAD HUB -->
-    <div class="border border-zinc-800 bg-zinc-900 rounded-lg overflow-hidden">
+    <!-- DELIVERABLES & ASSETS DOWNLOAD HUB (FIGMA, STAGING, PRODUCTION URLS & SOURCE CODE) -->
+    <div class="border border-zinc-800 bg-zinc-900 rounded-xl overflow-hidden shadow-xl">
       <div class="p-4 border-b border-zinc-800 bg-zinc-950 flex flex-col sm:flex-row sm:items-center justify-between gap-2 font-mono text-xs">
         <div>
-          <h2 class="font-bold text-white uppercase tracking-wider">Milestone Deliverables &amp; Asset Downloads</h2>
-          <p class="text-xs text-zinc-400 font-sans mt-0.5">Inspect preview links, review code repositories, and download deliverables submitted by specialists.</p>
+          <h2 class="font-bold text-white uppercase tracking-wider">Milestone Deliverables &amp; Asset Handover</h2>
+          <p class="text-xs text-zinc-400 font-sans mt-0.5">Inspect Figma prototypes, test staging previews, and access GitHub repositories submitted by specialists.</p>
         </div>
         <span class="badge {% if revisions_remaining > 0 %}badge-amber{% else %}badge-neutral{% endif %}">
           Revisions: {{ revisions_remaining }} of 2 Available
@@ -272,68 +338,98 @@
       {% if latest_delivery %}
       <div class="p-6 space-y-6 font-mono text-xs">
         
-        <!-- Artifacts Grid -->
+        <!-- Artifacts Grid: Mapped to the 3 Stages -->
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div class="p-4 rounded border border-zinc-800 bg-zinc-950 space-y-1">
-            <span class="text-[10px] text-zinc-500 uppercase block">Staging Preview URL</span>
+          
+          <!-- Step 1 & 2: Preview / Staging / Figma URL -->
+          <div class="p-4 rounded-lg border border-zinc-800 bg-zinc-950 space-y-1">
+            <span class="text-[10px] text-zinc-500 uppercase block font-bold">Step 1 &amp; 2: Staging / Prototype URL</span>
             {% if latest_delivery.preview_url %}
-            <a href="{{ latest_delivery.preview_url }}" target="_blank" class="text-indigo-400 hover:underline truncate block font-sans font-semibold">{{ latest_delivery.preview_url }}</a>
+            <a href="{{ latest_delivery.preview_url }}" target="_blank" rel="noopener noreferrer" class="text-indigo-400 hover:text-indigo-300 hover:underline truncate block font-sans font-semibold">
+              {{ latest_delivery.preview_url }} ↗
+            </a>
             {% else %}
             <span class="text-zinc-600 font-sans">Pending deployment</span>
             {% endif %}
           </div>
 
-          <div class="p-4 rounded border border-zinc-800 bg-zinc-950 space-y-1">
-            <span class="text-[10px] text-zinc-500 uppercase block">Production Live URL</span>
+          <!-- Step 3A: Live Production Domain -->
+          <div class="p-4 rounded-lg border border-zinc-800 bg-zinc-950 space-y-1">
+            <span class="text-[10px] text-zinc-500 uppercase block font-bold">Step 3A: Production Live Domain</span>
             {% if latest_delivery.live_url %}
-            <a href="{{ latest_delivery.live_url }}" target="_blank" class="text-emerald-400 hover:underline truncate block font-sans font-semibold">{{ latest_delivery.live_url }}</a>
+            <a href="{{ latest_delivery.live_url }}" target="_blank" rel="noopener noreferrer" class="text-emerald-400 hover:text-emerald-300 hover:underline truncate block font-sans font-semibold">
+              {{ latest_delivery.live_url }} ↗
+            </a>
             {% else %}
-            <span class="text-zinc-600 font-sans">Pending DNS cutover</span>
+            <span class="text-zinc-600 font-sans">Pending Step 3 cutover</span>
             {% endif %}
           </div>
 
-          <div class="p-4 rounded border border-zinc-800 bg-zinc-950 space-y-1">
-            <span class="text-[10px] text-zinc-500 uppercase block">Source Repository</span>
+          <!-- Step 3B: Source Code Repository -->
+          <div class="p-4 rounded-lg border border-zinc-800 bg-zinc-950 space-y-1">
+            <span class="text-[10px] text-zinc-500 uppercase block font-bold">Step 3B: Source Code Repository</span>
             {% if latest_delivery.source_url %}
-            <a href="{{ latest_delivery.source_url }}" target="_blank" class="text-zinc-200 hover:text-white underline truncate block font-sans font-semibold">{{ latest_delivery.source_url }}</a>
+            <a href="{{ latest_delivery.source_url }}" target="_blank" rel="noopener noreferrer" class="text-indigo-400 hover:text-indigo-300 font-bold underline truncate block font-sans">
+              {{ latest_delivery.source_url }} ↗
+            </a>
             {% else %}
-            <span class="text-zinc-600 font-sans">Repository restricted</span>
+            <span class="text-zinc-600 font-sans">Released upon Step 3</span>
             {% endif %}
           </div>
         </div>
 
         <!-- Completion Notes & Downloadable File Attachments -->
-        <div class="p-4 rounded border border-zinc-800 bg-zinc-950 space-y-2">
-          <span class="text-[10px] text-zinc-500 uppercase block">Specialist Handover Notes &amp; Files</span>
-          <p class="text-zinc-300 font-sans text-xs leading-relaxed whitespace-pre-wrap">{{ latest_delivery.completion_notes or 'All deliverable checklist requirements completed.' }}</p>
+        <div class="p-4 rounded-lg border border-zinc-800 bg-zinc-950 space-y-2">
+          <span class="text-[10px] text-zinc-500 uppercase block font-bold">Specialist Handover Notes &amp; Files</span>
+          <p class="text-zinc-300 font-sans text-xs leading-relaxed whitespace-pre-wrap">{{ latest_delivery.completion_notes or 'Checklist deliverables submitted.' }}</p>
         </div>
 
-        <!-- Sign-Off Actions -->
-        {% if project.status != 'Completed' %}
-        <div class="pt-4 border-t border-zinc-800 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <span class="text-[11px] text-zinc-500 font-sans">Sign-off verifies milestone scope and marks the sprint as Completed.</span>
+        <!-- Sequential Sign-Off Actions -->
+        {% if paid_payments_count < 3 %}
+          <!-- Intermediate Milestone Phase (Step 1 or Step 2) -->
+          <div class="pt-4 border-t border-zinc-800 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <span class="text-[11px] text-zinc-400 font-sans">
+              {% if latest_delivery.status == 'Approved' %}
+                ✓ Milestone deliverable approved. Please authorize the next payment gate above to continue.
+              {% elif paid_payments_count == 1 %}
+                Review UI/UX &amp; specs above. Signing off releases Step 1 advance and unlocks the Staging payment gate.
+              {% else %}
+                Test the functional staging build. Signing off approves Step 2 and unlocks the final Production gate.
+              {% endif %}
+            </span>
 
-          <div class="flex items-center gap-3 w-full sm:w-auto">
-            {% if revisions_remaining > 0 %}
-            <button type="button" id="openRevisionBtn" class="btn btn-secondary text-xs h-9 font-semibold text-amber-300 cursor-pointer">
-              Request Revision Cycle
-            </button>
-            {% else %}
-            <span class="badge badge-neutral">Revisions Exhausted (2/2)</span>
-            {% endif %}
+            <div class="flex items-center gap-3 w-full sm:w-auto">
+              {% if latest_delivery.status != 'Approved' %}
+                {% if revisions_remaining > 0 %}
+                <button type="button" id="openRevisionBtn" class="btn btn-secondary text-xs h-9 font-semibold text-amber-300 cursor-pointer">
+                  Request Revision Cycle
+                </button>
+                {% else %}
+                <span class="badge badge-neutral">Revisions Exhausted (2/2)</span>
+                {% endif %}
 
-            <form method="POST" action="{{ url_for('customer.customer_approve_project', project_id=project.id) }}" class="w-full sm:w-auto">
-              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-              <button type="submit" class="btn btn-primary text-xs h-9 font-semibold cursor-pointer">
-                Approve Deliverable Sign-Off ✓
-              </button>
-            </form>
+                <form method="POST" action="{{ url_for('customer.customer_approve_project', project_id=project.id) }}" class="w-full sm:w-auto" onsubmit="return confirm('Approve milestone deliverables? This will release the milestone escrow funds to the specialist.');">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <button type="submit" class="btn btn-primary text-xs h-9 px-5 font-semibold cursor-pointer shadow-md shadow-indigo-600/20">
+                    {% if paid_payments_count == 1 %}
+                      Approve Step 1 (UI/UX) &amp; Unlock Gate 2 Payment ✓
+                    {% else %}
+                      Approve Step 2 (Staging Build) &amp; Unlock Gate 3 Payment ✓
+                    {% endif %}
+                  </button>
+                </form>
+              {% else %}
+                <span class="px-3 py-1.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-800 text-xs font-bold font-mono">
+                  ✓ Stage Approved
+                </span>
+              {% endif %}
+            </div>
           </div>
-        </div>
         {% else %}
-        <div class="p-4 rounded border border-emerald-500/20 bg-emerald-500/10 text-emerald-300 text-center font-sans">
-          ✓ Milestone deliverable formally approved and signed off. All IP and repository access released.
-        </div>
+          <!-- Final Milestone 3 Completed Phase -->
+          <div class="p-4 rounded-lg border border-emerald-500/20 bg-emerald-500/10 text-emerald-300 text-center font-sans">
+            ✓ Final project deliverable formally approved and signed off. All IP and repository access released, and full specialist payout unlocked.
+          </div>
         {% endif %}
 
       </div>
@@ -348,7 +444,7 @@
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
       
       <!-- Chat Stream -->
-      <div class="border border-zinc-800 bg-zinc-900 rounded-lg overflow-hidden flex flex-col h-[480px]">
+      <div class="border border-zinc-800 bg-zinc-900 rounded-xl overflow-hidden flex flex-col h-[480px] shadow-xl">
         <div class="p-4 border-b border-zinc-800 bg-zinc-950 flex items-center justify-between shrink-0 font-mono text-xs">
           <h3 class="text-white font-bold uppercase tracking-wider">Discussion Stream</h3>
           <span class="badge badge-emerald">TEAM ONLINE</span>
@@ -357,7 +453,7 @@
         <div id="chatStream" class="flex-1 overflow-y-auto p-4 space-y-3 text-xs font-mono">
           {% for msg in messages %}
             {% set is_me = (msg.sender_id == current_user.id) %}
-            <div class="p-3 rounded border border-zinc-800 {% if is_me %}bg-zinc-850{% else %}bg-zinc-950{% endif %}">
+            <div class="p-3 rounded-lg border border-zinc-800 {% if is_me %}bg-zinc-850{% else %}bg-zinc-950{% endif %}">
               <div class="flex justify-between items-center text-[10px] text-zinc-500 mb-1">
                 <span class="font-bold text-zinc-300">{{ msg.sender.name if msg.sender else 'Agency Team' }}</span>
                 <span>{{ msg.created_at.strftime('%d %b %I:%M %p') if msg.created_at else '' }}</span>
@@ -381,7 +477,7 @@
       </div>
 
       <!-- SOW Brief -->
-      <div class="border border-zinc-800 bg-zinc-900 rounded-lg overflow-hidden flex flex-col h-[480px]">
+      <div class="border border-zinc-800 bg-zinc-900 rounded-xl overflow-hidden flex flex-col h-[480px] shadow-xl">
         <div class="p-4 border-b border-zinc-800 bg-zinc-950 font-mono text-xs text-white font-bold uppercase tracking-wider shrink-0">
           Statement of Work Brief &amp; Parameters
         </div>
@@ -393,7 +489,7 @@
     </div>
 
     <!-- IMMUTABLE AUDIT TRAIL -->
-    <section class="border border-zinc-800 bg-zinc-900 rounded-lg p-6 space-y-4">
+    <section class="border border-zinc-800 bg-zinc-900 rounded-xl p-6 space-y-4 shadow-xl">
       <div class="flex items-center justify-between pb-3 border-b border-zinc-800 font-mono text-xs">
         <h3 class="font-bold uppercase tracking-wider text-white">Cryptographic Project Activity Audit Trail</h3>
         <span class="text-zinc-500">Immutable Ledger</span>
@@ -401,7 +497,7 @@
 
       <div class="space-y-3 font-mono text-xs">
         {% for log in activity_logs %}
-        <div class="p-3 rounded border border-zinc-800 bg-zinc-950 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+        <div class="p-3 rounded-lg border border-zinc-800 bg-zinc-950 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div class="space-y-0.5">
             <span class="badge {% if log.category == 'success' %}badge-emerald{% elif log.category == 'warning' %}badge-amber{% else %}badge-neutral{% endif %} mr-2">
               {{ log.event_type }}
@@ -421,12 +517,52 @@
 
   </main>
 
+  <!-- ALL INVOICES MODAL -->
+  <div id="invoicesModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm hidden font-mono text-xs">
+    <div class="w-full max-w-lg p-6 bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl space-y-4">
+      <div class="flex items-center justify-between pb-3 border-b border-zinc-800">
+        <div>
+          <span class="text-zinc-500 text-[10px] uppercase block">Billing Ledger (SAC 998311)</span>
+          <h3 class="font-bold text-white uppercase text-sm">Project Milestone Invoices</h3>
+        </div>
+        <button type="button" id="closeInvoicesModalBtn" class="text-zinc-400 hover:text-white text-base cursor-pointer">&times;</button>
+      </div>
+
+      <div class="space-y-2 max-h-80 overflow-y-auto">
+        {% for inv in project.invoice_records %}
+        <div class="p-3 rounded-lg border border-zinc-800 bg-zinc-950 flex items-center justify-between">
+          <div>
+            <strong class="text-white text-xs block">{{ inv.invoice_number }}</strong>
+            <span class="text-[10px] text-zinc-500 block">{{ inv.created_at.strftime('%d %b %Y') if inv.created_at else '—' }} &bull; {{ inv.currency }} {{ inv.gross_amount }}</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-950 text-emerald-400 border border-emerald-800">PAID</span>
+            <a href="{{ url_for('customer.view_invoice', project_id=project.id, invoice_id=inv.id) }}" target="_blank" class="px-2.5 py-1 bg-zinc-800 hover:bg-zinc-700 text-white rounded text-xs transition-colors">
+              PDF ↗
+            </a>
+          </div>
+        </div>
+        {% else %}
+        <div class="p-6 text-center text-zinc-500 text-xs">
+          No paid milestone invoices on file for this project yet.
+        </div>
+        {% endfor %}
+      </div>
+
+      <div class="pt-2 border-t border-zinc-800">
+        <a href="{{ url_for('customer.invoices_list') }}" class="block text-center text-xs text-indigo-400 hover:underline">
+          View Complete Organization Billing History →
+        </a>
+      </div>
+    </div>
+  </div>
+
   <!-- REVISION MODAL -->
-  <div id="revisionModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs hidden">
-    <div class="w-full max-w-lg p-6 bg-zinc-900 border border-zinc-800 rounded-lg shadow-2xl font-mono text-xs">
+  <div id="revisionModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm hidden">
+    <div class="w-full max-w-lg p-6 bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl font-mono text-xs">
       <div class="flex items-center justify-between pb-4 border-b border-zinc-800">
-        <h3 class="font-bold text-white uppercase">Request Scope Revision ({{ revisions_remaining }} of 2 Available)</h3>
-        <button type="button" id="closeRevisionBtn" class="text-zinc-400 hover:text-white text-sm cursor-pointer">✕</button>
+        <h3 class="font-bold text-white uppercase text-sm">Request Scope Revision ({{ revisions_remaining }} of 2 Available)</h3>
+        <button type="button" id="closeRevisionBtn" class="text-zinc-400 hover:text-white text-base cursor-pointer">&times;</button>
       </div>
 
       <form method="POST" action="{{ url_for('customer.customer_request_revision', project_id=project.id) }}" class="space-y-4 mt-4 text-xs font-mono">
@@ -435,7 +571,7 @@
 
         <div>
           <label class="block text-zinc-400 mb-1">Modification Details</label>
-          <textarea name="revision_comment" rows="4" required placeholder="State exact UI adjustments, copy revisions, or bugs..." class="w-full p-3 rounded bg-zinc-950 border border-zinc-800 text-white font-sans focus:outline-none focus:border-zinc-400"></textarea>
+          <textarea name="revision_comment" rows="4" required placeholder="State exact UI adjustments, copy revisions, or bugs..." class="w-full p-3 rounded-lg bg-zinc-950 border border-zinc-800 text-white font-sans focus:outline-none focus:border-indigo-500"></textarea>
         </div>
 
         <div class="flex gap-2 pt-2">
@@ -448,7 +584,7 @@
 
   <!-- WORKBENCH FOOTER -->
   <footer class="border-t border-zinc-800 bg-zinc-950 py-6 px-6 text-center text-xs font-mono text-zinc-500">
-    {{ agency_settings.agency_name }} Workbench Node IST • SAC 998311 Compliant Billing
+    {{ agency_settings.agency_name if agency_settings else 'AgencyOS' }} Workbench Node IST • SAC 998311 Compliant Billing
   </footer>
 
   <script>
@@ -458,139 +594,31 @@
         chatStream.scrollTop = chatStream.scrollHeight;
       }
 
+      // Revision Modal
       var openBtn = document.getElementById("openRevisionBtn");
       var closeBtn = document.getElementById("closeRevisionBtn");
       var cancelBtn = document.getElementById("cancelRevisionBtn");
       var modal = document.getElementById("revisionModal");
 
       if (openBtn && modal) {
-        openBtn.addEventListener("click", function () {
-          modal.classList.remove("hidden");
-        });
+        openBtn.addEventListener("click", function () { modal.classList.remove("hidden"); });
       }
-
-      function hideModal() {
-        if (modal) modal.classList.add("hidden");
-      }
-
+      function hideModal() { if (modal) modal.classList.add("hidden"); }
       if (closeBtn) closeBtn.addEventListener("click", hideModal);
       if (cancelBtn) cancelBtn.addEventListener("click", hideModal);
+
+      // Invoices Modal
+      var openInvBtn = document.getElementById("openInvoicesModalBtn");
+      var closeInvBtn = document.getElementById("closeInvoicesModalBtn");
+      var invModal = document.getElementById("invoicesModal");
+
+      if (openInvBtn && invModal) {
+        openInvBtn.addEventListener("click", function () { invModal.classList.remove("hidden"); });
+      }
+      if (closeInvBtn && invModal) {
+        closeInvBtn.addEventListener("click", function () { invModal.classList.add("hidden"); });
+      }
     });
-
-    (function () {
-      const checkoutButton = document.getElementById('starter-retainer-checkout');
-      const statusMessage = document.getElementById('retainer-checkout-status');
-      if (!checkoutButton || !statusMessage) return;
-
-      const idleLabel = checkoutButton.textContent.trim();
-      let authorizationConfirmed = false;
-
-      function showStatus(message, kind) {
-        const colors = {
-          info: 'border-indigo-500/20 bg-indigo-500/10 text-indigo-200',
-          success: 'border-emerald-500/20 bg-emerald-500/10 text-emerald-200',
-          warning: 'border-amber-500/25 bg-amber-500/10 text-amber-200',
-          error: 'border-rose-500/20 bg-rose-500/10 text-rose-200'
-        };
-        statusMessage.className = 'mt-4 rounded border px-3 py-2.5 text-xs font-mono leading-relaxed ' + (colors[kind] || colors.info);
-        statusMessage.textContent = message;
-        statusMessage.hidden = false;
-      }
-
-      function resetButton() {
-        checkoutButton.disabled = false;
-        checkoutButton.textContent = idleLabel;
-      }
-
-      checkoutButton.addEventListener('click', async function () {
-        if (checkoutButton.disabled) return;
-        if (!window.Razorpay) {
-          showStatus('Secure checkout could not be loaded. Refresh the page and try again.', 'error');
-          return;
-        }
-
-        checkoutButton.disabled = true;
-        checkoutButton.textContent = 'Preparing secure checkout…';
-        showStatus('Preparing your recurring payment authorization. No debit has been started.', 'info');
-
-        try {
-          const response = await fetch(checkoutButton.dataset.createUrl, {
-            method: 'POST',
-            credentials: 'same-origin',
-            headers: {
-              'Accept': 'application/json',
-              'X-CSRFToken': checkoutButton.dataset.csrfToken
-            }
-          });
-          const checkoutData = await response.json();
-
-          if (!response.ok || !checkoutData.success) {
-            throw new Error('checkout_setup_failed');
-          }
-
-          const subscriptionStatus = (checkoutData.status || '').toLowerCase();
-          const confirmedStates = {
-            authenticated: {
-              button: 'Mandate authorized',
-              message: 'Your recurring mandate has been authorized. Retainer activation is being finalized; this does not confirm a charge.'
-            },
-            active: {
-              button: 'Mandate active',
-              message: 'Your Starter Retainer mandate is active. This confirms recurring authorization only; no charge is confirmed here.'
-            },
-            resumed: {
-              button: 'Retainer resumed',
-              message: 'Your Starter Retainer mandate has resumed. This confirms recurring authorization only; no charge is confirmed here.'
-            },
-            paused: {
-              button: 'Mandate paused',
-              message: 'Your Starter Retainer mandate is paused. Please contact your agency for assistance. No charge is confirmed here.',
-              kind: 'warning'
-            }
-          };
-
-          if (confirmedStates[subscriptionStatus]) {
-            checkoutButton.disabled = true;
-            checkoutButton.textContent = confirmedStates[subscriptionStatus].button;
-            showStatus(confirmedStates[subscriptionStatus].message, confirmedStates[subscriptionStatus].kind || 'success');
-            return;
-          }
-
-          if (!checkoutData.subscription_id || !checkoutData.razorpay_key || !checkoutData.agency_name || !checkoutData.primary_color) {
-            throw new Error('checkout_setup_failed');
-          }
-
-          const checkout = new Razorpay({
-            key: checkoutData.razorpay_key,
-            subscription_id: checkoutData.subscription_id,
-            name: checkoutData.agency_name,
-            description: 'Starter SEO Retainer · ₹14,999 per month',
-            theme: { color: checkoutData.primary_color },
-            modal: {
-              ondismiss: function () {
-                if (authorizationConfirmed) return;
-                resetButton();
-                showStatus('Checkout was closed before authorization was completed. No mandate was activated.', 'info');
-              }
-            },
-            handler: function () {
-              authorizationConfirmed = true;
-              checkoutButton.textContent = 'Authorization submitted';
-              showStatus('Razorpay received your authorization. Mandate activation is pending verification.', 'success');
-            }
-          });
-
-          checkout.on('payment.failed', function () {
-            resetButton();
-            showStatus('Authorization could not be completed. No subscription was activated. Please try again.', 'error');
-          });
-          checkout.open();
-        } catch (error) {
-            resetButton();
-            showStatus('We could not start secure checkout. Please try again in a moment.', 'error');
-        }
-      });
-    }());
   </script>
 </body>
 </html>

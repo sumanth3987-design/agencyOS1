@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Specialist Executive Workbench — {{ agency_settings.agency_name }}</title>
+  <title>Specialist Dashboard & Escrow Ledger — AgencyOS</title>
 
   <!-- Typography: Plus Jakarta Sans & JetBrains Mono -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -36,253 +36,687 @@
       }
     }
   </script>
+
+  <style>
+    input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-visible, a:focus-visible {
+      outline: 2px solid #6366f1 !important;
+      outline-offset: 1px;
+    }
+  </style>
 </head>
-<body class="bg-zinc-950 text-zinc-100 min-h-screen selection:bg-zinc-100 selection:text-zinc-950 antialiased" style="--agency-primary: {{ agency_settings.primary_color }}; --agency-on-primary: {{ agency_settings.primary_contrast }};">
+<body class="bg-zinc-950 text-zinc-100 min-h-screen selection:bg-zinc-100 selection:text-zinc-950 antialiased font-sans">
 
-  <!-- TOP HEADER -->
-  <header class="border-b border-zinc-800 bg-zinc-950/95 sticky top-0 z-50">
-    <div class="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
-      <div class="flex items-center gap-3">
-        {% include "includes/agency_brand.html" %}
-        <span class="font-mono text-xs text-zinc-500">/</span>
-        <span class="font-mono text-xs text-zinc-400 font-bold uppercase">Specialist Workbench</span>
-      </div>
-
-      <div class="flex items-center gap-3">
-        <a href="{{ url_for('professional.professional_profile') }}" class="btn btn-secondary text-xs h-8">
-          Payout Settings (UPI)
+  <!-- TOP NAVIGATION BAR -->
+  <header class="border-b border-zinc-800 bg-zinc-950/95 sticky top-0 z-40">
+    <div class="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
+      <div class="flex items-center gap-4">
+        <a href="{{ url_for('professional.professional_dashboard') }}" class="flex items-center gap-2 font-mono text-sm font-bold tracking-tight text-white">
+          <span class="w-7 h-7 rounded bg-indigo-600 text-white flex items-center justify-center font-black text-xs">A</span>
+          <span>Agency<span class="text-indigo-400">OS</span></span>
         </a>
-        <form method="POST" action="{{ url_for('auth.logout') }}" class="inline">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <button type="submit" class="btn btn-subtle text-xs h-8 cursor-pointer">Sign Out</button>
-        </form>
+        <span class="hidden sm:inline-flex items-center px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-indigo-950 text-indigo-300 border border-indigo-800">
+          Specialist Portal
+        </span>
       </div>
+
+      <nav class="flex items-center gap-2 font-mono text-xs">
+        <a href="{{ url_for('professional.professional_dashboard') }}" class="px-3 py-1.5 rounded bg-zinc-850 text-white font-semibold">Dashboard</a>
+        <a href="{{ url_for('professional.professional_projects') }}" class="px-3 py-1.5 rounded text-zinc-400 hover:text-white hover:bg-zinc-900 transition-colors">Opportunities</a>
+        <a href="{{ url_for('professional.professional_profile') }}" class="px-3 py-1.5 rounded text-zinc-400 hover:text-white hover:bg-zinc-900 transition-colors">Payout Profile</a>
+        <a href="/auth/logout" class="ml-2 px-3 py-1.5 rounded text-rose-400 hover:bg-rose-950/50 hover:text-rose-300 transition-colors">Logout</a>
+      </nav>
     </div>
   </header>
 
-  <!-- MAIN WORKBENCH -->
-  <main class="max-w-6xl mx-auto px-6 py-8 space-y-8 font-sans">
-
-    <!-- Flash Messages Slot -->
+  <!-- FLASH MESSAGES -->
+  <div class="max-w-7xl mx-auto px-6 w-full mt-4">
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}
         <div class="space-y-2">
           {% for category, message in messages %}
-            <div class="system-alert {{ 'system-alert-success' if category == 'success' else 'system-alert-error' }}">
-              <span class="font-mono">{{ message }}</span>
-              <button onclick="this.parentElement.remove()" class="text-zinc-400 hover:text-white ml-auto cursor-pointer">✕</button>
+            <div class="p-3 rounded border font-mono text-xs flex items-center justify-between
+              {% if category == 'success' %} bg-emerald-950/60 border-emerald-800 text-emerald-300
+              {% elif category == 'danger' or category == 'error' %} bg-rose-950/60 border-rose-800 text-rose-300
+              {% elif category == 'warning' %} bg-amber-950/60 border-amber-800 text-amber-300
+              {% else %} bg-indigo-950/60 border-indigo-800 text-indigo-300 {% endif %}">
+              <span>{{ message }}</span>
+              <button type="button" onclick="this.parentElement.remove()" class="text-zinc-400 hover:text-white ml-auto cursor-pointer">&times;</button>
             </div>
           {% endfor %}
         </div>
       {% endif %}
     {% endwith %}
+  </div>
 
-    <!-- Top Executive Header -->
+  <!-- DYNAMIC KYC VERIFICATION BANNER -->
+  {% if not current_user.is_verified %}
+    {% set has_submitted_banking = profile and (profile.upi_id or profile.bank_account_number) %}
+    <div class="max-w-7xl mx-auto px-6 w-full mt-4">
+      <div class="p-4 rounded-xl border {% if has_submitted_banking %}border-indigo-800/80 bg-indigo-950/40{% else %}border-amber-800/80 bg-amber-950/40{% endif %} flex flex-col sm:flex-row sm:items-center justify-between gap-4 font-mono text-xs">
+        <div class="flex items-start gap-3">
+          <span class="w-6 h-6 rounded-full {% if has_submitted_banking %}bg-indigo-900 text-indigo-300{% else %}bg-amber-900 text-amber-300{% endif %} flex items-center justify-center font-bold text-xs shrink-0 mt-0.5">
+            {% if has_submitted_banking %}ℹ{% else %}!{% endif %}
+          </span>
+          <div>
+            {% if has_submitted_banking %}
+              <h4 class="font-bold text-white text-sm">Credentials Submitted — Awaiting Admin Verification</h4>
+              <p class="text-zinc-400 text-[11px] mt-0.5 font-sans">
+                Your banking coordinates ({{ profile.upi_id or 'Bank Account' }}) and specialist profile are under review by agency administration. You will be able to submit sprint proposals once verified.
+              </p>
+            {% else %}
+              <h4 class="font-bold text-amber-300 text-sm">Payout Profile Incomplete</h4>
+              <p class="text-zinc-400 text-[11px] mt-0.5 font-sans">
+                Please complete your specialist profile and specify your UPI ID or Bank Account details so administrators can verify your account for sprint proposals.
+              </p>
+            {% endif %}
+          </div>
+        </div>
+
+        {% if not has_submitted_banking %}
+          <a href="{{ url_for('professional.professional_profile') }}" class="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded font-semibold text-xs whitespace-nowrap text-center transition-colors">
+            Setup Payout Profile →
+          </a>
+        {% else %}
+          <span class="px-3 py-1.5 rounded bg-indigo-950 text-indigo-300 border border-indigo-800 text-[11px] font-bold whitespace-nowrap text-center">
+            Under Admin Review
+          </span>
+        {% endif %}
+      </div>
+    </div>
+  {% endif %}
+
+  <!-- MAIN DASHBOARD CONTENT -->
+  <main class="max-w-7xl mx-auto px-6 py-8 w-full flex-1 space-y-8">
+
+    <!-- EXECUTIVE HEADER -->
     <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-6 border-b border-zinc-800 gap-4">
       <div>
-        <div class="flex items-center gap-2 mb-2 font-mono text-xs">
-          <span class="badge badge-emerald">VERIFIED SPECIALIST PARTNER</span>
+        <div class="flex items-center gap-2 mb-1 font-mono text-xs">
+          <span class="badge badge-emerald">MERITOCRACY HUB</span>
           <span class="text-zinc-600">•</span>
-          <span class="text-zinc-400">{{ profile.expertise or 'Full-Stack Software Specialist' }}</span>
+          <span class="text-zinc-400">Escrow-Backed Talent Rails</span>
         </div>
-        <h1 class="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">Specialist Allocation Ledger</h1>
-        <p class="text-xs font-mono text-zinc-400 mt-1">Claim open client orders, submit deliverable staging URLs, and reconcile instant 45% wire allocations.</p>
+        <h1 class="text-2xl sm:text-3xl font-extrabold text-white tracking-tight flex items-center gap-2">
+          <span>Welcome, {{ current_user.name }}</span>
+          {% if current_user.is_verified %}
+            <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-emerald-950 text-emerald-400 border border-emerald-800">
+              ✓ Verified Pro
+            </span>
+          {% endif %}
+        </h1>
+        <p class="text-xs font-mono text-zinc-400 mt-1">Manage active milestone workspaces, deliverable sign-offs, and two-stage wallet redemptions.</p>
       </div>
 
-      <div>
-        <a href="#available-sprints" class="btn btn-primary text-xs h-9 px-4 font-semibold">
-          Claim Open Sprints ↓
+      <div class="flex items-center gap-3">
+        <a href="{{ url_for('professional.professional_projects') }}" class="btn btn-primary text-xs h-9 font-semibold">
+          Browse Open Sprints →
         </a>
       </div>
     </div>
 
-    <!-- 4 High-Impact Financial KPI Tiles -->
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 border-t border-l border-zinc-800 bg-zinc-950 font-mono text-xs">
-      <div class="p-5 border-b border-r border-zinc-800">
-        <span class="text-zinc-500 uppercase block mb-1">Settled Earnings</span>
+    <!-- TWO-STAGE ESCROW WALLET TILES -->
+    <div class="grid grid-cols-1 sm:grid-cols-3 border-t border-l border-zinc-800 bg-zinc-950 font-mono text-xs">
+      
+      <!-- TILE 1: LOCKED ESCROW BALANCE -->
+      <div class="p-6 border-b border-r border-zinc-800 space-y-1">
+        <div class="flex items-center justify-between">
+          <span class="text-zinc-500 uppercase block">Locked Escrow Balance</span>
+          <span class="px-1.5 py-0.5 rounded text-[9px] bg-amber-950 text-amber-400 border border-amber-800 font-bold">IN-FLIGHT</span>
+        </div>
+        <div class="text-2xl font-bold text-amber-400 pt-1">
+          ₹{{ "%.2f"|format(pending_balance|float) }}
+        </div>
+        <p class="text-[11px] text-zinc-500 pt-1 font-sans">
+          Allocated for {{ active_sprints }} active sprint(s). Held safely in escrow until milestone sign-off.
+        </p>
+      </div>
+
+      <!-- TILE 2: AVAILABLE TO WITHDRAW -->
+      <div class="p-6 border-b border-r border-zinc-800 bg-zinc-900/60 space-y-2">
+        <div class="flex items-center justify-between">
+          <span class="text-zinc-400 uppercase font-bold block">Available to Withdraw</span>
+          <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+        </div>
         <div class="text-2xl font-bold text-emerald-400">
-          {% for currency, amount in total_earned|dictsort %}
-          <div>{{ amount|format_currency(currency) }}</div>
+          ₹{{ "%.2f"|format(available_balance|float) }}
+        </div>
+        <div class="pt-1">
+          {% if available_balance|float > 0 %}
+            <button type="button" id="openWithdrawModalBtn" class="btn btn-primary w-full text-xs h-8 font-semibold cursor-pointer">
+              Redeem Funds (UPI / Bank) ⚡
+            </button>
           {% else %}
-          <div>{{ 0|format_currency('INR') }}</div>
-          {% endfor %}
+            <button disabled class="btn btn-secondary w-full text-xs h-8 opacity-50 cursor-not-allowed">
+              No Redeemable Balance
+            </button>
+          {% endif %}
         </div>
-        <span class="text-[11px] text-zinc-500 mt-1 block">Cleared to registered account</span>
       </div>
 
-      <div class="p-5 border-b border-r border-zinc-800">
-        <span class="text-zinc-500 uppercase block mb-1">In-Flight Escrow (45%)</span>
-        <div class="text-2xl font-bold text-amber-400">
-          {% for currency, amount in pending_payout|dictsort %}
-          <div>{{ amount|format_currency(currency) }}</div>
-          {% else %}
-          <div>{{ 0|format_currency('INR') }}</div>
-          {% endfor %}
+      <!-- TILE 3: DELIVERABLE METRICS -->
+      <div class="p-6 border-b border-r border-zinc-800 space-y-1">
+        <div class="flex items-center justify-between">
+          <span class="text-zinc-500 uppercase block">Completed Deliverables</span>
+          <span class="text-zinc-400">{{ completed_sprints }} Finished</span>
         </div>
-        <span class="text-[11px] text-zinc-500 mt-1 block">Active milestone reservations</span>
+        <div class="text-2xl font-bold text-white pt-1">
+          {{ completed_sprints }} <span class="text-sm font-normal text-zinc-500">Sprints</span>
+        </div>
+        <p class="text-[11px] text-zinc-500 pt-1 font-sans">
+          Profile Health: <strong class="text-indigo-400 font-mono">{{ completion_score }}%</strong>
+        </p>
       </div>
 
-      <div class="p-5 border-b border-r border-zinc-800">
-        <span class="text-zinc-500 uppercase block mb-1">Active Sprints</span>
-        <div class="text-2xl font-bold text-white">{{ active_sprints }}</div>
-        <span class="text-[11px] text-zinc-500 mt-1 block">{{ completed_sprints }} deliverables completed</span>
-      </div>
-
-      <div class="p-5 border-b border-r border-zinc-800">
-        <span class="text-zinc-500 uppercase block mb-1">Payout Endpoint</span>
-        <div class="text-sm font-bold text-white truncate mt-1">
-          {{ profile.upi_id or 'UPI Setup Required' }}
-        </div>
-        <span class="text-[11px] text-zinc-500 mt-1 block">Bank UTR verified reconciliation</span>
-      </div>
     </div>
 
-    <!-- REDEEMABLE PAYOUTS ACCORDION -->
-    {% if redeemable_invoices %}
-    <section class="border border-zinc-800 bg-zinc-900 rounded-lg p-6 space-y-4">
-      <div class="flex items-center justify-between pb-3 border-b border-zinc-800 font-mono text-xs">
-        <h2 class="text-sm font-bold text-white uppercase tracking-wider">Client-Approved Milestone Payouts</h2>
-        <span class="badge badge-emerald">READY FOR CLEARANCE</span>
+    <!-- ACTIVE WORKSPACES & DELIVERABLES -->
+    <section class="space-y-4">
+      <div class="flex items-center justify-between font-mono text-xs">
+        <span class="text-white font-bold uppercase tracking-wider">Active Sprint Workspaces ({{ assigned_projects|length }})</span>
+        <span class="text-zinc-500">Delivery Pipeline</span>
       </div>
 
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 font-mono text-xs">
-        {% for inv in redeemable_invoices %}
-        <div class="p-4 rounded border border-zinc-800 bg-zinc-950 flex items-center justify-between gap-4">
-          <div>
-            <span class="text-[10px] text-zinc-500">Project SOW #{{ inv.project_id }}</span>
-            <div class="text-lg font-bold text-white mt-0.5">{{ inv.talent_payout|format_currency(inv.currency) }}</div>
-          </div>
-
-          <div>
-            {% if inv.payout_status == 'Requested' %}
-            <span class="badge badge-amber">Redemption Processing</span>
-            {% elif inv.payout_status == 'Settled' %}
-            <span class="badge badge-emerald">Settled (UTR: {{ inv.payout_utr or 'Logged' }})</span>
+      <div class="border border-zinc-800 bg-zinc-900 rounded-xl overflow-hidden shadow-xl">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Project Ref / Service</th>
+              <th>Package Tier</th>
+              <th>Currency / Split</th>
+              <th>Sprint Status</th>
+              <th class="text-right">Workspace</th>
+            </tr>
+          </thead>
+          <tbody class="font-mono text-xs">
+            {% for project in assigned_projects %}
+            <tr>
+              <td>
+                <span class="text-indigo-400 font-bold block">#{{ project.id }}</span>
+                <span class="text-white font-sans font-semibold text-xs">{{ project.service }}</span>
+              </td>
+              <td class="text-zinc-300">
+                {{ project.package }}
+              </td>
+              <td class="text-zinc-400">
+                {{ project.currency }}
+              </td>
+              <td>
+                <span class="badge {% if project.status == 'Completed' %}badge-emerald{% elif project.status == 'Revision' %}badge-amber{% else %}badge-indigo{% endif %}">
+                  {{ project.status }}
+                </span>
+              </td>
+              <td class="text-right">
+                <a href="/professional/project/{{ project.id }}/workspace" class="btn btn-primary text-xs h-7 px-3 font-semibold inline-flex items-center gap-1">
+                  Workspace →
+                </a>
+              </td>
+            </tr>
             {% else %}
-            <form method="POST" action="{{ url_for('professional.redeem_payout', invoice_id=inv.id) }}">
-              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-              <button type="submit" class="btn btn-primary text-xs h-8 px-3 font-semibold cursor-pointer">
-                Redeem Allocation →
-              </button>
-            </form>
-            {% endif %}
-          </div>
+            <tr>
+              <td colspan="5" class="p-12 text-center text-zinc-500 font-mono text-xs">
+                No active sprint assignments. Browse available opportunities below to submit proposals.
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- SKILL-MATCHED SPRINT OPPORTUNITIES -->
+    <section class="space-y-4">
+      <div class="flex items-center justify-between font-mono text-xs">
+        <div>
+          <span class="text-white font-bold uppercase tracking-wider block">Skill-Matched Sprints & Opportunities</span>
+          <span class="text-zinc-500 font-sans">Open engagements matching your tech stack profile</span>
         </div>
+        <a href="{{ url_for('professional.professional_projects') }}" class="text-indigo-400 hover:text-indigo-300">View All →</a>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {% for match in matched_projects[:6] %}
+          {% set proj = match.project %}
+          <div class="p-5 rounded-xl border border-zinc-800 bg-zinc-900 flex flex-col justify-between space-y-4 hover:border-zinc-700 transition">
+            <div class="space-y-2">
+              <div class="flex justify-between items-start gap-2 font-mono text-xs">
+                <span class="text-indigo-400 font-bold">#{{ proj.id }} · {{ proj.currency }}</span>
+                {% if match.match_count > 0 %}
+                  <span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-950 text-emerald-400 border border-emerald-800">
+                    {{ match.match_count }} Skill Match
+                  </span>
+                {% endif %}
+              </div>
+              <h3 class="font-bold text-white font-sans text-sm">{{ proj.package }}</h3>
+              <p class="text-xs text-zinc-400 font-mono">{{ proj.service }}</p>
+              
+              <!-- Requirements Preview -->
+              <p class="text-xs text-zinc-500 font-sans line-clamp-2 leading-relaxed">
+                {{ proj.requirements }}
+              </p>
+
+              <!-- Matching Skills Badges -->
+              {% if match.overlap_skills %}
+                <div class="flex flex-wrap gap-1 pt-1">
+                  {% for s in match.overlap_skills %}
+                    <span class="px-1.5 py-0.5 rounded text-[9px] font-mono bg-zinc-950 text-zinc-300 border border-zinc-800">
+                      ✓ {{ s }}
+                    </span>
+                  {% endfor %}
+                </div>
+              {% endif %}
+            </div>
+
+            <div class="pt-3 border-t border-zinc-800 flex items-center justify-between font-mono text-xs">
+              <!-- View Details Button -->
+              <button
+                type="button"
+                class="view-project-btn text-xs text-zinc-400 hover:text-white underline cursor-pointer"
+                data-project-id="{{ proj.id }}"
+                data-service="{{ proj.service }}"
+                data-package="{{ proj.package }}"
+                data-currency="{{ proj.currency }}"
+                data-requirements="{{ proj.requirements }}"
+                data-skills="{{ proj.required_skills or 'General Scope' }}"
+              >
+                View Details
+              </button>
+
+              {% if proj.id in my_applied_ids %}
+                <span class="badge badge-neutral text-[10px]">Applied</span>
+              {% else %}
+                <button
+                  type="button"
+                  class="open-proposal-btn btn btn-primary text-xs h-7 px-3 font-semibold cursor-pointer"
+                  data-project-id="{{ proj.id }}"
+                  data-package="{{ proj.package }}"
+                  data-service="{{ proj.service }}"
+                >
+                  Apply Now →
+                </button>
+              {% endif %}
+            </div>
+          </div>
+        {% else %}
+          <div class="col-span-full p-12 text-center text-zinc-500 font-mono text-xs border border-zinc-800 bg-zinc-900 rounded-xl">
+            No open sprints currently available for bidding.
+          </div>
         {% endfor %}
       </div>
     </section>
-    {% endif %}
 
-    <!-- ASSIGNED WORKSPACES (IN DEVELOPMENT) -->
-    <div class="space-y-4">
-      <div class="flex items-center justify-between pb-3 border-b border-zinc-800 font-mono text-xs">
-        <div>
-          <h2 class="text-sm font-bold text-white uppercase tracking-wider">My Active Delivery Workspaces</h2>
-          <p class="text-zinc-400 font-sans mt-0.5">Projects assigned to you by agency administration. Submit deliverable staging URLs or review client feedback.</p>
-        </div>
-        <span class="text-zinc-400">{{ assigned_projects|length }} Assigned Sprints</span>
+    <!-- RECENT REDEMPTION & PAYOUT HISTORY -->
+    <section class="space-y-4">
+      <div class="flex items-center justify-between font-mono text-xs">
+        <span class="text-white font-bold uppercase tracking-wider">Wallet Redemption History</span>
+        <span class="text-zinc-500">Live Payout Ledger</span>
       </div>
 
-      <div class="border border-zinc-800 bg-zinc-900 rounded-lg overflow-hidden">
-        <div class="divide-y divide-zinc-800">
-          {% for project in assigned_projects if assigned_projects %}
-          <article class="p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div>
-              <div class="flex items-center gap-2.5 mb-1">
-                <span class="font-mono text-xs text-zinc-400 font-bold">#{{ project.id }}</span>
-                <h3 class="text-sm font-bold text-white">{{ project.service }}</h3>
-                <span class="badge
-                  {% if project.status == 'Completed' %}badge-emerald
-                  {% elif project.status == 'Revision' %}badge-amber
-                  {% elif project.status == 'Submitted' %}badge-indigo
-                  {% else %}badge-neutral{% endif %} font-mono text-[10px]">
-                  {{ project.status }}
+      <div class="border border-zinc-800 bg-zinc-900 rounded-xl overflow-hidden shadow-xl">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Request ID</th>
+              <th>Date</th>
+              <th>Payout Route</th>
+              <th>Amount</th>
+              <th>State</th>
+              <th class="text-right">UTR Reference</th>
+            </tr>
+          </thead>
+          <tbody class="font-mono text-xs">
+            {% for w in withdrawal_history %}
+            <tr>
+              <td class="font-bold text-zinc-400">#WTH-{{ w.id }}</td>
+              <td class="text-zinc-500">{{ w.requested_at.strftime('%d %b %Y, %H:%M') if w.requested_at else '—' }}</td>
+              <td>
+                {% if w.payout_mode == 'UPI' %}
+                  <span class="text-indigo-400 font-bold">📱 UPI: {{ w.upi_id }}</span>
+                {% else %}
+                  <span class="text-zinc-300">🏦 Direct Bank Wire</span>
+                {% endif %}
+              </td>
+              <td class="font-bold text-emerald-400">₹{{ "%.2f"|format(w.amount|float) }}</td>
+              <td>
+                <span class="badge {% if w.status == 'Processed' %}badge-emerald{% elif w.status == 'Rejected' %}badge-neutral text-rose-400{% else %}badge-amber{% endif %}">
+                  {{ w.status|upper }}
                 </span>
-              </div>
-              <p class="text-xs font-mono text-zinc-400">
-                Package: <strong class="text-zinc-200">{{ project.package }}</strong> • 
-                Client: <strong class="text-zinc-200">{{ project.customer.name if project.customer else 'Direct Client' }}</strong>
-              </p>
-            </div>
-
-            <div class="flex items-center gap-3">
-              <a href="{{ url_for('professional.professional_project_workspace', project_id=project.id) }}" class="btn btn-primary text-xs h-8 font-semibold">
-                Open Delivery Workbench →
-              </a>
-            </div>
-          </article>
-          {% else %}
-          <div class="p-10 text-center font-mono text-xs text-zinc-500">
-            You have no assigned sprints in active development right now. Claim an open order below to start.
-          </div>
-          {% endfor %}
-        </div>
-      </div>
-    </div>
-
-    <!-- OPEN OPPORTUNITIES MARKETPLACE -->
-    <div id="available-sprints" class="space-y-4 pt-4">
-      <div class="flex items-center justify-between pb-3 border-b border-zinc-800 font-mono text-xs">
-        <div>
-          <h2 class="text-sm font-bold text-white uppercase tracking-wider">Available Sprints (Open Client Orders)</h2>
-          <p class="text-zinc-400 font-sans mt-0.5">Claim newly commissioned milestone engagements. Fixed 45% revenue allocation per package.</p>
-        </div>
-        <span class="badge badge-indigo">{{ available_projects|length }} Open Engagements</span>
-      </div>
-
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {% for prj in available_projects if available_projects %}
-        <div class="border border-zinc-800 bg-zinc-900 rounded-lg p-6 flex flex-col justify-between space-y-4">
-          <div>
-            {% if prj.currency == 'INR' %}
-              {% set sprint_price = package_prices.get(prj.package) %}
+              </td>
+              <td class="text-right text-zinc-500 font-mono">
+                {{ w.utr_reference or 'Pending Clearance' }}
+              </td>
+            </tr>
             {% else %}
-              {% set sprint_price = international_package_prices.get(prj.currency, {}).get(prj.package) %}
-            {% endif %}
-
-            <div class="flex items-center justify-between font-mono text-xs mb-2">
-              <span class="text-zinc-400 font-bold">#{{ prj.id }}</span>
-              <span class="badge badge-emerald">
-                {% if sprint_price is not none %}Specialist Share (45%): {{ (sprint_price * 0.45)|format_currency(prj.currency) }}{% else %}Quote Pending{% endif %}
-              </span>
-            </div>
-
-            <h3 class="text-base font-bold text-white font-sans">{{ prj.service }}</h3>
-            <p class="text-xs font-mono text-zinc-400 mt-1">Package: {{ prj.package }} • Entity: {{ prj.business.name if prj.business else 'Client Account' }}</p>
-
-            <div class="mt-4 p-3.5 rounded bg-zinc-950 border border-zinc-800 text-[11px] text-zinc-300 font-mono line-clamp-3 leading-relaxed">
-              {{ prj.requirements or 'Standard client milestone brief.' }}
-            </div>
-          </div>
-
-          <div class="pt-4 border-t border-zinc-800 flex items-center justify-between font-mono text-xs">
-            <span class="text-[11px] text-zinc-500">Ordered: {{ prj.created_at.strftime('%d %b %Y') if prj.created_at else 'Today' }}</span>
-
-            {% if prj.id in my_applied_ids %}
-            <span class="badge badge-amber">Application Under Review ⏳</span>
-            {% else %}
-            <form method="POST" action="{{ url_for('professional.apply_for_project', project_id=prj.id) }}">
-              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-              <button type="submit" class="btn btn-primary text-xs h-8 px-4 font-semibold cursor-pointer">
-                Claim Sprint ⚡
-              </button>
-            </form>
-            {% endif %}
-          </div>
-        </div>
-        {% else %}
-        <div class="col-span-2 p-12 text-center rounded border border-zinc-800 bg-zinc-900 font-mono text-xs text-zinc-500">
-          All client projects are currently staffed. New open orders will appear as clients fund Milestone 1 escrow.
-        </div>
-        {% endfor %}
+            <tr>
+              <td colspan="6" class="p-8 text-center text-zinc-500 font-mono text-xs">
+                No past payout requests. Once milestone deliverables are approved, redeem funds here.
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
       </div>
-    </div>
+    </section>
 
   </main>
 
-  <!-- FOOTER -->
-  <footer class="border-t border-zinc-800 bg-zinc-950 py-6 px-6 text-center text-xs font-mono text-zinc-500">
-    {{ agency_settings.agency_name }} Specialist Partner Network • Instant Wire/UPI Clearance
+  <!-- VIEW PROJECT DETAILS MODAL -->
+  <div id="projectDetailsModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm hidden font-mono text-xs">
+    <div class="w-full max-w-lg p-6 bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl space-y-4">
+      <div class="flex items-center justify-between pb-3 border-b border-zinc-800">
+        <div>
+          <span class="text-zinc-500 text-[10px] uppercase block">Engagement Scope Details</span>
+          <h3 id="detailsModalTitle" class="font-bold text-white font-sans text-base">Project Service</h3>
+        </div>
+        <button type="button" id="closeDetailsModalBtn" class="text-zinc-400 hover:text-white text-base cursor-pointer">&times;</button>
+      </div>
+
+      <div class="space-y-3 p-4 rounded-lg border border-zinc-800 bg-zinc-950 font-mono text-xs max-h-80 overflow-y-auto">
+        <div class="grid grid-cols-2 gap-3 pb-2 border-b border-zinc-800">
+          <div>
+            <span class="text-zinc-500 text-[10px] uppercase block">Milestone Package:</span>
+            <strong id="detailsModalPackage" class="text-white">Package</strong>
+          </div>
+          <div>
+            <span class="text-zinc-500 text-[10px] uppercase block">Currency:</span>
+            <strong id="detailsModalCurrency" class="text-indigo-400">INR</strong>
+          </div>
+        </div>
+
+        <div>
+          <span class="text-zinc-500 text-[10px] uppercase block mb-1">Required Tech Stack / Skills:</span>
+          <div id="detailsModalSkills" class="text-emerald-400 font-bold">Skills</div>
+        </div>
+
+        <div>
+          <span class="text-zinc-500 text-[10px] uppercase block mb-1">Full Scope Narrative & Deliverables:</span>
+          <p id="detailsModalReqs" class="text-zinc-300 font-sans text-xs whitespace-pre-wrap leading-relaxed">Requirements</p>
+        </div>
+      </div>
+
+      <div class="flex gap-2 pt-2">
+        <button type="button" id="applyFromDetailsBtn" class="flex-1 btn btn-primary text-xs h-9 font-semibold cursor-pointer">
+          Apply for this Sprint →
+        </button>
+        <button type="button" id="dismissDetailsModalBtn" class="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded text-xs cursor-pointer">
+          Close
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PROPOSAL APPLICATION MODAL -->
+  <div id="proposalModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm hidden font-mono text-xs">
+    <div class="w-full max-w-lg p-6 bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl space-y-4">
+      <div class="flex items-center justify-between pb-3 border-b border-zinc-800">
+        <div>
+          <span class="text-zinc-500 text-[10px] uppercase block">Sprint Application</span>
+          <h3 id="modalProjectSummary" class="font-bold text-white text-sm">#Project</h3>
+        </div>
+        <button type="button" id="closeProposalModalBtn" class="text-zinc-400 hover:text-white text-base cursor-pointer">&times;</button>
+      </div>
+
+      <form id="proposalForm" method="POST" action="" class="space-y-4">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        <div>
+          <label class="block text-zinc-400 mb-1">Pitch / Technical Approach <span class="text-rose-400">*</span></label>
+          <textarea
+            name="proposal"
+            rows="4"
+            required
+            placeholder="Explain your approach, architecture, relevant portfolio projects..."
+            class="w-full p-3 rounded bg-zinc-950 border border-zinc-800 text-white font-sans text-xs focus:outline-none focus:border-indigo-500"
+          ></textarea>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-zinc-400 mb-1">Proposed Quote (₹)</label>
+            <input
+              type="number"
+              step="0.01"
+              name="proposed_rate"
+              placeholder="Leave blank for 45% default"
+              class="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded text-white text-xs"
+            >
+          </div>
+          <div>
+            <label class="block text-zinc-400 mb-1">Delivery Time (Days)</label>
+            <input
+              type="number"
+              min="1"
+              max="90"
+              name="estimated_days"
+              placeholder="e.g. 7"
+              class="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded text-white text-xs"
+            >
+          </div>
+        </div>
+
+        <div class="flex gap-2 pt-2">
+          <button type="submit" class="flex-1 btn btn-primary text-xs h-9 font-semibold cursor-pointer">
+            Submit Proposal ⚡
+          </button>
+          <button type="button" id="cancelProposalModalBtn" class="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded text-xs cursor-pointer">
+            Cancel
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- WITHDRAWAL REDEEM MODAL -->
+  <div id="withdrawModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm hidden font-mono text-xs">
+    <div class="w-full max-w-md p-6 bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl space-y-4">
+      <div class="flex items-center justify-between pb-3 border-b border-zinc-800">
+        <div>
+          <span class="text-zinc-500 text-[10px] uppercase block">Escrow Clearance</span>
+          <h3 class="font-bold text-white text-sm">Redeem Funds to UPI / Bank</h3>
+        </div>
+        <button type="button" id="closeWithdrawModalBtn" class="text-zinc-400 hover:text-white text-base cursor-pointer">&times;</button>
+      </div>
+
+      <form method="POST" action="/professional/wallet/withdraw" class="space-y-4">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        <div class="p-3 bg-zinc-950 border border-zinc-800 rounded space-y-1">
+          <span class="text-zinc-500 text-[10px] uppercase block">Redeemable Available Balance</span>
+          <div class="text-emerald-400 font-bold text-base">₹{{ "%.2f"|format(available_balance|float) }}</div>
+        </div>
+
+        <div>
+          <label class="block text-zinc-400 mb-1">Amount to Withdraw (₹)</label>
+          <input
+            type="number"
+            step="0.01"
+            min="1"
+            max="{{ available_balance|float }}"
+            name="amount"
+            value="{{ available_balance|float }}"
+            required
+            class="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded text-white font-bold text-xs"
+          >
+        </div>
+
+        <div>
+          <label class="block text-zinc-400 mb-1">Payout Method</label>
+          <div class="grid grid-cols-2 gap-2">
+            <button type="button" id="tabUPI" class="py-2 px-3 border border-indigo-500 bg-indigo-950/60 rounded text-xs font-bold text-indigo-300 cursor-pointer">
+              📱 UPI ID
+            </button>
+            <button type="button" id="tabBank" class="py-2 px-3 border border-zinc-800 bg-zinc-950 rounded text-xs text-zinc-400 cursor-pointer">
+              🏦 Bank Transfer
+            </button>
+          </div>
+          <input type="hidden" name="payout_mode" id="payoutModeInput" value="UPI">
+        </div>
+
+        <div id="upiSection" class="space-y-1">
+          <label class="block text-zinc-400">UPI ID (VPA)</label>
+          <input
+            type="text"
+            name="upi_id"
+            value="{{ profile.upi_id or '' }}"
+            placeholder="e.g. name@oksbi, mobile@paytm"
+            class="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded text-white text-xs"
+          >
+        </div>
+
+        <div id="bankSection" class="hidden space-y-2">
+          <div>
+            <label class="block text-zinc-400">Beneficiary Name</label>
+            <input
+              type="text"
+              name="bank_beneficiary_name"
+              value="{{ profile.bank_beneficiary_name or current_user.name }}"
+              class="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded text-white text-xs"
+            >
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block text-zinc-400">Account Number</label>
+              <input
+                type="text"
+                name="bank_account_number"
+                value="{{ profile.bank_account_number or '' }}"
+                class="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded text-white text-xs"
+              >
+            </div>
+            <div>
+              <label class="block text-zinc-400">IFSC Code</label>
+              <input
+                type="text"
+                name="bank_ifsc"
+                value="{{ profile.bank_ifsc or '' }}"
+                class="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded text-white text-xs uppercase"
+              >
+            </div>
+          </div>
+        </div>
+
+        <div class="flex gap-2 pt-2">
+          <button type="submit" class="flex-1 btn btn-primary text-xs h-9 font-semibold cursor-pointer">
+            Submit Redemption Request
+          </button>
+          <button type="button" id="cancelWithdrawModalBtn" class="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded text-xs cursor-pointer">
+            Cancel
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <footer class="border-t border-zinc-800 bg-zinc-950 py-6 px-6 text-center text-xs font-mono text-zinc-500 mt-12">
+    AgencyOS Specialist Node &bull; Escrow Protection &bull; SAC 998311
   </footer>
+
+  <!-- SCRIPT CONTROLLERS -->
+  <script>
+    document.addEventListener("DOMContentLoaded", function () {
+      // 1. View Project Details Modal
+      var detailsModal = document.getElementById("projectDetailsModal");
+      var currentSelectedProjectId = null;
+      var currentSelectedPackage = null;
+      var currentSelectedService = null;
+
+      document.querySelectorAll(".view-project-btn").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          var ds = this.dataset;
+          currentSelectedProjectId = ds.projectId;
+          currentSelectedPackage = ds.package;
+          currentSelectedService = ds.service;
+
+          document.getElementById("detailsModalTitle").textContent = "#" + ds.projectId + " · " + ds.service;
+          document.getElementById("detailsModalPackage").textContent = ds.package;
+          document.getElementById("detailsModalCurrency").textContent = ds.currency;
+          document.getElementById("detailsModalSkills").textContent = ds.skills;
+          document.getElementById("detailsModalReqs").textContent = ds.requirements;
+
+          if (detailsModal) detailsModal.classList.remove("hidden");
+        });
+      });
+
+      var closeDetails = document.getElementById("closeDetailsModalBtn");
+      var dismissDetails = document.getElementById("dismissDetailsModalBtn");
+      if (closeDetails) closeDetails.addEventListener("click", function () { detailsModal.classList.add("hidden"); });
+      if (dismissDetails) dismissDetails.addEventListener("click", function () { detailsModal.classList.add("hidden"); });
+
+      // Apply directly from inside Details Modal
+      var applyFromDetailsBtn = document.getElementById("applyFromDetailsBtn");
+      if (applyFromDetailsBtn) {
+        applyFromDetailsBtn.addEventListener("click", function () {
+          if (detailsModal) detailsModal.classList.add("hidden");
+          if (currentSelectedProjectId) {
+            openProposal(currentSelectedProjectId, currentSelectedPackage, currentSelectedService);
+          }
+        });
+      }
+
+      // 2. Proposal Modal
+      var proposalModal = document.getElementById("proposalModal");
+      var proposalForm = document.getElementById("proposalForm");
+      var proposalSummary = document.getElementById("modalProjectSummary");
+
+      function openProposal(pid, pkg, srv) {
+        if (proposalSummary) proposalSummary.textContent = "#" + pid + " · " + pkg + " (" + srv + ")";
+        if (proposalForm) proposalForm.action = "/professional/project/" + encodeURIComponent(pid) + "/apply";
+        if (proposalModal) proposalModal.classList.remove("hidden");
+      }
+
+      document.querySelectorAll(".open-proposal-btn").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          var pid = this.dataset.projectId;
+          var pkg = this.dataset.package;
+          var srv = this.dataset.service;
+          openProposal(pid, pkg, srv);
+        });
+      });
+
+      var closeProposal = document.getElementById("closeProposalModalBtn");
+      var cancelProposal = document.getElementById("cancelProposalModalBtn");
+      if (closeProposal) closeProposal.addEventListener("click", function () { proposalModal.classList.add("hidden"); });
+      if (cancelProposal) cancelProposal.addEventListener("click", function () { proposalModal.classList.add("hidden"); });
+
+      // 3. Withdrawal Modal
+      var withdrawModal = document.getElementById("withdrawModal");
+      var openWithdrawBtn = document.getElementById("openWithdrawModalBtn");
+      var closeWithdrawBtn = document.getElementById("closeWithdrawModalBtn");
+      var cancelWithdrawBtn = document.getElementById("cancelWithdrawModalBtn");
+
+      if (openWithdrawBtn) {
+        openWithdrawBtn.addEventListener("click", function () {
+          if (withdrawModal) withdrawModal.classList.remove("hidden");
+        });
+      }
+
+      if (closeWithdrawBtn) closeWithdrawBtn.addEventListener("click", function () { withdrawModal.classList.add("hidden"); });
+      if (cancelWithdrawBtn) cancelWithdrawBtn.addEventListener("click", function () { withdrawModal.classList.add("hidden"); });
+
+      // Tab switcher in withdraw modal
+      var tabUPI = document.getElementById("tabUPI");
+      var tabBank = document.getElementById("tabBank");
+      var upiSec = document.getElementById("upiSection");
+      var bankSec = document.getElementById("bankSection");
+      var payoutModeInput = document.getElementById("payoutModeInput");
+
+      if (tabUPI && tabBank) {
+        tabUPI.addEventListener("click", function () {
+          payoutModeInput.value = "UPI";
+          tabUPI.className = "py-2 px-3 border border-indigo-500 bg-indigo-950/60 rounded text-xs font-bold text-indigo-300 cursor-pointer";
+          tabBank.className = "py-2 px-3 border border-zinc-800 bg-zinc-950 rounded text-xs text-zinc-400 cursor-pointer";
+          if (upiSec) upiSec.classList.remove("hidden");
+          if (bankSec) bankSec.classList.add("hidden");
+        });
+
+        tabBank.addEventListener("click", function () {
+          payoutModeInput.value = "BANK_TRANSFER";
+          tabBank.className = "py-2 px-3 border border-indigo-500 bg-indigo-950/60 rounded text-xs font-bold text-indigo-300 cursor-pointer";
+          tabUPI.className = "py-2 px-3 border border-zinc-800 bg-zinc-950 rounded text-xs text-zinc-400 cursor-pointer";
+          if (upiSec) upiSec.classList.add("hidden");
+          if (bankSec) bankSec.classList.remove("hidden");
+        });
+      }
+    });
+  </script>
 </body>
 </html>

@@ -1,8 +1,8 @@
 """AgencyOS Multi-Currency Payments & Payout Blueprint.
 
-Handles Razorpay orders, one-time milestones, scope add-ons, auto-debit retainers,
-idempotent cryptographic webhooks, specialist ledger settlement workflows, and
-seamless sandbox simulation in development environments.
+Handles Razorpay orders, sequential 3-milestone escrow checkouts (50/25/25), scope add-ons,
+auto-debit retainers, idempotent cryptographic webhooks, specialist ledger settlements,
+and seamless sandbox simulation in development environments.
 """
 
 import hashlib
@@ -287,11 +287,23 @@ def payment_page(project_id: int) -> ResponseReturnValue:
         )
         return redirect(url_for("customer.project_details", project_id=project.id))
 
+    # Calculate paid milestone count on file
+    paid_payments = Payment.query.filter_by(project_id=project.id, status="Paid", addon_id=None).all()
+    paid_count = len(paid_payments)
+
     milestone_num = request.args.get("milestone", type=int)
+    if not milestone_num:
+        milestone_num = paid_count + 1
+
     if addon is not None:
         amount = Decimal(str(addon.amount))
         project_currency = sanitize_currency(addon.invoice.currency if addon.invoice else project.currency)
     else:
+        # Check if the requested milestone is already paid
+        if milestone_num <= paid_count:
+            flash(f"Milestone {milestone_num} has already been authorized and paid.", "info")
+            return redirect(url_for("customer.project_details", project_id=project.id))
+
         project_currency = sanitize_currency(project.currency)
         try:
             total_pkg_amount = get_package_price(
@@ -416,24 +428,23 @@ def create_payment_order(project_id: int) -> ResponseReturnValue:
             "key_id": RAZORPAY_KEY_ID or "rzp_test_placeholder",
         })
 
-    # Standard Milestone Flow
-    existing_paid = Payment.query.filter_by(project_id=project.id, status="Paid", addon_id=None).first()
-    if existing_paid is not None:
-        return jsonify({"success": False, "message": "Project advance has already been authorized."}), 400
+    # Sequential Milestone Payment Flow (50 / 25 / 25)
+    paid_payments = Payment.query.filter_by(project_id=project.id, status="Paid", addon_id=None).all()
+    paid_count = len(paid_payments)
 
-    existing_created = Payment.query.filter_by(project_id=project.id, status="Created", addon_id=None).first()
-    if existing_created is not None:
-        return jsonify({
-            "success": True,
-            "order_id": existing_created.razorpay_order_id,
-            "amount": to_minor_units(existing_created.amount),
-            "currency": existing_created.currency,
-            "key_id": RAZORPAY_KEY_ID,
-        })
+    if paid_count >= 3:
+        return jsonify({"success": False, "message": "All milestone payments for this project have already been completed."}), 400
 
-    milestone_num = data.get("milestone", 1)
+    raw_milestone = data.get("milestone")
+    try:
+        milestone_num = int(raw_milestone) if raw_milestone else (paid_count + 1)
+    except (ValueError, TypeError):
+        milestone_num = paid_count + 1
+
+    if milestone_num <= paid_count:
+        return jsonify({"success": False, "message": f"Milestone {milestone_num} has already been authorized and paid."}), 400
+
     currency = sanitize_currency(project.currency)
-
     try:
         total_pkg = get_package_price(project.package, currency, PACKAGE_PRICES)
     except ValueError as exc:
@@ -448,15 +459,31 @@ def create_payment_order(project_id: int) -> ResponseReturnValue:
         amount = total_pkg
 
     amount_minor = to_minor_units(amount)
-    order_id = None
 
+    # Reuse existing Created payment if amounts match
+    existing_created = Payment.query.filter_by(project_id=project.id, status="Created", addon_id=None).first()
+    if existing_created is not None:
+        if existing_created.amount == amount and existing_created.currency == currency:
+            return jsonify({
+                "success": True,
+                "order_id": existing_created.razorpay_order_id,
+                "amount": to_minor_units(existing_created.amount),
+                "currency": existing_created.currency,
+                "key_id": RAZORPAY_KEY_ID,
+            })
+        else:
+            # Delete stale created payment record to allow new milestone amount
+            db.session.delete(existing_created)
+            db.session.flush()
+
+    order_id = None
     if razorpay_client and "placeholder" not in RAZORPAY_KEY_ID.lower() and RAZORPAY_KEY_ID:
         try:
             order = razorpay_client.order.create(
                 {
                     "amount": amount_minor,
                     "currency": currency,
-                    "receipt": f"proj_{project.id}_m{milestone_num}",
+                    "receipt": f"proj_{project.id}_m{milestone_num}_{secrets.token_hex(2)}",
                     "notes": {
                         "project_id": str(project.id),
                         "customer_id": str(project.customer_id),
@@ -530,7 +557,6 @@ def verify_payment() -> ResponseReturnValue:
 
     is_simulated = razorpay_order_id.startswith("order_sim_") or "placeholder" in RAZORPAY_KEY_ID.lower()
 
-    # Remote cryptographic signature check only when live keys are active
     if not is_simulated and razorpay_client:
         try:
             razorpay_client.utility.verify_payment_signature(
@@ -567,48 +593,46 @@ def verify_payment() -> ResponseReturnValue:
                 "addon_id": addon.id,
             })
 
-        # Update Project Status to Active & Unlocked
+        # Calculate which milestone was just funded
+        paid_count = Payment.query.filter_by(project_id=payment.project_id, status="Paid", addon_id=None).count()
+        milestone_index = paid_count
+
         if payment.project_id:
             project = Project.query.get(payment.project_id)
             if project:
-                project.status = "In Progress"
+                if milestone_index == 1:
+                    # Milestone 1 paid: opens sprint for specialist applications
+                    if not project.assigned_professional_id:
+                        project.status = "Pending Assignment"
+                    else:
+                        project.status = "In Progress"
+                elif milestone_index in (2, 3):
+                    project.status = "In Progress"
+
             ActivityLog.log_event(
                 project_id=payment.project_id,
                 action="PAYMENT_RECEIVED",
-                description=f"Milestone advance payment of {format_currency(payment.amount, payment.currency)} verified.",
+                description=f"Milestone {milestone_index} payment of {format_currency(payment.amount, payment.currency)} verified and held in escrow.",
                 user_id=payment.customer_id,
                 category="success",
             )
 
         talent_share, agency_share, tax_val = compute_financial_split(payment.amount, payment.currency)
-        unique_inv_number = f"INV-2026-{payment.project_id or 1:04d}-{secrets.token_hex(2).upper()}"
+        unique_inv_number = f"INV-2026-{payment.project_id or 1:04d}-M{milestone_index}-{secrets.token_hex(2).upper()}"
 
-        invoice = Invoice.query.filter_by(project_id=payment.project_id).first() if payment.project_id else None
-        if invoice:
-            invoice.status = "Paid"
-            invoice.currency = payment.currency
-            if not invoice.razorpay_order_id:
-                invoice.razorpay_order_id = razorpay_order_id
-            if not invoice.talent_payout:
-                invoice.talent_payout = talent_share
-            if not invoice.agency_profit:
-                invoice.agency_profit = agency_share
-            if not invoice.tax_amount:
-                invoice.tax_amount = tax_val
-        else:
-            new_inv = Invoice()
-            new_inv.invoice_number = unique_inv_number
-            new_inv.project_id = payment.project_id
-            new_inv.customer_id = payment.customer_id
-            new_inv.gross_amount = payment.amount
-            new_inv.currency = payment.currency
-            new_inv.talent_payout = talent_share
-            new_inv.agency_profit = agency_share
-            new_inv.tax_amount = tax_val
-            new_inv.status = "Paid"
-            new_inv.payout_status = "Pending Approval"
-            new_inv.razorpay_order_id = razorpay_order_id
-            db.session.add(new_inv)
+        new_inv = Invoice()
+        new_inv.invoice_number = unique_inv_number
+        new_inv.project_id = payment.project_id
+        new_inv.customer_id = payment.customer_id
+        new_inv.gross_amount = payment.amount
+        new_inv.currency = payment.currency
+        new_inv.talent_payout = talent_share
+        new_inv.agency_profit = agency_share
+        new_inv.tax_amount = tax_val
+        new_inv.status = "Paid"
+        new_inv.payout_status = "Pending Approval"
+        new_inv.razorpay_order_id = razorpay_order_id
+        db.session.add(new_inv)
 
         if payment.project_id:
             Milestone.query.filter_by(project_id=payment.project_id, status="pending").update(
@@ -618,7 +642,7 @@ def verify_payment() -> ResponseReturnValue:
         db.session.commit()
         return jsonify({
             "success": True,
-            "message": "Payment verified successfully.",
+            "message": f"Milestone {milestone_index} payment verified successfully.",
             "project_id": payment.project_id,
         })
 
@@ -629,13 +653,13 @@ def verify_payment() -> ResponseReturnValue:
 
 
 # =========================================================
-# ONE-CLICK TEST ESCROW CLEARANCE (DIRECT WORKBENCH REDIRECT)
+# ONE-CLICK SIMULATE TEST PAYMENT (SUPPORTS MILESTONES 1, 2, 3)
 # =========================================================
 
 @payments_bp.route("/payment/simulate-test-payment/<int:project_id>", methods=["POST"])
 @login_required
 def simulate_test_payment(project_id: int) -> ResponseReturnValue:
-    """Instantly fund milestone in development and redirect directly to project workbench."""
+    """Instantly fund next milestone in development and redirect directly to project workbench."""
     user_role = getattr(current_user, "role", "").lower()
     if user_role not in ("customer", "client", "admin"):
         flash("Customer access required.", "warning")
@@ -646,44 +670,53 @@ def simulate_test_payment(project_id: int) -> ResponseReturnValue:
     else:
         project = Project.query.filter_by(id=project_id, customer_id=current_user.id).first_or_404()
 
+    paid_payments = Payment.query.filter_by(project_id=project.id, status="Paid", addon_id=None).all()
+    paid_count = len(paid_payments)
+
+    if paid_count >= 3:
+        flash("All 3 milestones have already been authorized and settled.", "info")
+        return redirect(url_for("customer.project_details", project_id=project.id))
+
+    next_milestone = paid_count + 1
     currency = sanitize_currency(project.currency)
     total_pkg = get_package_price(project.package, currency, PACKAGE_PRICES)
-    amount = (total_pkg * Decimal("0.50")).quantize(Decimal("0.01"))
 
-    payment = Payment.query.filter_by(project_id=project.id, addon_id=None).first()
-    if not payment:
-        payment = _create_payment_record(
-            project_id=project.id,
-            customer_id=project.customer_id,
-            order_id=f"order_sim_{project.id}_{secrets.token_hex(4)}",
-            amount=amount,
-            currency=currency,
-        )
-        db.session.add(payment)
+    if next_milestone == 1:
+        amount = (total_pkg * Decimal("0.50")).quantize(Decimal("0.01"))
+    else:
+        amount = (total_pkg * Decimal("0.25")).quantize(Decimal("0.01"))
 
+    payment = _create_payment_record(
+        project_id=project.id,
+        customer_id=project.customer_id,
+        order_id=f"order_sim_{project.id}_m{next_milestone}_{secrets.token_hex(4)}",
+        amount=amount,
+        currency=currency,
+    )
     payment.status = "Paid"
     payment.paid_at = get_ist_now()
-    payment.razorpay_payment_id = f"pay_sim_{secrets.token_hex(6)}"
-    project.status = "In Progress"
+    payment.razorpay_payment_id = f"pay_sim_m{next_milestone}_{secrets.token_hex(6)}"
+    db.session.add(payment)
+
+    if next_milestone == 1 and not project.assigned_professional_id:
+        project.status = "Pending Assignment"
+    else:
+        project.status = "In Progress"
 
     talent_share, agency_share, tax_val = compute_financial_split(amount, currency)
-    invoice = Invoice.query.filter_by(project_id=project.id).first()
-    if not invoice:
-        new_inv = Invoice()
-        new_inv.invoice_number = f"INV-2026-{project.id:04d}-{secrets.token_hex(2).upper()}"
-        new_inv.project_id = project.id
-        new_inv.customer_id = project.customer_id
-        new_inv.gross_amount = amount
-        new_inv.currency = currency
-        new_inv.talent_payout = talent_share
-        new_inv.agency_profit = agency_share
-        new_inv.tax_amount = tax_val
-        new_inv.status = "Paid"
-        new_inv.payout_status = "Pending Approval"
-        new_inv.razorpay_order_id = payment.razorpay_order_id
-        db.session.add(new_inv)
-    else:
-        invoice.status = "Paid"
+    new_inv = Invoice()
+    new_inv.invoice_number = f"INV-2026-{project.id:04d}-M{next_milestone}-{secrets.token_hex(2).upper()}"
+    new_inv.project_id = project.id
+    new_inv.customer_id = project.customer_id
+    new_inv.gross_amount = amount
+    new_inv.currency = currency
+    new_inv.talent_payout = talent_share
+    new_inv.agency_profit = agency_share
+    new_inv.tax_amount = tax_val
+    new_inv.status = "Paid"
+    new_inv.payout_status = "Pending Approval"
+    new_inv.razorpay_order_id = payment.razorpay_order_id
+    db.session.add(new_inv)
 
     Milestone.query.filter_by(project_id=project.id, status="pending").update(
         {"status": "funded"}, synchronize_session=False
@@ -692,13 +725,13 @@ def simulate_test_payment(project_id: int) -> ResponseReturnValue:
     ActivityLog.log_event(
         project_id=project.id,
         action="PAYMENT_RECEIVED",
-        description=f"Milestone 1 deposit of {format_currency(amount, currency)} verified and escrow held.",
+        description=f"Milestone {next_milestone} deposit of {format_currency(amount, currency)} verified and escrow held.",
         user_id=current_user.id,
         category="success",
     )
 
     db.session.commit()
-    flash(f"Milestone 1 deposit of {format_currency(amount, currency)} successfully authorized! Sprint is active.", "success")
+    flash(f"Milestone {next_milestone} deposit of {format_currency(amount, currency)} successfully authorized! Escrow held.", "success")
     return redirect(url_for("customer.project_details", project_id=project.id))
 
 

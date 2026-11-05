@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Open Sprints Marketplace — {{ agency_settings.agency_name }}</title>
+  <title>Open Sprints Marketplace — AgencyOS</title>
 
   <!-- Typography: Plus Jakarta Sans & JetBrains Mono -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -37,109 +37,298 @@
     }
   </script>
 </head>
-<body class="bg-zinc-950 text-zinc-100 min-h-screen selection:bg-zinc-100 selection:text-zinc-950 antialiased font-sans" style="--agency-primary: {{ agency_settings.primary_color }}; --agency-on-primary: {{ agency_settings.primary_contrast }};">
+<body class="bg-zinc-950 text-zinc-100 min-h-screen selection:bg-zinc-100 selection:text-zinc-950 antialiased font-sans">
 
-  <!-- TOP WORKBENCH HEADER -->
-  <header class="border-b border-zinc-800 bg-zinc-950/95 sticky top-0 z-50">
-    <div class="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between">
-      <div class="flex items-center gap-3">
-        {% include "includes/agency_brand.html" %}
-        <span class="font-mono text-xs text-zinc-500">/</span>
-        <span class="font-mono text-xs text-zinc-400 font-bold uppercase">Sprint Marketplace</span>
-      </div>
-
-      <div class="flex items-center gap-3">
-        <a href="{{ url_for('professional.professional_profile') }}" class="btn btn-secondary text-xs h-8">
-          Payout Settings (UPI)
+  <!-- TOP NAVIGATION BAR -->
+  <header class="border-b border-zinc-800 bg-zinc-950/95 sticky top-0 z-40">
+    <div class="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
+      <div class="flex items-center gap-4">
+        <a href="{{ url_for('professional.professional_dashboard') }}" class="flex items-center gap-2 font-mono text-sm font-bold tracking-tight text-white">
+          <span class="w-7 h-7 rounded bg-indigo-600 text-white flex items-center justify-center font-black text-xs">A</span>
+          <span>Agency<span class="text-indigo-400">OS</span></span>
         </a>
-        <form method="POST" action="{{ url_for('auth.logout') }}" class="inline">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <button type="submit" class="btn btn-subtle text-xs h-8 cursor-pointer">Sign Out</button>
-        </form>
+        <span class="hidden sm:inline-flex items-center px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-indigo-950 text-indigo-300 border border-indigo-800">
+          Specialist Portal
+        </span>
       </div>
+
+      <nav class="flex items-center gap-2 font-mono text-xs">
+        <a href="{{ url_for('professional.professional_dashboard') }}" class="px-3 py-1.5 rounded text-zinc-400 hover:text-white hover:bg-zinc-900 transition-colors">Dashboard</a>
+        <a href="{{ url_for('professional.professional_projects') }}" class="px-3 py-1.5 rounded bg-zinc-850 text-white font-semibold">Opportunities</a>
+        <a href="{{ url_for('professional.professional_profile') }}" class="px-3 py-1.5 rounded text-zinc-400 hover:text-white hover:bg-zinc-900 transition-colors">Payout Profile</a>
+        <a href="/auth/logout" class="ml-2 px-3 py-1.5 rounded text-rose-400 hover:bg-rose-950/50 hover:text-rose-300 transition-colors">Logout</a>
+      </nav>
     </div>
   </header>
 
-  <!-- MAIN MARKETPLACE CONTAINER -->
-  <main class="max-w-5xl mx-auto px-6 py-10 space-y-8">
+  <!-- MAIN CONTENT -->
+  <main class="max-w-7xl mx-auto px-6 py-8 w-full flex-1 space-y-8">
 
-    <!-- Flash Messages Slot -->
-    {% with messages = get_flashed_messages(with_categories=true) %}
-      {% if messages %}
-        <div class="space-y-2">
-          {% for category, message in messages %}
-            <div class="system-alert {{ 'system-alert-success' if category == 'success' else 'system-alert-error' }}">
-              <span class="font-mono text-xs">{{ message }}</span>
-              <button onclick="this.parentElement.remove()" class="text-zinc-400 hover:text-white ml-auto cursor-pointer">✕</button>
-            </div>
-          {% endfor %}
-        </div>
-      {% endif %}
-    {% endwith %}
-
-    <!-- Top Executive Header -->
     <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-6 border-b border-zinc-800 gap-4">
       <div>
         <div class="flex items-center gap-2 mb-1 font-mono text-xs">
-          <span class="badge badge-emerald">SPECIALIST PIPELINE</span>
+          <span class="badge badge-emerald">FUNDED SPRINT MARKETPLACE</span>
           <span class="text-zinc-600">•</span>
-          <span class="text-zinc-400">45% Allocation Standard</span>
+          <span class="text-zinc-400">50% Advance Deposited</span>
         </div>
-        <h1 class="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">Open Client Sprints</h1>
-        <p class="text-xs font-mono text-zinc-400 mt-1">Milestone packages funded by clients. Apply to claim lead delivery assignment.</p>
+        <h1 class="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">Open Opportunities Feed</h1>
+        <p class="text-xs font-mono text-zinc-400 mt-1">Browse verified client projects where Milestone 1 escrow deposit is fully funded.</p>
       </div>
 
-      <a href="{{ url_for('professional.professional_my_projects') }}" class="btn btn-secondary text-xs h-9 px-4 font-semibold">
-        View My Assigned Sprints →
-      </a>
+      <span class="badge badge-neutral font-mono text-xs px-3 py-1">
+        {{ scored_projects|length if scored_projects else 0 }} Funded Sprints Available
+      </span>
     </div>
 
-    <!-- Projects Grid -->
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 font-mono text-xs">
-      {% for prj in projects if projects %}
-      <div class="border border-zinc-800 bg-zinc-900 rounded-lg p-6 flex flex-col justify-between space-y-4">
-        <div>
-          <div class="flex items-center justify-between mb-2">
-            <span class="text-zinc-400 font-bold">#{{ prj.id }}</span>
-            <span class="badge badge-emerald">45% ALLOCATION</span>
+    <!-- Opportunities Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      {% for item in scored_projects %}
+        {% set proj = item.project %}
+        <div class="p-6 rounded-xl border border-zinc-800 bg-zinc-900 flex flex-col justify-between space-y-4 shadow-xl hover:border-zinc-700 transition">
+          <div class="space-y-3">
+            <div class="flex justify-between items-start gap-2 font-mono text-xs">
+              <span class="text-indigo-400 font-bold">#{{ proj.id }} · {{ proj.currency }}</span>
+              {% if item.match_count > 0 %}
+                <span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-950 text-emerald-400 border border-emerald-800">
+                  {{ item.match_count }} Skill Match{% if item.match_count > 1 %}es{% endif %}
+                </span>
+              {% else %}
+                <span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-zinc-800 text-zinc-400">
+                  Open Scope
+                </span>
+              {% endif %}
+            </div>
+
+            <h3 class="font-bold text-white font-sans text-base">{{ proj.package }}</h3>
+            <p class="text-xs text-zinc-400 font-mono">{{ proj.service }}</p>
+
+            <p class="text-xs text-zinc-300 font-sans line-clamp-3 leading-relaxed">
+              {{ proj.requirements }}
+            </p>
+
+            {% if item.matched_skills %}
+              <div class="flex flex-wrap gap-1.5 pt-1">
+                {% for s in item.matched_skills %}
+                  <span class="px-2 py-0.5 rounded text-[10px] font-mono bg-zinc-950 text-indigo-300 border border-zinc-800">
+                    ✓ {{ s }}
+                  </span>
+                {% endfor %}
+              </div>
+            {% endif %}
           </div>
 
-          <h3 class="text-base font-bold text-white font-sans">{{ prj.service }}</h3>
-          <p class="text-xs text-zinc-400 mt-1">Package: {{ prj.package }} • Entity: {{ prj.business.name if prj.business else 'Client Account' }}</p>
-
-          <div class="mt-4 p-3.5 rounded bg-zinc-950 border border-zinc-800 text-[11px] text-zinc-300 line-clamp-3 leading-relaxed">
-            {{ prj.requirements or 'Standard client milestone brief.' }}
-          </div>
-        </div>
-
-        <div class="pt-4 border-t border-zinc-800 flex items-center justify-between">
-          <span class="text-[11px] text-zinc-500">Ordered: {{ prj.created_at.strftime('%d %b %Y') if prj.created_at else 'Today' }}</span>
-
-          {% if prj.id in my_applied_ids %}
-          <span class="badge badge-amber">Application Under Review ⏳</span>
-          {% else %}
-          <form method="POST" action="{{ url_for('professional.apply_for_project', project_id=prj.id) }}">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button type="submit" class="btn btn-primary text-xs h-8 px-4 font-semibold cursor-pointer">
-              Claim Sprint ⚡
+          <div class="pt-4 border-t border-zinc-800 flex items-center justify-between font-mono text-xs">
+            <!-- View Details Button -->
+            <button
+              type="button"
+              class="view-project-btn text-xs text-zinc-400 hover:text-white underline cursor-pointer"
+              data-project-id="{{ proj.id }}"
+              data-service="{{ proj.service }}"
+              data-package="{{ proj.package }}"
+              data-currency="{{ proj.currency }}"
+              data-requirements="{{ proj.requirements }}"
+              data-skills="{{ proj.required_skills or 'General Scope' }}"
+            >
+              View Details
             </button>
-          </form>
-          {% endif %}
+
+            {% if proj.id in my_applied_ids %}
+              <span class="badge badge-neutral text-xs">Applied ✓</span>
+            {% else %}
+              <button
+                type="button"
+                class="open-proposal-btn btn btn-primary text-xs h-8 px-4 font-semibold cursor-pointer"
+                data-project-id="{{ proj.id }}"
+                data-package="{{ proj.package }}"
+                data-service="{{ proj.service }}"
+              >
+                Apply Now →
+              </button>
+            {% endif %}
+          </div>
         </div>
-      </div>
       {% else %}
-      <div class="col-span-2 p-12 text-center rounded border border-zinc-800 bg-zinc-900 font-mono text-xs text-zinc-500">
-        All active client projects are currently staffed. New open sprints appear here immediately upon escrow funding.
-      </div>
+        <div class="col-span-full p-16 text-center text-zinc-500 font-mono text-xs border border-zinc-800 bg-zinc-900 rounded-xl">
+          No funded sprint opportunities currently available in the queue.
+        </div>
       {% endfor %}
     </div>
 
   </main>
 
-  <!-- FOOTER -->
-  <footer class="border-t border-zinc-800 bg-zinc-950 py-6 px-6 text-center text-xs font-mono text-zinc-500">
-    {{ agency_settings.agency_name }} Specialist Partner Network • SAC 998311 Compliant
+  <!-- VIEW PROJECT DETAILS MODAL -->
+  <div id="projectDetailsModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm hidden font-mono text-xs">
+    <div class="w-full max-w-lg p-6 bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl space-y-4">
+      <div class="flex items-center justify-between pb-3 border-b border-zinc-800">
+        <div>
+          <span class="text-zinc-500 text-[10px] uppercase block">Engagement Scope Details</span>
+          <h3 id="detailsModalTitle" class="font-bold text-white font-sans text-base">Project Service</h3>
+        </div>
+        <button type="button" id="closeDetailsModalBtn" class="text-zinc-400 hover:text-white text-base cursor-pointer">&times;</button>
+      </div>
+
+      <div class="space-y-3 p-4 rounded-lg border border-zinc-800 bg-zinc-950 font-mono text-xs max-h-80 overflow-y-auto">
+        <div class="grid grid-cols-2 gap-3 pb-2 border-b border-zinc-800">
+          <div>
+            <span class="text-zinc-500 text-[10px] uppercase block">Milestone Package:</span>
+            <strong id="detailsModalPackage" class="text-white">Package</strong>
+          </div>
+          <div>
+            <span class="text-zinc-500 text-[10px] uppercase block">Currency:</span>
+            <strong id="detailsModalCurrency" class="text-indigo-400">INR</strong>
+          </div>
+        </div>
+
+        <div>
+          <span class="text-zinc-500 text-[10px] uppercase block mb-1">Required Tech Stack / Skills:</span>
+          <div id="detailsModalSkills" class="text-emerald-400 font-bold">Skills</div>
+        </div>
+
+        <div>
+          <span class="text-zinc-500 text-[10px] uppercase block mb-1">Full Scope Narrative & Deliverables:</span>
+          <p id="detailsModalReqs" class="text-zinc-300 font-sans text-xs whitespace-pre-wrap leading-relaxed">Requirements</p>
+        </div>
+      </div>
+
+      <div class="flex gap-2 pt-2">
+        <button type="button" id="applyFromDetailsBtn" class="flex-1 btn btn-primary text-xs h-9 font-semibold cursor-pointer">
+          Apply for this Sprint →
+        </button>
+        <button type="button" id="dismissDetailsModalBtn" class="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded text-xs cursor-pointer">
+          Close
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PROPOSAL APPLICATION MODAL -->
+  <div id="proposalModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm hidden font-mono text-xs">
+    <div class="w-full max-w-lg p-6 bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl space-y-4">
+      <div class="flex items-center justify-between pb-3 border-b border-zinc-800">
+        <div>
+          <span class="text-zinc-500 text-[10px] uppercase block">Sprint Application</span>
+          <h3 id="modalProjectSummary" class="font-bold text-white text-sm">#Project</h3>
+        </div>
+        <button type="button" id="closeProposalModalBtn" class="text-zinc-400 hover:text-white text-base cursor-pointer">&times;</button>
+      </div>
+
+      <form id="proposalForm" method="POST" action="" class="space-y-4">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        <div>
+          <label class="block text-zinc-400 mb-1">Pitch / Technical Approach <span class="text-rose-400">*</span></label>
+          <textarea
+            name="proposal"
+            rows="4"
+            required
+            placeholder="Explain your approach, architecture, relevant portfolio projects..."
+            class="w-full p-3 rounded bg-zinc-950 border border-zinc-800 text-white font-sans text-xs focus:outline-none focus:border-indigo-500"
+          ></textarea>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-zinc-400 mb-1">Proposed Quote (₹)</label>
+            <input
+              type="number"
+              step="0.01"
+              name="proposed_rate"
+              placeholder="Leave blank for 45% default"
+              class="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded text-white text-xs"
+            >
+          </div>
+          <div>
+            <label class="block text-zinc-400 mb-1">Delivery Time (Days)</label>
+            <input
+              type="number"
+              min="1"
+              max="90"
+              name="estimated_days"
+              placeholder="e.g. 7"
+              class="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded text-white text-xs"
+            >
+          </div>
+        </div>
+
+        <div class="flex gap-2 pt-2">
+          <button type="submit" class="flex-1 btn btn-primary text-xs h-9 font-semibold cursor-pointer">
+            Submit Proposal ⚡
+          </button>
+          <button type="button" id="cancelProposalModalBtn" class="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded text-xs cursor-pointer">
+            Cancel
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <footer class="border-t border-zinc-800 bg-zinc-950 py-6 px-6 text-center text-xs font-mono text-zinc-500 mt-12">
+    AgencyOS Specialist Node &bull; Escrow Protection &bull; SAC 998311
   </footer>
 
+  <script>
+    document.addEventListener("DOMContentLoaded", function () {
+      var detailsModal = document.getElementById("projectDetailsModal");
+      var currentSelectedProjectId = null;
+      var currentSelectedPackage = null;
+      var currentSelectedService = null;
+
+      document.querySelectorAll(".view-project-btn").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          var ds = this.dataset;
+          currentSelectedProjectId = ds.projectId;
+          currentSelectedPackage = ds.package;
+          currentSelectedService = ds.service;
+
+          document.getElementById("detailsModalTitle").textContent = "#" + ds.projectId + " · " + ds.service;
+          document.getElementById("detailsModalPackage").textContent = ds.package;
+          document.getElementById("detailsModalCurrency").textContent = ds.currency;
+          document.getElementById("detailsModalSkills").textContent = ds.skills;
+          document.getElementById("detailsModalReqs").textContent = ds.requirements;
+
+          if (detailsModal) detailsModal.classList.remove("hidden");
+        });
+      });
+
+      var closeDetails = document.getElementById("closeDetailsModalBtn");
+      var dismissDetails = document.getElementById("dismissDetailsModalBtn");
+      if (closeDetails) closeDetails.addEventListener("click", function () { detailsModal.classList.add("hidden"); });
+      if (dismissDetails) dismissDetails.addEventListener("click", function () { detailsModal.classList.add("hidden"); });
+
+      var applyFromDetailsBtn = document.getElementById("applyFromDetailsBtn");
+      if (applyFromDetailsBtn) {
+        applyFromDetailsBtn.addEventListener("click", function () {
+          if (detailsModal) detailsModal.classList.add("hidden");
+          if (currentSelectedProjectId) {
+            openProposal(currentSelectedProjectId, currentSelectedPackage, currentSelectedService);
+          }
+        });
+      }
+
+      var proposalModal = document.getElementById("proposalModal");
+      var proposalForm = document.getElementById("proposalForm");
+      var proposalSummary = document.getElementById("modalProjectSummary");
+
+      function openProposal(pid, pkg, srv) {
+        if (proposalSummary) proposalSummary.textContent = "#" + pid + " · " + pkg + " (" + srv + ")";
+        if (proposalForm) proposalForm.action = "/professional/project/" + encodeURIComponent(pid) + "/apply";
+        if (proposalModal) proposalModal.classList.remove("hidden");
+      }
+
+      document.querySelectorAll(".open-proposal-btn").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          var pid = this.dataset.projectId;
+          var pkg = this.dataset.package;
+          var srv = this.dataset.service;
+          openProposal(pid, pkg, srv);
+        });
+      });
+
+      var closeProposal = document.getElementById("closeProposalModalBtn");
+      var cancelProposal = document.getElementById("cancelProposalModalBtn");
+      if (closeProposal) closeProposal.addEventListener("click", function () { proposalModal.classList.add("hidden"); });
+      if (cancelProposal) cancelProposal.addEventListener("click", function () { proposalModal.classList.add("hidden"); });
+    });
+  </script>
 </body>
 </html>

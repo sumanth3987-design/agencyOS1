@@ -2,10 +2,12 @@
 
 Defines SQLAlchemy ORM models for users, multi-tenant businesses, professional profiles,
 customer profiles with direct contact & GST context, gated projects, cryptographic payment ledgers,
-invoice margin splits, and activity audit trails.
+invoice margin splits, two-stage escrow wallets, withdrawal requests, and activity audit trails.
 """
 
 from datetime import datetime
+import json
+import re
 from typing import Any
 from urllib.parse import urlparse
 from zoneinfo import ZoneInfo
@@ -94,7 +96,7 @@ services = [
 
 
 # =========================================================
-# USER MODEL
+# USER MODEL (WITH ADMIN KYC VERIFICATION)
 # =========================================================
 
 class User(UserMixin, db.Model):
@@ -110,6 +112,12 @@ class User(UserMixin, db.Model):
     # Ignore Pylance override warning for Flask-Login compatibility
     is_active = db.Column(db.Boolean, default=True, nullable=False)  # type: ignore[override]
 
+    # Admin KYC Verification Gate
+    is_verified = db.Column(db.Boolean, default=False, nullable=False)
+    verification_status = db.Column(db.String(30), default="Pending", nullable=False)  # Pending, Verified, Rejected
+    verified_at = db.Column(db.DateTime, nullable=True)
+    rejection_reason = db.Column(db.Text, nullable=True)
+
     created_at = db.Column(db.DateTime, server_default=db.func.now(), nullable=False)
     email_verified_at = db.Column(db.DateTime, nullable=True)
     session_version = db.Column(db.Integer, nullable=False, default=0)
@@ -122,7 +130,11 @@ class User(UserMixin, db.Model):
         """Return True if the given plain-text password matches the stored hash."""
         return check_password_hash(self.password, password)
 
-    projects = db.relationship("Project", backref="customer", lazy=True)
+    # Relationships
+    projects = db.relationship("Project", backref="customer", foreign_keys="Project.customer_id", lazy=True)
+    assigned_projects = db.relationship(
+        "Project", backref="assigned_professional", foreign_keys="Project.assigned_professional_id", lazy=True
+    )
     professional_profile = db.relationship(
         "ProfessionalProfile",
         backref="user",
@@ -140,6 +152,18 @@ class User(UserMixin, db.Model):
         back_populates="customer",
         cascade="all, delete-orphan",
         lazy=True,
+    )
+    withdrawal_requests = db.relationship(
+        "WithdrawalRequest",
+        back_populates="specialist",
+        lazy=True,
+        cascade="all, delete-orphan",
+    )
+    wallet_transactions = db.relationship(
+        "WalletTransaction",
+        back_populates="user",
+        lazy=True,
+        cascade="all, delete-orphan",
     )
 
 
@@ -244,7 +268,7 @@ class UserToken(db.Model):
 
 
 # =========================================================
-# PROFESSIONAL PROFILE MODEL
+# PROFESSIONAL PROFILE MODEL (WITH TWO-STAGE ESCROW WALLET)
 # =========================================================
 
 class ProfessionalProfile(db.Model):
@@ -259,7 +283,7 @@ class ProfessionalProfile(db.Model):
     about = db.Column(db.Text, nullable=True)
     phone = db.Column(db.String(30), nullable=True)
     location = db.Column(db.String(150), nullable=True)
-    skills = db.Column(db.Text, nullable=True)
+    skills = db.Column(db.Text, nullable=True) # Comma-separated or JSON list
     technologies = db.Column(db.Text, nullable=True)
     skill_level = db.Column(db.String(50), nullable=True)
     project_types = db.Column(db.Text, nullable=True)
@@ -272,10 +296,15 @@ class ProfessionalProfile(db.Model):
     availability = db.Column(db.String(50), nullable=True)
     current_workload = db.Column(db.String(100), nullable=True)
 
-    # Payout & Banking Fields
+    # Two-Stage Escrow Ledger
+    pending_balance = db.Column(db.Numeric(12, 2), default=0.00, nullable=False)   # Locked in-flight balance
+    available_balance = db.Column(db.Numeric(12, 2), default=0.00, nullable=False) # Confirmed, ready for withdrawal
+
+    # Payout & Banking Coordinates
     upi_id = db.Column(db.String(100), nullable=True)
     bank_account_number = db.Column(db.String(50), nullable=True)
     bank_ifsc = db.Column(db.String(20), nullable=True)
+    bank_beneficiary_name = db.Column(db.String(120), nullable=True)
     pan_number = db.Column(db.String(20), nullable=True)
 
     verification_status = db.Column(db.String(30), default="Pending", nullable=False)
@@ -285,6 +314,20 @@ class ProfessionalProfile(db.Model):
     updated_at = db.Column(
         db.DateTime, server_default=db.func.now(), onupdate=db.func.now(), nullable=False
     )
+
+    def get_skills_list(self) -> list[str]:
+        """Return standardized list of clean lowercase skills."""
+        if not self.skills:
+            return []
+        try:
+            parsed = json.loads(self.skills)
+            if isinstance(parsed, list):
+                return [str(s).strip().lower() for s in parsed if str(s).strip()]
+        except Exception:
+            pass
+        # Fallback to splitting commas or spaces
+        tokens = re.split(r"[,|\n/]+", self.skills)
+        return [t.strip().lower() for t in tokens if t.strip()]
 
     def get_performance_metrics(self) -> dict[str, Any]:
         assigned_projects = (
@@ -420,7 +463,7 @@ class ProfessionalProfile(db.Model):
 
 
 # =========================================================
-# PROJECT MODEL
+# PROJECT MODEL (WITH SKILL-MATCHING & WORKSPACE LINKING)
 # =========================================================
 
 class Project(db.Model):
@@ -438,7 +481,18 @@ class Project(db.Model):
     package = db.Column(db.String(100), nullable=False)
     currency = db.Column(db.String(3), nullable=False, default="INR")
     requirements = db.Column(db.Text, nullable=False)
+    
+    # Skill-Matching Tags (JSON string or comma-separated)
+    required_skills = db.Column(db.Text, nullable=True)
+
+    # Status State Machine:
+    # 'Pending Assignment' (Open for Bids) -> 'Assigned' -> 'In Progress' -> 'Submitted' -> 'Completed'
     status = db.Column(db.String(50), default="Pending Assignment", nullable=False)
+    
+    assigned_professional_id = db.Column(
+        db.Integer, db.ForeignKey("user.id"), nullable=True, index=True
+    )
+    
     revision_comment = db.Column(db.Text, nullable=True)
     payment_reminder_sent_at = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, server_default=db.func.now(), nullable=False)
@@ -449,6 +503,19 @@ class Project(db.Model):
         cascade="all, delete-orphan",
         lazy=True,
     )
+
+    def get_required_skills_list(self) -> list[str]:
+        """Return standardized list of clean lowercase project skills."""
+        if not self.required_skills:
+            return []
+        try:
+            parsed = json.loads(self.required_skills)
+            if isinstance(parsed, list):
+                return [str(s).strip().lower() for s in parsed if str(s).strip()]
+        except Exception:
+            pass
+        tokens = re.split(r"[,|\n/]+", self.required_skills)
+        return [t.strip().lower() for t in tokens if t.strip()]
 
 
 # =========================================================
@@ -512,7 +579,7 @@ class Payment(db.Model):
     paid_at = db.Column(db.DateTime, nullable=True)
 
     project = db.relationship("Project", backref="payments")
-    customer = db.relationship("User", backref="payments")
+    customer = db.relationship("User", backref="payments", foreign_keys=[customer_id])
     add_on = db.relationship("ProjectAddOn", backref="payments")
 
 
@@ -537,7 +604,7 @@ class Milestone(db.Model):
 
 
 # =========================================================
-# PROFESSIONAL PROJECT APPLICATION
+# PROFESSIONAL PROJECT APPLICATION (MATCH & BID)
 # =========================================================
 
 class ProfessionalProjectApplication(db.Model):
@@ -550,11 +617,14 @@ class ProfessionalProjectApplication(db.Model):
     professional_id = db.Column(
         db.Integer, db.ForeignKey("user.id"), nullable=False, index=True
     )
-    status = db.Column(db.String(30), default="Applied", nullable=False)
+    proposal = db.Column(db.Text, nullable=True)
+    proposed_rate = db.Column(db.Numeric(12, 2), nullable=True)
+    estimated_days = db.Column(db.Integer, nullable=True)
+    status = db.Column(db.String(30), default="Applied", nullable=False) # Applied, Assigned, Rejected
     created_at = db.Column(db.DateTime, server_default=db.func.now(), nullable=False)
 
     project = db.relationship("Project", backref="applications")
-    professional = db.relationship("User", backref="project_applications")
+    professional = db.relationship("User", backref="project_applications", foreign_keys=[professional_id])
 
 
 # =========================================================
@@ -590,7 +660,7 @@ class ProjectDelivery(db.Model):
             order_by="ProjectDelivery.submission_number",
         ),
     )
-    professional = db.relationship("User", backref="project_deliveries")
+    professional = db.relationship("User", backref="project_deliveries", foreign_keys=[professional_id])
 
 
 # =========================================================
@@ -632,7 +702,55 @@ class Notification(db.Model):
     user = db.relationship(
         "User",
         backref=db.backref("notifications", lazy=True, order_by="Notification.created_at.desc()"),
+        foreign_keys=[user_id],
     )
+
+
+# =========================================================
+# TWO-STAGE WITHDRAWAL & WALLET REDEMPTION MODEL
+# =========================================================
+
+class WithdrawalRequest(db.Model):
+    __tablename__ = "withdrawal_requests"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    amount = db.Column(db.Numeric(12, 2), nullable=False)
+    currency = db.Column(db.String(10), default="INR", nullable=False)
+    
+    payout_mode = db.Column(db.String(30), default="UPI", nullable=False) # 'UPI' or 'BANK_TRANSFER'
+    upi_id = db.Column(db.String(100), nullable=True)
+    bank_account_number = db.Column(db.String(50), nullable=True)
+    bank_ifsc = db.Column(db.String(20), nullable=True)
+    bank_beneficiary_name = db.Column(db.String(120), nullable=True)
+
+    status = db.Column(db.String(30), default="Pending", nullable=False) # Pending, Approved, Processed, Rejected
+    utr_reference = db.Column(db.String(100), nullable=True)
+    admin_notes = db.Column(db.Text, nullable=True)
+
+    requested_at = db.Column(db.DateTime, default=get_ist_now, nullable=False)
+    processed_at = db.Column(db.DateTime, nullable=True)
+
+    specialist = db.relationship("User", back_populates="withdrawal_requests")
+
+
+class WalletTransaction(db.Model):
+    """Audit ledger for all wallet balance shifts (escrow lock, unlock, withdrawal)."""
+    __tablename__ = "wallet_transactions"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    amount = db.Column(db.Numeric(12, 2), nullable=False)
+    currency = db.Column(db.String(10), default="INR", nullable=False)
+    
+    # Types: ESCROW_LOCKED, ESCROW_RELEASED, WITHDRAWAL_DEBIT, WITHDRAWAL_REVERSED
+    transaction_type = db.Column(db.String(40), nullable=False)
+    reference_type = db.Column(db.String(40), nullable=True) # PROJECT, WITHDRAWAL
+    reference_id = db.Column(db.Integer, nullable=True)
+    description = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, default=get_ist_now, nullable=False)
+
+    user = db.relationship("User", back_populates="wallet_transactions")
 
 
 # =========================================================
@@ -663,7 +781,7 @@ class Invoice(db.Model):
         "Project",
         backref=db.backref("invoice_records", lazy=True, order_by="Invoice.id.desc()"),
     )
-    customer = db.relationship("User", backref="invoices")
+    customer = db.relationship("User", backref="invoices", foreign_keys=[customer_id])
 
 
 class AgencySetting(db.Model):
@@ -726,7 +844,7 @@ class RazorpaySubscription(db.Model):
     )
 
     project = db.relationship("Project", backref=db.backref("retainer_subscriptions", lazy=True))
-    customer = db.relationship("User", backref=db.backref("retainer_subscriptions", lazy=True))
+    customer = db.relationship("User", backref=db.backref("retainer_subscriptions", lazy=True), foreign_keys=[customer_id])
     plan = db.relationship("RazorpaySubscriptionPlan")
     charges = db.relationship("SubscriptionCharge", back_populates="subscription", lazy=True)
 
@@ -822,7 +940,7 @@ class ActivityLog(db.Model):
     created_at = db.Column(db.DateTime, default=get_ist_now, nullable=False)
 
     project = db.relationship("Project", backref=db.backref("activity_logs", cascade="all, delete-orphan", lazy=True))
-    actor = db.relationship("User", backref="activity_logs")
+    actor = db.relationship("User", backref="activity_logs", foreign_keys=[user_id])
 
     @property
     def event_type(self) -> str:

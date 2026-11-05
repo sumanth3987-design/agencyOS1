@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Specialist Delivery Workbench — SOW #{{ project.id }} | {{ agency_settings.agency_name }}</title>
+  <title>Specialist Delivery Workbench — SOW #{{ project.id }} | {{ agency_settings.agency_name if agency_settings else 'AgencyOS' }}</title>
 
   <!-- Typography: Plus Jakarta Sans & JetBrains Mono -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -36,14 +36,21 @@
       }
     }
   </script>
+
+  <style>
+    input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-visible, a:focus-visible {
+      outline: 2px solid #6366f1 !important;
+      outline-offset: 1px;
+    }
+  </style>
 </head>
-<body class="bg-zinc-950 text-zinc-100 min-h-screen selection:bg-zinc-100 selection:text-zinc-950 antialiased" style="--agency-primary: {{ agency_settings.primary_color }}; --agency-on-primary: {{ agency_settings.primary_contrast }};">
+<body class="bg-zinc-950 text-zinc-100 min-h-screen selection:bg-zinc-100 selection:text-zinc-950 antialiased" style="--agency-primary: {{ agency_settings.primary_color if agency_settings else '#09090b' }};">
 
   <!-- TOP WORKBENCH HEADER -->
   <header class="border-b border-zinc-800 bg-zinc-950/95 sticky top-0 z-50">
     <div class="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
       <div class="flex items-center gap-4">
-        <a href="{{ url_for('professional.professional_dashboard') }}" class="btn btn-secondary text-xs h-8">
+        <a href="{{ url_for('professional.professional_dashboard') }}" class="px-3 py-1.5 rounded-lg border border-zinc-700 hover:border-zinc-600 bg-zinc-900 text-zinc-300 hover:text-white text-xs transition-colors font-semibold">
           ← Return to Specialist Hub
         </a>
         <div class="hidden sm:flex items-center gap-2">
@@ -54,7 +61,7 @@
 
       <!-- Financial Allocation Indicator -->
       <div class="flex items-center gap-3">
-        <span class="badge badge-emerald font-mono">
+        <span class="px-3 py-1 rounded border border-emerald-800 bg-emerald-950 text-emerald-400 font-mono text-[10px] font-bold shadow-sm">
           SPECIALIST SHARE (45%): {{ specialist_share|format_currency(currency) }}
         </span>
       </div>
@@ -67,11 +74,11 @@
     <!-- Flash Messages Slot -->
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}
-        <div class="space-y-2">
+        <div class="space-y-2 font-mono text-xs">
           {% for category, message in messages %}
-            <div class="system-alert {{ 'system-alert-success' if category == 'success' else 'system-alert-error' }}">
-              <span class="font-mono">{{ message }}</span>
-              <button onclick="this.parentElement.remove()" class="text-zinc-400 hover:text-white ml-auto cursor-pointer">✕</button>
+            <div class="p-3 rounded border {% if category == 'success' %}bg-emerald-950/60 border-emerald-800 text-emerald-300{% elif category == 'danger' or category == 'error' %}bg-rose-950/60 border-rose-800 text-rose-300{% elif category == 'warning' %}bg-amber-950/60 border-amber-800 text-amber-300{% else %}bg-indigo-950/60 border-indigo-800 text-indigo-300{% endif %} flex justify-between">
+              <span>{{ message }}</span>
+              <button onclick="this.parentElement.remove()" class="text-zinc-400 hover:text-white ml-auto cursor-pointer">&times;</button>
             </div>
           {% endfor %}
         </div>
@@ -82,7 +89,7 @@
     <div class="border-b border-zinc-800 pb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
       <div>
         <div class="flex items-center gap-2 mb-1">
-          <span class="badge badge-indigo">ACTIVE SPRINT WORKBENCH</span>
+          <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-950 text-indigo-300 border border-indigo-800 font-mono">ACTIVE SPRINT WORKBENCH</span>
           <span class="font-mono text-xs text-zinc-500">•</span>
           <span class="font-mono text-xs text-zinc-400">#{{ project.id }}</span>
         </div>
@@ -94,11 +101,11 @@
       </div>
 
       <div>
-        <span class="badge
-          {% if project.status == 'Completed' %}badge-emerald
-          {% elif project.status == 'Revision' %}badge-amber
-          {% elif project.status == 'Submitted' %}badge-indigo
-          {% else %}badge-neutral{% endif %} font-mono">
+        <span class="px-2.5 py-1 rounded text-xs font-semibold
+          {% if project.status == 'Completed' %}bg-emerald-950 border border-emerald-800 text-emerald-400
+          {% elif project.status == 'Revision' %}bg-amber-950 border border-amber-800 text-amber-400
+          {% elif project.status == 'Submitted' %}bg-indigo-950 border border-indigo-800 text-indigo-400
+          {% else %}bg-zinc-800 border border-zinc-700 text-zinc-300{% endif %} font-mono">
           ● {{ project.status|upper }}
         </span>
       </div>
@@ -106,9 +113,9 @@
 
     <!-- REVISION FEEDBACK NOTICE (IF ACTIVE) -->
     {% if project.status == 'Revision' and project.revision_comment %}
-    <div class="border border-amber-500/30 bg-amber-500/5 rounded-lg p-5 space-y-2 font-mono text-xs">
+    <div class="border border-amber-500/30 bg-amber-500/5 rounded-xl p-5 space-y-2 font-mono text-xs shadow-lg">
       <div class="flex justify-between items-center">
-        <span class="badge badge-amber font-bold">CLIENT REVISION FEEDBACK (CYCLE {{ revision_count }} OF 2)</span>
+        <span class="px-2 py-0.5 rounded bg-amber-950 border border-amber-800 text-amber-400 font-bold">CLIENT REVISION FEEDBACK (CYCLE {{ revision_count }} OF 2)</span>
         <span class="text-[11px] text-zinc-400">SOW BOUNDARY ENFORCED</span>
       </div>
       <div class="p-3.5 rounded border border-zinc-800 bg-zinc-950 text-zinc-200 whitespace-pre-wrap leading-relaxed font-sans">
@@ -118,187 +125,209 @@
     </div>
     {% endif %}
 
-    <!-- 2-COLUMN WORKBENCH: Left (Submission & Scope) | Right (Chat & History) -->
+    <!-- FULL-WIDTH: SOW Requirements Master Brief -->
+    <div class="border border-zinc-800 bg-zinc-900 rounded-xl p-6 space-y-4 shadow-xl">
+      <div class="flex items-center justify-between pb-3 border-b border-zinc-800 font-mono text-xs">
+        <div>
+          <h2 class="text-sm font-bold text-white uppercase tracking-wider">Statement of Work (SOW) Requirements</h2>
+          <p class="text-zinc-400 font-sans mt-0.5">Master technical scope &amp; requirements outlining this sprint.</p>
+        </div>
+      </div>
+      
+      <div class="p-4 rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-300 font-sans text-xs leading-relaxed whitespace-pre-wrap break-words">
+        {{ project.requirements or 'Standard client milestone brief.' }}
+      </div>
+    </div>
+
+    <!-- 2-COLUMN WORKBENCH: Left (Submission & History) | Right (Chat) -->
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
       
-      <!-- LEFT 2 COLUMNS: Deliverable Submission & SOW Requirements (66%) -->
+      <!-- LEFT 2 COLUMNS: Deliverable Submission & History (66%) -->
       <div class="lg:col-span-2 space-y-8">
         
-        <!-- Deliverable Submission Form -->
-        <div class="border border-zinc-800 bg-zinc-900 rounded-lg p-6">
+        <!-- Deliverable Submission Form (Structured for 3 Gates) -->
+        <div class="border border-zinc-800 bg-zinc-900 rounded-xl p-6 shadow-xl">
           <div class="flex items-center justify-between pb-4 border-b border-zinc-800 mb-6 font-mono text-xs">
             <div>
               <h2 class="text-sm font-bold text-white uppercase tracking-wider">Milestone Deliverable Submission</h2>
-              <p class="text-zinc-400 font-sans mt-0.5">Submit verified staging URLs and source code repositories for quality review.</p>
+              <p class="text-zinc-400 font-sans mt-0.5">Submit verified prototypes, staging builds, or final production repositories.</p>
             </div>
-            <span class="badge badge-neutral">SUBMISSION #{{ deliveries|length + 1 }}</span>
+            <span class="px-2 py-1 rounded bg-zinc-800 text-zinc-300 font-bold border border-zinc-700">SUBMISSION #{{ deliveries|length + 1 }}</span>
           </div>
 
           <form method="POST" action="{{ url_for('professional.submit_deliverable', project_id=project.id) }}" enctype="multipart/form-data" class="space-y-4 text-xs font-mono">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token else '' }}">
 
-            <!-- Staging / Figma URL -->
+            <!-- Step 1 & 2: Preview / Staging / Figma URL -->
             <div>
-              <label class="block text-zinc-400 mb-1">Staging / Preview / Figma Prototype URL *</label>
+              <label class="block text-zinc-400 mb-1">
+                Step 1 &amp; 2: Staging Preview / Figma Prototype URL *
+              </label>
               <input
                 type="url"
                 name="preview_url"
                 required
                 placeholder="https://staging.domain.com or https://figma.com/@file"
-                class="form-control text-xs"
+                class="w-full p-2.5 rounded bg-zinc-950 border border-zinc-800 text-white focus:outline-none focus:border-indigo-500"
               >
+              <span class="text-[10px] text-zinc-500 font-sans mt-0.5 block">For Step 1 submit Figma/Wireframes. For Step 2 submit live staging test link.</span>
             </div>
 
-            <!-- Live Production URL -->
+            <!-- Step 3A: Live Production Domain URL -->
             <div>
-              <label class="block text-zinc-400 mb-1">Production Live URL (if DNS is cutover)</label>
+              <label class="block text-zinc-400 mb-1">
+                Step 3A: Production Live Domain URL (Final Cutover)
+              </label>
               <input
                 type="url"
                 name="live_url"
                 placeholder="https://clientdomain.com"
-                class="form-control text-xs"
+                class="w-full p-2.5 rounded bg-zinc-950 border border-zinc-800 text-white focus:outline-none focus:border-indigo-500"
               >
+              <span class="text-[10px] text-zinc-500 font-sans mt-0.5 block">Required for final Milestone 3 handover when DNS is pointed to production.</span>
             </div>
 
-            <!-- Source Code Repository -->
+            <!-- Step 3B: Source Code Repository -->
             <div>
-              <label class="block text-zinc-400 mb-1">Source Code Repository URL (GitHub / GitLab)</label>
+              <label class="block text-zinc-400 mb-1">
+                Step 3B: Source Code Repository URL (GitHub / GitLab)
+              </label>
               <input
                 type="url"
                 name="source_url"
-                placeholder="https://github.com/org/repo"
-                class="form-control text-xs"
+                placeholder="https://github.com/organization/project-repo"
+                class="w-full p-2.5 rounded bg-zinc-950 border border-zinc-800 text-white focus:outline-none focus:border-indigo-500"
               >
+              <span class="text-[10px] text-zinc-500 font-sans mt-0.5 block">Repository transfer for client code ownership sign-off.</span>
+            </div>
+            
+            <!-- Completion Memo & Credentials -->
+            <div>
+              <label class="block text-zinc-400 mb-1">Completion Memo &amp; Testing Notes *</label>
+              <textarea
+                name="completion_notes"
+                rows="3"
+                required
+                placeholder="Detail the completed milestone features, staging test credentials, or DNS notes..."
+                class="w-full p-2.5 rounded bg-zinc-950 border border-zinc-800 text-white font-sans focus:outline-none focus:border-indigo-500"
+              ></textarea>
             </div>
 
             <!-- Pre-Flight Verification Checklist -->
-            <div class="p-4 rounded border border-zinc-800 bg-zinc-950 space-y-2.5">
+            <div class="p-4 rounded-lg border border-zinc-800 bg-zinc-950 space-y-2.5 mt-2">
               <span class="text-[11px] font-bold text-zinc-400 uppercase block">Pre-Flight Quality Gate Checklist:</span>
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-zinc-300 font-sans text-xs">
-                <label class="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" required class="mt-0.5">
+                <label class="flex items-center gap-2 cursor-pointer hover:text-white">
+                  <input type="checkbox" required class="mt-0.5 accent-indigo-500">
                   <span>Mobile-First Responsive Verified</span>
                 </label>
-                <label class="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" required class="mt-0.5">
+                <label class="flex items-center gap-2 cursor-pointer hover:text-white">
+                  <input type="checkbox" required class="mt-0.5 accent-indigo-500">
                   <span>Cross-Browser Compatibility Verified</span>
                 </label>
-                <label class="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" required class="mt-0.5">
-                  <span>Performance & Lighthouse Audit Passed</span>
+                <label class="flex items-center gap-2 cursor-pointer hover:text-white">
+                  <input type="checkbox" required class="mt-0.5 accent-indigo-500">
+                  <span>Performance &amp; Speed Audit Passed</span>
                 </label>
-                <label class="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" required class="mt-0.5">
-                  <span>SEO & Accessibility Audit Passed</span> 
+                <label class="flex items-center gap-2 cursor-pointer hover:text-white">
+                  <input type="checkbox" required class="mt-0.5 accent-indigo-500">
+                  <span>SEO &amp; Accessibility Standards Checked</span> 
                 </label>
-                <label class="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" required class="mt-0.5">
-                  <span>Staging & Production URLs Verified</span>
-                  
+                <label class="flex items-center gap-2 cursor-pointer hover:text-white">
+                  <input type="checkbox" required class="mt-0.5 accent-indigo-500">
+                  <span>URLs &amp; Prototype Links Verified</span>
                 </label>
-                <label class="flex items-center gap-2 cursor-pointer">  
-                  <input type="checkbox" required class="mt-0.5">
-                  <span>Source Code Repository Verified</span>  
+                <label class="flex items-center gap-2 cursor-pointer hover:text-white">  
+                  <input type="checkbox" required class="mt-0.5 accent-indigo-500">
+                  <span>Source Code Repositories Ready</span>  
                 </label>
               </div>  
             </div>
 
-            <button type="submit" class="btn btn-indigo w-full mt-4">Submit Deliverable for Review</button>
+            <button type="submit" class="w-full mt-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-bold uppercase tracking-wider text-xs shadow-md shadow-indigo-500/20 transition-colors">
+              Submit Deliverable for Review ⚡
+            </button>
           </form>
         </div>
 
-        <!-- SOW Requirements & Deliverable History -->
-        <div class="border border-zinc-800 bg-zinc-900 rounded-lg p
-            -6 space-y-6">
-          <div class="flex items-center justify-between pb-4 border-b border-zinc-800 mb-6 font-mono text-xs">
+        <!-- Deliverable Submission History -->
+        <div class="border border-zinc-800 bg-zinc-900 rounded-xl overflow-hidden shadow-xl">
+          <div class="p-4 border-b border-zinc-800 bg-zinc-950 flex items-center justify-between font-mono text-xs">
             <div>
-              <h2 class="text-sm font-bold text-white uppercase tracking-wider">SOW Requirements & Deliverable History</h2>
-              <p class="text-zinc-400 font-sans mt-0.5">Review the original SOW requirements and track all submitted deliverables.</p>
+              <h2 class="text-white font-bold uppercase tracking-wider">Submission History</h2>
+              <p class="text-zinc-500 font-sans mt-0.5">Track all submitted milestone iterations.</p>
             </div>
           </div>
-
-          <!-- SOW Requirements -->
-          <div class="space-y-3">
-            <span class="text-[11px] font-bold text-zinc-400 uppercase block">Original SOW Requirements:</span>
-            <ul class="list-disc list-inside text-zinc-300 font-sans text-xs space-y-1">
-              {% for requirement in project.requirements %}
-              <li>{{ requirement }}</li>
-              {% endfor %}
-            </ul>
-          </div>
-
-          <!-- Deliverable History -->
-          <div class="space-y-3">
-            <span class="text-[11px] font-bold text-zinc-400 uppercase block">Deliverable Submission History:</span>
+          
+          <div class="p-4">
             {% if deliveries %}
-            <ul class="list-decimal list-inside text-zinc-300 font-sans text-xs space-y-1">
+            <div class="space-y-3 text-xs font-mono max-h-[300px] overflow-y-auto pr-1">
               {% for delivery in deliveries %}
-              <li>
-                <strong>Submission #{{ loop.index }}:</strong> {{ delivery.submission_date.strftime('%Y-%m-%d %H:%M') }} — 
-                <a href="{{ delivery.preview_url }}" target="_blank" class="text-indigo-400 hover:underline">Preview</a> | 
-                {% if delivery.live_url %}<a href="{{ delivery.live_url }}" target="_blank" class="text-indigo-400 hover:underline">Live</a>{% else %}No Live URL{% endif %} | 
-                {% if delivery.source_url %}<a href="{{ delivery.source_url }}" target="_blank" class="text-indigo-400 hover:underline">Source Code</a>{% else %}No Source Code{% endif %}
-              </li>
+              <div class="p-3 rounded-lg bg-zinc-950 border border-zinc-800 flex flex-col gap-2">
+                <div class="flex justify-between items-start">
+                  <div>
+                    <strong class="text-white block">Submission #{{ delivery.submission_number }}</strong> 
+                    <span class="text-[10px] text-zinc-500">{{ delivery.submitted_at.strftime('%d %b %Y, %H:%M') if delivery.submitted_at else '' }}</span>
+                  </div>
+                  <span class="px-1.5 py-0.5 rounded {% if delivery.status == 'Approved' %}bg-emerald-950 text-emerald-400 border border-emerald-800{% elif delivery.status == 'Revision' %}bg-amber-950 text-amber-400 border border-amber-800{% else %}bg-indigo-950 text-indigo-400 border border-indigo-800{% endif %} text-[9px] font-bold">{{ delivery.status|upper }}</span>
+                </div>
+                <div class="flex flex-wrap gap-3 text-indigo-400 font-sans font-semibold text-[11px] pt-1.5 border-t border-zinc-800">
+                  {% if delivery.preview_url %}<a href="{{ delivery.preview_url }}" target="_blank" rel="noopener noreferrer" class="hover:text-indigo-300 hover:underline">Preview / Staging ↗</a>{% endif %}
+                  {% if delivery.live_url %}<a href="{{ delivery.live_url }}" target="_blank" rel="noopener noreferrer" class="hover:text-indigo-300 hover:underline">Live Production ↗</a>{% endif %}
+                  {% if delivery.source_url %}<a href="{{ delivery.source_url }}" target="_blank" rel="noopener noreferrer" class="hover:text-indigo-300 hover:underline">Source Code ↗</a>{% endif %}
+                </div>
+              </div>
               {% endfor %}
-            </ul>
+            </div>
             {% else %}
-            <p class="text-zinc-500 text-xs font-sans">No deliverables have been submitted yet.</p>
+            <div class="p-4 rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-500 text-xs font-sans text-center">
+              No deliverables submitted yet.
+            </div>
             {% endif %}
           </div>
         </div>
+
       </div>  
 
-      <!-- RIGHT 1 COLUMN: Chat & History (33%) -->
-      <div class="space-y-8"> 
-        <!-- Chat / Discussion Thread -->
-        <div class="border border-zinc-800 bg-zinc-900 rounded-lg p-6">
-          <div class="flex items-center justify-between pb-4 border-b border-zinc-800 mb-6 font-mono text-xs">
+      <!-- RIGHT 1 COLUMN: Project Discussion Chat (33%) -->
+      <div class="space-y-8 h-full"> 
+        
+        <div class="border border-zinc-800 bg-zinc-900 rounded-xl overflow-hidden flex flex-col h-[750px] shadow-xl">
+          <div class="p-4 border-b border-zinc-800 bg-zinc-950 flex items-center justify-between shrink-0 font-mono text-xs">
             <div>
-              <h2 class="text-sm font-bold text-white uppercase tracking-wider">Project Discussion Thread</h2>
-              <p class="text-zinc-400 font-sans mt-0.5">Collaborate with the client and internal team on project updates and clarifications.</p>
+              <h2 class="text-white font-bold uppercase tracking-wider">Project Discussion</h2>
+              <p class="text-zinc-500 font-sans mt-0.5">Collaborate with client &amp; QA.</p>
             </div>
           </div>
 
           <!-- Chat Messages -->
-          <div class="space-y-4 max-h-[300px] overflow-y-auto">
-            {% for message in chat_messages %}
-            <div class="flex items-start gap-3">
-              <div class="w-8 h-8 rounded-full bg-zinc-700 flex items-center justify-center text-xs font-bold text-white">
-                {{ message.sender_initials }}
+          <div class="flex-1 overflow-y-auto p-4 space-y-3 text-xs font-mono">
+            {% for msg in messages %}
+              {% set is_me = (msg.sender_id == current_user.id) %}
+              <div class="p-3 rounded-lg border border-zinc-800 {% if is_me %}bg-zinc-850{% else %}bg-zinc-950{% endif %}">
+                <div class="flex justify-between items-center text-[10px] text-zinc-500 mb-1">
+                  <span class="font-bold text-zinc-300">{{ msg.sender.name if msg.sender else 'Agency Team' }}</span>
+                  <span>{{ msg.created_at.strftime('%d %b %I:%M %p') if msg.created_at else '' }}</span>
+                </div>
+                <p class="text-zinc-200 font-sans text-xs leading-relaxed whitespace-pre-wrap">{{ msg.message }}</p>
               </div>
-              <div>
-                <p class="text-zinc-300 text-xs font-sans"><strong>{{ message.sender_name }}</strong> • {{ message.timestamp.strftime('%Y-%m-%d %H:%M') }}</p>
-                <p class="text-zinc-400 text-xs font-sans mt-0.5">{{ message.content }}</p>
+            {% else %}
+              <div class="h-full flex items-center justify-center text-zinc-600 font-mono text-xs text-center p-4">
+                Direct project stream initialized. Post operational notes below.
               </div>
-            </div>
             {% endfor %}
           </div>
 
           <!-- New Message Form -->
-          <form method="POST" action="{{ url_for('professional.post_chat_message', project_id=project.id) }}" class="mt-4 space-y-2">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <textarea name="message_content" required placeholder="Type your message..." class="form-control text-xs h-20"></textarea>
-            <button type="submit" class="btn btn-indigo w-full">Send Message</button>
+          <form method="POST" action="{{ url_for('professional.post_chat_message', project_id=project.id) }}" class="p-3 border-t border-zinc-800 bg-zinc-950 flex gap-2 font-mono text-xs">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token else '' }}">
+            <input type="text" name="message" required placeholder="Type a note to the agency lead..." class="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded text-white focus:outline-none focus:border-indigo-500">
+            <button type="submit" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded font-bold uppercase tracking-wider cursor-pointer">
+              Send
+            </button>
           </form>
         </div>
 
-        <!-- Project Activity Log -->
-        <div class="border border-zinc-800 bg-zinc-900 rounded-lg p-6">
-          <div class="flex items-center justify-between pb-4 border-b border-zinc-800 mb-6 font-mono text-xs">
-            <div>
-              <h2 class="text-sm font-bold text-white uppercase tracking-wider">Project Activity Log</h2>
-              <p class="text-zinc-400 font-sans mt-0.5">Track all major actions and status changes for this project.</p>
-            </div> 
-          </div>  
-          <!-- Activity Log Entries -->
-          <div class="space-y-3 max-h-[300px] overflow-y-auto">
-            {% for log in activity_logs %}
-            <div class="text-zinc-400 text-xs font-sans">
-              <p><strong>{{ log.timestamp.strftime('%Y-%m-%d %H:%M') }}</strong> — {{ log.description }}</p>
-            </div>
-            {% endfor %}
-          </div>
-        </div>
       </div>
     </div>
   </main>

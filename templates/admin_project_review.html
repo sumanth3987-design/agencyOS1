@@ -16,7 +16,7 @@
       <p class="text-xs font-mono text-zinc-400 mt-1">Review work submitted by specialists before passing to client or releasing milestone payouts.</p>
     </div>
 
-    <span class="badge badge-neutral font-mono">
+    <span class="badge badge-neutral font-mono text-xs px-3 py-1">
       {{ projects|selectattr("status", "equalto", "Submitted")|list|length }} Pending Gate Submissions
     </span>
   </div>
@@ -27,45 +27,67 @@
       {% set delivery = project_deliveries.get(project.id) %}
       {% set app = project_applications.get(project.id) %}
 
-      <div class="border border-zinc-800 bg-zinc-900 rounded-lg p-6 space-y-4">
+      <div class="border border-zinc-800 bg-zinc-900 rounded-xl p-6 space-y-5 shadow-xl">
         
         <div class="flex flex-col md:flex-row md:items-center justify-between pb-4 border-b border-zinc-800 gap-4 font-mono text-xs">
           <div>
             <div class="flex items-center gap-2.5 mb-1">
-              <span class="font-bold text-white">#{{ project.id }}</span>
+              <span class="text-indigo-400 font-bold">#{{ project.id }}</span>
               <h3 class="text-sm font-bold text-white font-sans">{{ project.service }}</h3>
               <span class="badge {% if project.status == 'Submitted' %}badge-indigo{% else %}badge-amber{% endif %}">
                 {{ project.status }}
               </span>
             </div>
-            <p class="text-zinc-400">
+            <p class="text-zinc-400 font-mono text-[11px]">
               Client Entity: <strong class="text-zinc-200">{{ project.customer.name if project.customer else 'Direct Client' }}</strong> • 
               Assigned Specialist: <strong class="text-emerald-400">{{ app.professional.name if app and app.professional else 'Unassigned' }}</strong>
             </p>
           </div>
 
-          <div class="text-zinc-400">
+          <div class="text-zinc-400 font-mono text-xs">
             Package Tier: <strong class="text-white">{{ project.package }}</strong>
           </div>
         </div>
 
         <!-- Deliverable Links & Completion Memo -->
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-mono">
-          <div class="p-4 rounded border border-zinc-800 bg-zinc-950 space-y-2">
-            <span class="text-[10px] text-zinc-500 uppercase block">Production & Staging Artifacts</span>
+          
+          <!-- Staging & Live URLs Box -->
+          <div class="p-4 rounded-lg border border-zinc-800 bg-zinc-950 space-y-3">
+            <span class="text-[10px] text-zinc-500 uppercase font-bold tracking-wider block">Production & Staging Artifacts</span>
             {% if delivery %}
-              <div class="space-y-1.5">
-                <div>
-                  <span class="text-zinc-500">Live URL:</span>
-                  <a href="{{ delivery.live_url }}" target="_blank" class="text-zinc-300 hover:text-white underline truncate">{{ delivery.live_url or 'None provided' }}</a>
+              <div class="space-y-2">
+                <div class="p-2.5 rounded bg-zinc-900 border border-zinc-800">
+                  <span class="text-[10px] text-zinc-500 uppercase block mb-0.5">Staging Preview URL:</span>
+                  {% if delivery.preview_url %}
+                    <a href="{{ delivery.preview_url }}" target="_blank" rel="noopener noreferrer" class="text-indigo-400 hover:text-indigo-300 font-sans font-semibold underline truncate block">
+                      {{ delivery.preview_url }} ↗
+                    </a>
+                  {% else %}
+                    <span class="text-zinc-500">None provided</span>
+                  {% endif %}
                 </div>
-                <div>
-                  <span class="text-zinc-500">Preview:</span>
-                  <a href="{{ delivery.preview_url }}" target="_blank" class="text-zinc-300 hover:text-white underline truncate">{{ delivery.preview_url or 'None provided' }}</a>
+
+                <div class="p-2.5 rounded bg-zinc-900 border border-zinc-800">
+                  <span class="text-[10px] text-zinc-500 uppercase block mb-0.5">Live Production URL:</span>
+                  {% if delivery.live_url %}
+                    <a href="{{ delivery.live_url }}" target="_blank" rel="noopener noreferrer" class="text-emerald-400 hover:text-emerald-300 font-sans font-semibold underline truncate block">
+                      {{ delivery.live_url }} ↗
+                    </a>
+                  {% else %}
+                    <span class="text-zinc-500">None provided</span>
+                  {% endif %}
                 </div>
-                <div>
-                  <span class="text-zinc-500">Source Code:</span>
-                  <a href="{{ delivery.source_url }}" target="_blank" class="text-zinc-300 hover:text-white underline truncate">{{ delivery.source_url or 'None provided' }}</a>
+
+                <div class="p-2.5 rounded bg-zinc-900 border border-zinc-800">
+                  <span class="text-[10px] text-zinc-500 uppercase block mb-0.5">Source Repository:</span>
+                  {% if delivery.source_url %}
+                    <a href="{{ delivery.source_url }}" target="_blank" rel="noopener noreferrer" class="text-zinc-200 hover:text-white font-sans font-semibold underline truncate block">
+                      {{ delivery.source_url }} ↗
+                    </a>
+                  {% else %}
+                    <span class="text-zinc-500">None provided</span>
+                  {% endif %}
                 </div>
               </div>
             {% else %}
@@ -73,15 +95,16 @@
             {% endif %}
           </div>
 
-          <div class="p-4 rounded border border-zinc-800 bg-zinc-950 space-y-1">
-            <span class="text-[10px] text-zinc-500 uppercase block">Specialist Completion Memo</span>
+          <!-- Specialist Handover Notes -->
+          <div class="p-4 rounded-lg border border-zinc-800 bg-zinc-950 space-y-2">
+            <span class="text-[10px] text-zinc-500 uppercase font-bold tracking-wider block">Specialist Completion Memo</span>
             <p class="text-zinc-300 font-sans text-xs leading-relaxed whitespace-pre-wrap">{{ delivery.completion_notes if delivery and delivery.completion_notes else 'No notes provided by specialist.' }}</p>
           </div>
         </div>
 
         <!-- Actions: Approve or Request Revision -->
         <div class="pt-4 border-t border-zinc-800 flex flex-col sm:flex-row items-center justify-between gap-4 font-mono text-xs">
-          <span class="text-zinc-500 text-[11px]">Quality gate verification (Client sign-off follows).</span>
+          <span class="text-zinc-500 text-[11px]">Quality gate verification (Client sign-off follows upon approval).</span>
 
           <div class="flex items-center gap-3 w-full sm:w-auto">
             <!-- Revision Request Form -->
@@ -92,18 +115,18 @@
                 name="revision_comment"
                 required
                 placeholder="Reason for revision..."
-                class="form-control text-xs w-52 h-8"
+                class="form-control text-xs w-52 h-9"
               >
-              <button type="submit" class="btn btn-secondary text-xs h-8 px-3 font-semibold text-amber-300 cursor-pointer">
+              <button type="submit" class="btn btn-secondary text-xs h-9 px-3 font-semibold text-amber-300 cursor-pointer">
                 Request Revision
               </button>
             </form>
 
             <!-- Approve Form -->
-            <form method="POST" action="{{ url_for('admin.approve_project', project_id=project.id) }}">
+            <form method="POST" action="{{ url_for('admin.approve_project', project_id=project.id) }}" onsubmit="return confirm('Approve deliverable and mark project completed?');">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-              <button type="submit" class="btn btn-primary text-xs h-8 px-4 font-semibold cursor-pointer">
-                Approve & Complete ✓
+              <button type="submit" class="btn btn-primary text-xs h-9 px-5 font-semibold cursor-pointer shadow-md shadow-indigo-600/20">
+                Approve &amp; Complete ✓
               </button>
             </form>
           </div>
@@ -111,7 +134,7 @@
 
       </div>
     {% else %}
-      <div class="p-12 text-center rounded border border-zinc-800 bg-zinc-900 font-mono text-xs text-zinc-500">
+      <div class="p-16 text-center rounded-xl border border-zinc-800 bg-zinc-900 font-mono text-xs text-zinc-500">
         Review Queue Clean. There are no deliverables currently awaiting internal quality review.
       </div>
     {% endfor %}

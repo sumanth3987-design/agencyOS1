@@ -1,7 +1,8 @@
 """AgencyOS Admin Command Center Blueprint.
 
 Governs project pipelines, specialist talent allocations, application review gates,
-offline manual settlements, broadcast notifications, and AI SOW drafting.
+offline manual settlements, broadcast notifications, two-stage escrow releases,
+UPI/Bank payout approvals, and AI SOW drafting.
 """
 
 import csv
@@ -37,8 +38,10 @@ from app.models import (
     ActivityLog,
     AgencySetting,
     Business,
+    ChatMessage,
     CustomerProfile,
     Invoice,
+    Milestone,
     Notification,
     PACKAGE_PRICES,
     Payment,
@@ -47,7 +50,11 @@ from app.models import (
     Project,
     ProjectAddOn,
     ProjectDelivery,
+    RazorpaySubscription,
+    Review,
     User,
+    WalletTransaction,
+    WithdrawalRequest,
     calculate_professional_profile_completion,
     get_ist_now,
     get_latest_project_delivery,
@@ -164,7 +171,9 @@ def admin_dashboard() -> ResponseReturnValue:
     project_count = Project.query.count()
 
     pending_project_count = Project.query.filter_by(status="Pending Assignment").count()
-    pending_verification_count = ProfessionalProfile.query.filter_by(verification_status="Pending").count()
+    pending_verification_count = (
+        User.query.filter(User.is_verified == False, User.role.in_(["customer", "client", "professional"])).count()
+    )
     application_count = ProfessionalProjectApplication.query.count()
 
     submitted_project_count = Project.query.filter_by(status="Submitted").count()
@@ -286,7 +295,7 @@ def admin_project_view(project_id: int) -> ResponseReturnValue:
 
 
 # =========================================================
-# ADMIN CLIENT CRM
+# ADMIN CLIENT CRM & KYC VERIFICATION
 # =========================================================
 
 @admin_bp.route("/admin/customers")
@@ -310,8 +319,48 @@ def admin_customers() -> ResponseReturnValue:
     )
 
 
+@admin_bp.route("/admin/customers/<int:user_id>/verify", methods=["POST"])
+@login_required
+def verify_customer(user_id: int) -> ResponseReturnValue:
+    if getattr(current_user, "role", "").lower() != "admin":
+        flash("Admin access required.", "danger")
+        return redirect(url_for("customer.dashboard"))
+
+    customer = User.query.get_or_404(user_id)
+    customer.is_verified = True
+    customer.verification_status = "Verified"
+    customer.verified_at = get_ist_now()
+
+    notif = Notification()
+    notif.user_id = customer.id
+    notif.title = "Account Verified 🎉"
+    notif.message = "Your customer account has been approved by the agency administrator. You can now commission projects."
+    notif.link = "/dashboard"
+    db.session.add(notif)
+
+    db.session.commit()
+    flash(f"Customer {customer.email} verified successfully.", "success")
+    return redirect(url_for("admin.admin_customers"))
+
+
+@admin_bp.route("/admin/customers/<int:user_id>/reject", methods=["POST"])
+@login_required
+def reject_customer(user_id: int) -> ResponseReturnValue:
+    if getattr(current_user, "role", "").lower() != "admin":
+        flash("Admin access required.", "danger")
+        return redirect(url_for("customer.dashboard"))
+
+    customer = User.query.get_or_404(user_id)
+    customer.is_verified = False
+    customer.verification_status = "Rejected"
+    db.session.commit()
+
+    flash(f"Customer {customer.email} onboarding marked as Rejected.", "warning")
+    return redirect(url_for("admin.admin_customers"))
+
+
 # =========================================================
-# SPECIALIST TALENT MANAGEMENT & VERIFICATION
+# SPECIALIST TALENT MANAGEMENT & READ-ONLY PROFILE INSPECTION
 # =========================================================
 
 @admin_bp.route("/admin/professionals")
@@ -321,7 +370,14 @@ def admin_professionals() -> ResponseReturnValue:
         flash("Admin access required.", "danger")
         return redirect(url_for("customer.dashboard"))
 
-    profiles = ProfessionalProfile.query.order_by(ProfessionalProfile.created_at.desc()).all()
+    # Exclude admin users from showing up in the specialist roster
+    profiles = (
+        ProfessionalProfile.query
+        .join(User, ProfessionalProfile.user_id == User.id)
+        .filter(User.role != "admin")
+        .order_by(ProfessionalProfile.created_at.desc())
+        .all()
+    )
     completion_map = {p.id: calculate_professional_profile_completion(p) for p in profiles}
     meritocracy_map = {p.id: p.get_performance_metrics() for p in profiles}
 
@@ -331,6 +387,18 @@ def admin_professionals() -> ResponseReturnValue:
         completion_map=completion_map,
         meritocracy_map=meritocracy_map,
     )
+
+
+@admin_bp.route("/admin/professionals/<int:profile_id>/view")
+@login_required
+def admin_view_professional(profile_id: int) -> ResponseReturnValue:
+    if getattr(current_user, "role", "").lower() != "admin":
+        flash("Admin access required.", "danger")
+        return redirect(url_for("customer.dashboard"))
+
+    profile = ProfessionalProfile.query.get_or_404(profile_id)
+    metrics = profile.get_performance_metrics()
+    return render_template("admin_professional_profile.html", profile=profile, metrics=metrics)
 
 
 @admin_bp.route("/admin/professionals/<int:profile_id>/verify", methods=["POST"])
@@ -343,8 +411,20 @@ def verify_professional(profile_id: int) -> ResponseReturnValue:
     profile = ProfessionalProfile.query.get_or_404(profile_id)
     profile.verification_status = "Verified"
     profile.verification_notes = "Verified by agency administrator."
-    db.session.commit()
+    
+    if profile.user:
+        profile.user.is_verified = True
+        profile.user.verification_status = "Verified"
+        profile.user.verified_at = get_ist_now()
 
+        notif = Notification()
+        notif.user_id = profile.user.id
+        notif.title = "Specialist Profile Approved 🛡️"
+        notif.message = "Your profile is verified. You can now apply for matched sprint projects."
+        notif.link = "/professional/dashboard"
+        db.session.add(notif)
+
+    db.session.commit()
     flash("Specialist verified successfully.", "success")
     return redirect(url_for("admin.admin_professionals"))
 
@@ -358,14 +438,17 @@ def reject_professional(profile_id: int) -> ResponseReturnValue:
 
     profile = ProfessionalProfile.query.get_or_404(profile_id)
     profile.verification_status = "Rejected"
-    db.session.commit()
+    if profile.user:
+        profile.user.is_verified = False
+        profile.user.verification_status = "Rejected"
 
+    db.session.commit()
     flash("Specialist onboarding application rejected.", "warning")
     return redirect(url_for("admin.admin_professionals"))
 
 
 # =========================================================
-# TALENT APPLICATION ASSIGNMENTS (WITH SPECIALIST NOTIFICATION)
+# TALENT APPLICATION ASSIGNMENTS & TWO-STAGE ESCROW LOCK
 # =========================================================
 
 @admin_bp.route("/admin/applications")
@@ -396,9 +479,12 @@ def assign_professional(application_id: int) -> ResponseReturnValue:
         flash("This application has already been processed.", "warning")
         return redirect(url_for("admin.admin_applications"))
 
+    # 1. Update Application & Project State
     app_record.status = "Assigned"
     project.status = "Assigned"
+    project.assigned_professional_id = app_record.professional_id
 
+    # 2. Reject Other Applicants
     other_apps = ProfessionalProjectApplication.query.filter(
         ProfessionalProjectApplication.project_id == project.id,
         ProfessionalProjectApplication.id != app_record.id,
@@ -407,25 +493,52 @@ def assign_professional(application_id: int) -> ResponseReturnValue:
     for o in other_apps:
         o.status = "Not Selected"
 
-    ActivityLog.log_event(
-        project_id=project.id,
-        action="SPECIALIST_ASSIGNED",
-        description=f"Specialist {app_record.professional.name} assigned to project #{project.id}.",
-        user_id=current_user.id,
-        category="success",
-    )
+    # 3. Compute Specialist Payout Allocation
+    currency = sanitize_currency(project.currency)
+    gross = get_package_price(project.package, currency, PACKAGE_PRICES)
+    talent_share, _, _ = compute_financial_split(gross, currency)
+    locked_amount = app_record.proposed_rate or talent_share
 
-    # Dispatch notification to specialist
+    # 4. Lock in Specialist Two-Stage Wallet (Pending Balance / Escrow)
+    specialist_profile = ProfessionalProfile.query.filter_by(user_id=app_record.professional_id).first()
+    if specialist_profile:
+        current_pending = Decimal(str(specialist_profile.pending_balance or 0))
+        specialist_profile.pending_balance = current_pending + locked_amount
+
+    # 5. Log Wallet Transaction Audit
+    tx = WalletTransaction()
+    tx.user_id = app_record.professional_id
+    tx.amount = locked_amount
+    tx.currency = currency
+    tx.transaction_type = "ESCROW_LOCKED"
+    tx.reference_type = "PROJECT"
+    tx.reference_id = project.id
+    tx.description = f"Project #{project.id} assigned. ₹{locked_amount} locked in escrow."
+    tx.created_at = get_ist_now()
+    db.session.add(tx)
+
+    # 6. Dispatch Notification to Specialist
     notif = Notification()
     notif.user_id = app_record.professional_id
     notif.title = f"Sprint Assigned: #{project.id} {project.service}"
-    notif.message = "You have been selected as the lead delivery specialist for this engagement. Open your workspace to begin."
+    notif.message = (
+        f"You have been assigned to Project #{project.id}. ₹{locked_amount} has been locked in your escrow wallet. "
+        "Open your workspace to begin."
+    )
     notif.link = f"/professional/project/{project.id}/workspace"
     notif.created_at = get_ist_now()
     db.session.add(notif)
 
+    ActivityLog.log_event(
+        project_id=project.id,
+        action="SPECIALIST_ASSIGNED",
+        description=f"Specialist {app_record.professional.name} assigned to project #{project.id}. Escrow locked: ₹{locked_amount}.",
+        user_id=current_user.id,
+        category="success",
+    )
+
     db.session.commit()
-    flash(f"Specialist {app_record.professional.name} successfully assigned to Project #{project.id}!", "success")
+    flash(f"Specialist {app_record.professional.name} assigned to Project #{project.id}. ₹{locked_amount} locked in escrow.", "success")
     return redirect(url_for("admin.admin_applications"))
 
 
@@ -472,7 +585,7 @@ def send_admin_reminder(project_id: int) -> ResponseReturnValue:
 
 
 # =========================================================
-# QUALITY REVIEW GATE
+# QUALITY REVIEW GATE & ESCROW FUND UNLOCK
 # =========================================================
 
 @admin_bp.route("/admin/project-review")
@@ -550,16 +663,62 @@ def approve_project(project_id: int) -> ResponseReturnValue:
 
     project.status = "Completed"
     project.revision_comment = None
+
+    # 1. Unlock Specialist Escrow Funds (Pending Balance -> Available Balance)
+    assigned_app = ProfessionalProjectApplication.query.filter_by(
+        project_id=project.id, status="Assigned"
+    ).first()
+
+    if assigned_app and assigned_app.professional_id:
+        specialist_id = assigned_app.professional_id
+        specialist_profile = ProfessionalProfile.query.filter_by(user_id=specialist_id).first()
+
+        currency = sanitize_currency(project.currency)
+        gross = get_package_price(project.package, currency, PACKAGE_PRICES)
+        talent_share, _, _ = compute_financial_split(gross, currency)
+        earned_amount = assigned_app.proposed_rate or talent_share
+
+        if specialist_profile:
+            curr_pend = Decimal(str(specialist_profile.pending_balance or 0))
+            curr_avail = Decimal(str(specialist_profile.available_balance or 0))
+
+            specialist_profile.pending_balance = max(Decimal("0.00"), curr_pend - earned_amount)
+            specialist_profile.available_balance = curr_avail + earned_amount
+
+        # 2. Log Wallet Transaction
+        tx = WalletTransaction()
+        tx.user_id = specialist_id
+        tx.amount = earned_amount
+        tx.currency = currency
+        tx.transaction_type = "ESCROW_RELEASED"
+        tx.reference_type = "PROJECT"
+        tx.reference_id = project.id
+        tx.description = f"Project #{project.id} deliverables approved. ₹{earned_amount} released to available balance."
+        tx.created_at = get_ist_now()
+        db.session.add(tx)
+
+        # 3. Notify Specialist of Redeemable Balance
+        notif = Notification()
+        notif.user_id = specialist_id
+        notif.title = f"Milestone Approved! ₹{earned_amount} Unlocked 💰"
+        notif.message = (
+            f"Deliverables for Project #{project.id} have been approved. ₹{earned_amount} has been released "
+            "to your available balance and is ready to redeem via UPI or Bank Transfer."
+        )
+        notif.link = "/professional/dashboard"
+        notif.created_at = get_ist_now()
+        db.session.add(notif)
+
     ActivityLog.log_event(
         project_id=project.id,
         action="MILESTONE_APPROVED",
-        description="Agency approved the milestone deliverable. Project marked Completed.",
+        description="Agency approved the milestone deliverable. Funds moved from locked escrow to specialist available balance.",
         user_id=current_user.id,
         category="success",
     )
     db.session.commit()
 
-    flash("Project deliverable approved and marked as Completed.", "success")
+    flash("Project deliverable approved. Funds unlocked and moved to specialist's available balance.", "success")
     return redirect(url_for("admin.admin_project_review"))
 
 
@@ -717,6 +876,7 @@ def unassign_professional(project_id: int) -> ResponseReturnValue:
         app_item.status = "Applied"
 
     project.status = "Pending Assignment"
+    project.assigned_professional_id = None
     db.session.commit()
 
     flash(f"Specialist removed from Project #{project.id}. Reset to Pending Assignment.", "success")
@@ -732,19 +892,31 @@ def delete_project(project_id: int) -> ResponseReturnValue:
 
     project = Project.query.get_or_404(project_id)
 
-    ProfessionalProjectApplication.query.filter_by(project_id=project.id).delete()
-    ProjectDelivery.query.filter_by(project_id=project.id).delete()
-    Payment.query.filter_by(project_id=project.id).delete()
+    try:
+        # Use explicit core deletes to bypass ORM memory cascade nullifications
+        db.session.execute(db.delete(ChatMessage).where(ChatMessage.project_id == project.id))
+        db.session.execute(db.delete(ActivityLog).where(ActivityLog.project_id == project.id))
+        db.session.execute(db.delete(Invoice).where(Invoice.project_id == project.id))
+        db.session.execute(db.delete(Review).where(Review.project_id == project.id))
+        db.session.execute(db.delete(ProjectAddOn).where(ProjectAddOn.project_id == project.id))
+        db.session.execute(db.delete(RazorpaySubscription).where(RazorpaySubscription.project_id == project.id))
+        db.session.execute(db.delete(ProfessionalProjectApplication).where(ProfessionalProjectApplication.project_id == project.id))
+        db.session.execute(db.delete(ProjectDelivery).where(ProjectDelivery.project_id == project.id))
+        db.session.execute(db.delete(Payment).where(Payment.project_id == project.id))
+        db.session.execute(db.delete(Milestone).where(Milestone.project_id == project.id))
 
-    db.session.delete(project)
-    db.session.commit()
+        db.session.delete(project)
+        db.session.commit()
+        flash(f"Project #{project_id} permanently deleted.", "success")
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.exception("Failed to delete project #%s", project_id)
+        flash(f"Could not delete project: {str(e)}", "danger")
 
-    flash(f"Project #{project_id} permanently deleted.", "success")
     return redirect(request.referrer or url_for("admin.admin_dashboard"))
 
-
 # =========================================================
-# TRANSACTIONS, EXPORTS & AI SOW
+# TRANSACTIONS, UPI/BANK WITHDRAWALS & EXPORTS
 # =========================================================
 
 @admin_bp.route("/admin/transactions")
@@ -777,6 +949,9 @@ def admin_transactions() -> ResponseReturnValue:
     pagination = query.order_by(Payment.created_at.desc()).paginate(page=page, per_page=per_page, error_out=False)
     payments = pagination.items
 
+    # Fetch specialist withdrawal requests
+    withdrawal_requests = WithdrawalRequest.query.order_by(WithdrawalRequest.requested_at.desc()).all()
+
     return render_template(
         "admin_transactions.html",
         payments=payments,
@@ -784,7 +959,88 @@ def admin_transactions() -> ResponseReturnValue:
         current_status=status_filter,
         total_collected=total_collected,
         pending_amount=pending_amount,
+        withdrawal_requests=withdrawal_requests,
     )
+
+
+@admin_bp.route("/admin/withdrawals/<int:request_id>/approve", methods=["POST"])
+@login_required
+def approve_withdrawal(request_id: int) -> ResponseReturnValue:
+    if getattr(current_user, "role", "").lower() != "admin":
+        flash("Admin access required.", "danger")
+        return redirect(url_for("customer.dashboard"))
+
+    req = WithdrawalRequest.query.get_or_404(request_id)
+    if req.status != "Pending":
+        flash("This withdrawal request has already been processed.", "warning")
+        return redirect(url_for("admin.admin_transactions"))
+
+    utr_number = request.form.get("utr_number", "").strip() or "UPI_SETTLED"
+    req.status = "Processed"
+    req.utr_reference = utr_number
+    req.processed_at = get_ist_now()
+
+    # Notify Specialist
+    notif = Notification()
+    notif.user_id = req.user_id
+    notif.title = f"Payout Processed! ₹{req.amount} Sent 🚀"
+    destination = req.upi_id if req.payout_mode == "UPI" else f"Bank Acc ending {str(req.bank_account_number or '')[-4:]}"
+    notif.message = f"Your withdrawal of ₹{req.amount} has been settled via {req.payout_mode} to {destination}. UTR: {utr_number}."
+    notif.link = "/professional/dashboard"
+    notif.created_at = get_ist_now()
+    db.session.add(notif)
+
+    db.session.commit()
+    flash(f"Withdrawal #{req.id} for ₹{req.amount} marked as Processed. UTR logged: {utr_number}", "success")
+    return redirect(url_for("admin.admin_transactions"))
+
+
+@admin_bp.route("/admin/withdrawals/<int:request_id>/reject", methods=["POST"])
+@login_required
+def reject_withdrawal(request_id: int) -> ResponseReturnValue:
+    if getattr(current_user, "role", "").lower() != "admin":
+        flash("Admin access required.", "danger")
+        return redirect(url_for("customer.dashboard"))
+
+    req = WithdrawalRequest.query.get_or_404(request_id)
+    if req.status != "Pending":
+        flash("This withdrawal request is not pending.", "warning")
+        return redirect(url_for("admin.admin_transactions"))
+
+    reason = request.form.get("reason", "Details mismatch").strip()
+    req.status = "Rejected"
+    req.admin_notes = reason
+    req.processed_at = get_ist_now()
+
+    # Refund the amount back to specialist available balance
+    profile = ProfessionalProfile.query.filter_by(user_id=req.user_id).first()
+    if profile:
+        profile.available_balance = Decimal(str(profile.available_balance or 0)) + req.amount
+
+    # Log Reversal Transaction
+    tx = WalletTransaction()
+    tx.user_id = req.user_id
+    tx.amount = req.amount
+    tx.currency = "INR"
+    tx.transaction_type = "WITHDRAWAL_REVERSED"
+    tx.reference_type = "WITHDRAWAL"
+    tx.reference_id = req.id
+    tx.description = f"Withdrawal request #{req.id} rejected: {reason}. ₹{req.amount} refunded to available balance."
+    tx.created_at = get_ist_now()
+    db.session.add(tx)
+
+    # Notify Specialist
+    notif = Notification()
+    notif.user_id = req.user_id
+    notif.title = "Withdrawal Request Rejected"
+    notif.message = f"Your request for ₹{req.amount} was rejected ({reason}). Funds have been credited back to your available balance."
+    notif.link = "/professional/dashboard"
+    notif.created_at = get_ist_now()
+    db.session.add(notif)
+
+    db.session.commit()
+    flash(f"Withdrawal request #{req.id} rejected and ₹{req.amount} credited back to specialist balance.", "info")
+    return redirect(url_for("admin.admin_transactions"))
 
 
 @admin_bp.route("/admin/invoice/<int:invoice_id>/release-payout", methods=["POST"])
@@ -865,7 +1121,7 @@ def broadcast_notification() -> ResponseReturnValue:
         db.session.add(notif)
 
     db.session.commit()
-    flash(f"Broadcast sent successfully to {len(recipients)} recipient(s).", "success")
+    flash(f"Broadcast sent successfully to {len(recipients)} users.", "success")
     return redirect(request.referrer or url_for("admin.admin_dashboard"))
 
 

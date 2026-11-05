@@ -10,10 +10,10 @@
       <div class="flex items-center gap-2 mb-1 font-mono text-xs">
         <span class="badge badge-emerald">FINANCIAL RECONCILIATION</span>
         <span class="text-zinc-600">•</span>
-        <span class="text-zinc-400">Multi-Currency Clearance</span>
+        <span class="text-zinc-400">Escrow & Specialist Redemption Rails</span>
       </div>
       <h1 class="text-2xl font-extrabold text-white tracking-tight">Payments & Escrow Ledger</h1>
-      <p class="text-xs font-mono text-zinc-400 mt-1">Live reconciliation of gateway deposits, statutory GST/LUT allocations, and 45% specialist payouts.</p>
+      <p class="text-xs font-mono text-zinc-400 mt-1">Live reconciliation of gateway deposits, statutory GST/LUT allocations, and specialist UPI/Bank settlements.</p>
     </div>
 
     <div class="flex items-center gap-3">
@@ -56,8 +56,136 @@
     </div>
   </div>
 
-  <!-- Filter & Search Toolbar -->
-  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded border border-zinc-800 bg-zinc-900 font-mono text-xs">
+  <!-- SPECIALIST WALLET WITHDRAWAL REQUESTS QUEUE -->
+  <section class="space-y-4">
+    <div class="flex items-center justify-between">
+      <div>
+        <h2 class="text-lg font-bold text-white flex items-center gap-2">
+          <span>⚡</span> Specialist Wallet Redemption Queue (UPI / Bank)
+        </h2>
+        <p class="text-xs font-mono text-zinc-400">Payout requests submitted by vetted specialists from their available balance.</p>
+      </div>
+      <span class="badge badge-neutral font-mono text-xs">
+        {{ withdrawal_requests|length if withdrawal_requests else 0 }} Total Requests
+      </span>
+    </div>
+
+    <div class="border border-zinc-800 bg-zinc-900 rounded-xl overflow-hidden shadow-xl">
+      <div class="overflow-x-auto w-full">
+        <table class="w-full text-left border-collapse font-mono text-xs">
+          <thead class="bg-zinc-950/80 border-b border-zinc-800 text-[11px] uppercase tracking-wider text-zinc-400">
+            <tr>
+              <th class="p-4">Request Ref</th>
+              <th class="p-4">Specialist Talent</th>
+              <th class="p-4">Redeem Amount</th>
+              <th class="p-4">Payout Route / Coordinates</th>
+              <th class="p-4">State</th>
+              <th class="p-4 text-right">Settlement Action</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-zinc-800/60 text-zinc-300">
+            {% for req in withdrawal_requests %}
+            <tr class="hover:bg-zinc-800/40 transition-colors">
+              <td class="p-4 font-bold text-zinc-400">
+                #WTH-{{ req.id }}
+                <span class="text-[10px] text-zinc-500 block font-normal">{{ req.requested_at.strftime('%d %b %Y, %H:%M') if req.requested_at else '—' }}</span>
+              </td>
+              
+              <td class="p-4">
+                <strong class="text-white font-sans text-xs block">{{ req.specialist.name if req.specialist else 'Specialist' }}</strong>
+                <span class="text-zinc-500 text-[11px] block">{{ req.specialist.email if req.specialist else '' }}</span>
+              </td>
+
+              <td class="p-4">
+                <span class="font-extrabold text-emerald-400 text-sm">₹{{ "%.2f"|format(req.amount|float) }}</span>
+                <span class="text-[10px] text-zinc-500 block">INR</span>
+              </td>
+
+              <td class="p-4">
+                {% if req.payout_mode == 'UPI' %}
+                  <div class="space-y-0.5">
+                    <span class="inline-flex items-center gap-1 text-indigo-400 font-bold text-xs">
+                      📱 UPI VPA
+                    </span>
+                    <span class="text-white block bg-zinc-950 px-2 py-0.5 rounded border border-zinc-800 select-all">{{ req.upi_id }}</span>
+                  </div>
+                {% else %}
+                  <div class="space-y-0.5">
+                    <span class="inline-flex items-center gap-1 text-emerald-400 font-bold text-xs">
+                      🏦 Bank NEFT/IMPS
+                    </span>
+                    <span class="text-white block text-[11px]">A/C: {{ req.bank_account_number }}</span>
+                    <span class="text-zinc-400 block text-[10px]">IFSC: {{ req.bank_ifsc }} &bull; {{ req.bank_beneficiary_name }}</span>
+                  </div>
+                {% endif %}
+              </td>
+
+              <td class="p-4">
+                {% if req.status == 'Processed' %}
+                  <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-950 text-emerald-400 border border-emerald-800">
+                    ✓ PROCESSED
+                  </span>
+                  {% if req.utr_reference %}
+                    <span class="text-[10px] text-zinc-500 block mt-1 font-mono">UTR: {{ req.utr_reference }}</span>
+                  {% endif %}
+                {% elif req.status == 'Rejected' %}
+                  <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-rose-950 text-rose-400 border border-rose-800">
+                    REJECTED
+                  </span>
+                  {% if req.admin_notes %}
+                    <span class="text-[10px] text-rose-400 block mt-1">{{ req.admin_notes }}</span>
+                  {% endif %}
+                {% else %}
+                  <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-950 text-amber-400 border border-amber-800 animate-pulse">
+                    PENDING APPROVAL
+                  </span>
+                {% endif %}
+              </td>
+
+              <td class="p-4 text-right">
+                {% if req.status == 'Pending' %}
+                  <div class="flex items-center justify-end gap-2">
+                    <!-- Approve Button -->
+                    <button
+                      type="button"
+                      class="approve-wth-btn px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-xs font-semibold cursor-pointer shadow-sm transition-colors"
+                      data-request-id="{{ req.id }}"
+                      data-amount="{{ req.amount }}"
+                      data-mode="{{ req.payout_mode }}"
+                      data-destination="{% if req.payout_mode == 'UPI' %}{{ req.upi_id }}{% else %}A/C {{ req.bank_account_number }} (IFSC: {{ req.bank_ifsc }}){% endif %}"
+                    >
+                      Settle Payout →
+                    </button>
+                    <!-- Reject Button -->
+                    <button
+                      type="button"
+                      class="reject-wth-btn px-2.5 py-1.5 bg-zinc-800 hover:bg-rose-900/60 text-zinc-400 hover:text-rose-300 rounded text-xs cursor-pointer transition-colors"
+                      data-request-id="{{ req.id }}"
+                      data-amount="{{ req.amount }}"
+                    >
+                      Reject
+                    </button>
+                  </div>
+                {% else %}
+                  <span class="text-zinc-600 text-[11px]">—</span>
+                {% endif %}
+              </td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="6" class="p-12 text-center text-zinc-500 font-mono text-xs">
+                No specialist wallet redemption requests currently pending.
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- Filter & Search Toolbar for Gateway Payments -->
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-xl border border-zinc-800 bg-zinc-900 font-mono text-xs">
     <div class="flex items-center gap-2 flex-wrap">
       <a href="{{ url_for('admin.admin_transactions', status='all') }}" class="btn {% if current_status == 'all' or not current_status %}btn-primary{% else %}btn-secondary{% endif %} text-xs h-7 px-3">
         All Transactions
@@ -69,11 +197,11 @@
         Pending / Checkout
       </a>
     </div>
-    <span class="text-zinc-400">{{ payments|length }} Records Loaded</span>
+    <span class="text-zinc-400">{{ payments|length }} Client Payments Loaded</span>
   </div>
 
-  <!-- Transactions Table -->
-  <div class="border border-zinc-800 bg-zinc-900 rounded-lg overflow-hidden">
+  <!-- Gateway Transactions Table -->
+  <div class="border border-zinc-800 bg-zinc-900 rounded-xl overflow-hidden shadow-xl">
     <table class="data-table">
       <thead>
         <tr>
@@ -81,7 +209,7 @@
           <th>Customer Account</th>
           <th>Gross Amount</th>
           <th>Gateway Status</th>
-          <th>Specialist Payout (45%)</th>
+          <th>Specialist Allocation</th>
         </tr>
       </thead>
       <tbody class="font-mono text-xs">
@@ -133,7 +261,7 @@
               </div>
               <div class="text-[10px] text-zinc-500 mt-1">UTR: {{ inv.payout_utr or 'Unsettled' }}</div>
             {% else %}
-              <span class="text-zinc-600 text-[10px]">No specialist assigned</span>
+              <span class="text-zinc-600 text-[10px]">Escrow ledger managed</span>
             {% endif %}
           </td>
         </tr>
@@ -150,7 +278,7 @@
 
   <!-- Pagination Controls (< >) -->
   {% if pagination and pagination.pages > 1 %}
-  <div class="flex items-center justify-between p-4 rounded border border-zinc-800 bg-zinc-950 font-mono text-xs text-zinc-400">
+  <div class="flex items-center justify-between p-4 rounded-xl border border-zinc-800 bg-zinc-950 font-mono text-xs text-zinc-400">
     <div>
       Showing page <span class="font-bold text-white">{{ pagination.page }}</span> of <span class="font-bold text-white">{{ pagination.pages }}</span>
     </div>
@@ -171,12 +299,89 @@
 
 </main>
 
-<!-- PAYOUT RELEASE MODAL -->
-<div id="payoutModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs hidden">
-  <div class="w-full max-w-sm p-6 bg-zinc-900 border border-zinc-800 rounded-lg shadow-2xl font-mono text-xs space-y-4">
+<!-- APPROVE WITHDRAWAL SETTLEMENT MODAL -->
+<div id="approveWthModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm hidden font-mono text-xs">
+  <div class="w-full max-w-md p-6 bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl space-y-4">
+    <div class="flex items-center justify-between pb-3 border-b border-zinc-800">
+      <h3 class="font-bold text-white uppercase text-sm">Confirm UPI / Bank Settlement</h3>
+      <button type="button" id="closeApproveWthBtn" class="text-zinc-400 hover:text-white text-base cursor-pointer">&times;</button>
+    </div>
+
+    <form id="approveWthForm" method="POST" action="" class="space-y-4">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+      <div class="p-3 bg-zinc-950 border border-zinc-800 rounded-lg space-y-1.5">
+        <span class="text-zinc-500 text-[10px] uppercase block">Payout Destination</span>
+        <strong id="wthDestination" class="text-white block text-xs break-all">Coordinates</strong>
+        <div class="text-emerald-400 font-bold text-sm pt-1" id="wthAmountDisplay">₹0.00</div>
+      </div>
+
+      <div>
+        <label class="block text-zinc-400 mb-1">Bank UTR / UPI Transaction Reference <span class="text-rose-500">*</span></label>
+        <input
+          type="text"
+          name="utr_number"
+          required
+          placeholder="e.g. 305829104819 (UPI) / AXISN23910 (NEFT)"
+          class="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded text-white text-xs font-mono uppercase focus:border-indigo-500 outline-none"
+        >
+      </div>
+
+      <div class="flex gap-2 pt-2">
+        <button type="submit" class="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-xs font-semibold cursor-pointer shadow-sm transition-colors">
+          Mark as Settled ✓
+        </button>
+        <button type="button" id="cancelApproveWthBtn" class="px-4 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded text-xs cursor-pointer">
+          Cancel
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- REJECT WITHDRAWAL MODAL -->
+<div id="rejectWthModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm hidden font-mono text-xs">
+  <div class="w-full max-w-sm p-6 bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl space-y-4">
+    <div class="flex items-center justify-between pb-3 border-b border-zinc-800">
+      <h3 class="font-bold text-white uppercase text-sm">Reject Payout Request</h3>
+      <button type="button" id="closeRejectWthBtn" class="text-zinc-400 hover:text-white text-base cursor-pointer">&times;</button>
+    </div>
+
+    <form id="rejectWthForm" method="POST" action="" class="space-y-4">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <p class="text-zinc-400">
+        Rejecting this request will immediately refund the amount back to the specialist's available balance.
+      </p>
+
+      <div>
+        <label class="block text-zinc-400 mb-1">Reason for Rejection</label>
+        <input
+          type="text"
+          name="reason"
+          required
+          value="Invalid UPI ID or Bank Account Details"
+          class="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded text-white text-xs focus:border-rose-500 outline-none"
+        >
+      </div>
+
+      <div class="flex gap-2 pt-2">
+        <button type="submit" class="flex-1 py-2.5 bg-rose-600 hover:bg-rose-500 text-white rounded text-xs font-semibold cursor-pointer shadow-sm transition-colors">
+          Reject & Refund
+        </button>
+        <button type="button" id="cancelRejectWthBtn" class="px-4 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded text-xs cursor-pointer">
+          Cancel
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- LEGACY INVOICE PAYOUT MODAL -->
+<div id="payoutModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm hidden font-mono text-xs">
+  <div class="w-full max-w-sm p-6 bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl space-y-4">
     <div class="flex items-center justify-between pb-3 border-b border-zinc-800">
       <h3 class="font-bold text-white uppercase">Release Specialist Payout</h3>
-      <button type="button" id="closePayoutModalBtn" class="text-zinc-400 hover:text-white text-sm cursor-pointer">✕</button>
+      <button type="button" id="closePayoutModalBtn" class="text-zinc-400 hover:text-white text-base cursor-pointer">&times;</button>
     </div>
 
     <form id="payoutForm" method="POST" action="" class="space-y-4">
@@ -191,15 +396,15 @@
           type="text"
           name="utr_number"
           placeholder="e.g. UPI Ref 30582910..."
-          class="form-control text-xs uppercase font-mono"
+          class="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded text-white text-xs font-mono uppercase focus:border-indigo-500 outline-none"
         >
       </div>
 
       <div class="flex gap-2 pt-2">
-        <button type="submit" class="btn btn-primary flex-1 text-xs h-9 font-semibold cursor-pointer">
+        <button type="submit" class="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-xs font-semibold cursor-pointer shadow-sm transition-colors">
           Confirm Settlement
         </button>
-        <button type="button" id="cancelPayoutModalBtn" class="btn btn-secondary text-xs h-9 px-4 cursor-pointer">
+        <button type="button" id="cancelPayoutModalBtn" class="px-4 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded text-xs cursor-pointer">
           Cancel
         </button>
       </div>
@@ -209,18 +414,52 @@
 
 <script>
   document.addEventListener("DOMContentLoaded", function () {
-    var modal = document.getElementById("payoutModal");
-    var form = document.getElementById("payoutForm");
+    // 1. Approve Withdrawal Modal
+    var approveModal = document.getElementById("approveWthModal");
+    var approveForm = document.getElementById("approveWthForm");
+    var wthDest = document.getElementById("wthDestination");
+    var wthAmt = document.getElementById("wthAmountDisplay");
+
+    document.querySelectorAll(".approve-wth-btn").forEach(function (button) {
+      button.addEventListener("click", function () {
+        var reqId = this.dataset.requestId;
+        var amt = parseFloat(this.dataset.amount || 0).toFixed(2);
+        var dest = this.dataset.destination;
+        var mode = this.dataset.mode;
+
+        if (approveForm) approveForm.action = "/admin/withdrawals/" + encodeURIComponent(reqId) + "/approve";
+        if (wthDest) wthDest.textContent = dest + " (" + mode + ")";
+        if (wthAmt) wthAmt.textContent = "₹" + amt;
+        if (approveModal) approveModal.classList.remove("hidden");
+      });
+    });
+
+    var closeApprove = document.getElementById("closeApproveWthBtn");
+    var cancelApprove = document.getElementById("cancelApproveWthBtn");
+    if (closeApprove) closeApprove.addEventListener("click", function() { approveModal.classList.add("hidden"); });
+    if (cancelApprove) cancelApprove.addEventListener("click", function() { approveModal.classList.add("hidden"); });
+
+    // 2. Reject Withdrawal Modal
+    var rejectModal = document.getElementById("rejectWthModal");
+    var rejectForm = document.getElementById("rejectWthForm");
+
+    document.querySelectorAll(".reject-wth-btn").forEach(function (button) {
+      button.addEventListener("click", function () {
+        var reqId = this.dataset.requestId;
+        if (rejectForm) rejectForm.action = "/admin/withdrawals/" + encodeURIComponent(reqId) + "/reject";
+        if (rejectModal) rejectModal.classList.remove("hidden");
+      });
+    });
+
+    var closeReject = document.getElementById("closeRejectWthBtn");
+    var cancelReject = document.getElementById("cancelRejectWthBtn");
+    if (closeReject) closeReject.addEventListener("click", function() { rejectModal.classList.add("hidden"); });
+    if (cancelReject) cancelReject.addEventListener("click", function() { rejectModal.classList.add("hidden"); });
+
+    // 3. Legacy Invoice Payout Modal
+    var payoutModal = document.getElementById("payoutModal");
+    var payoutForm = document.getElementById("payoutForm");
     var amountDisplay = document.getElementById("modalAmountDisplay");
-    var closeBtn = document.getElementById("closePayoutModalBtn");
-    var cancelBtn = document.getElementById("cancelPayoutModalBtn");
-
-    function closeModal() {
-      if (modal) modal.classList.add("hidden");
-    }
-
-    if (closeBtn) closeBtn.addEventListener("click", closeModal);
-    if (cancelBtn) cancelBtn.addEventListener("click", closeModal);
 
     document.querySelectorAll(".release-payout-btn").forEach(function (button) {
       button.addEventListener("click", function () {
@@ -229,16 +468,21 @@
         var currency = this.dataset.currency || "INR";
         var amount = parseFloat(amountStr) || 0;
 
-        if (form) form.action = "/admin/invoice/" + encodeURIComponent(invoiceId) + "/release-payout";
+        if (payoutForm) payoutForm.action = "/admin/invoice/" + encodeURIComponent(invoiceId) + "/release-payout";
         if (amountDisplay) {
           amountDisplay.textContent = new Intl.NumberFormat(undefined, {
             style: "currency",
             currency: currency
           }).format(amount);
         }
-        if (modal) modal.classList.remove("hidden");
+        if (payoutModal) payoutModal.classList.remove("hidden");
       });
     });
+
+    var closePayout = document.getElementById("closePayoutModalBtn");
+    var cancelPayout = document.getElementById("cancelPayoutModalBtn");
+    if (closePayout) closePayout.addEventListener("click", function() { payoutModal.classList.add("hidden"); });
+    if (cancelPayout) cancelPayout.addEventListener("click", function() { payoutModal.classList.add("hidden"); });
   });
 </script>
 {% endblock %}

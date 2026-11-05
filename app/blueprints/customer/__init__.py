@@ -1,11 +1,12 @@
 """AgencyOS Customer & Client Portal Blueprint.
 
 Manages client workspace, project progression, digital SOW contracts,
-milestone deliverable reviews, chat dispatch, and GST-compliant invoicing.
+sequential 3-gate deliverable reviews (50/25/25), chat dispatch, automated escrow release, and GST-compliant invoicing.
 """
 
 from datetime import datetime
 from decimal import Decimal
+import json
 from urllib.parse import urlsplit
 
 from flask import (
@@ -29,13 +30,18 @@ from app.models import (
     CustomerProfile,
     Invoice,
     Milestone,
+    Notification,
     PACKAGE_PRICES,
     Payment,
+    ProfessionalProfile,
+    ProfessionalProjectApplication,
     Project,
     ProjectDelivery,
     RazorpaySubscription,
     Review,
     SubscriptionCharge,
+    User,
+    WalletTransaction,
     calculate_customer_profile_completion,
     get_ist_now,
     get_latest_project_delivery,
@@ -57,6 +63,7 @@ customer_bp = Blueprint("customer", __name__)
 # =========================================================
 
 @customer_bp.route("/dashboard")
+@customer_bp.route("/customer/dashboard")
 @login_required
 def dashboard() -> ResponseReturnValue:
     user_role = getattr(current_user, "role", "").lower()
@@ -451,8 +458,8 @@ def project_contract(project_id: int) -> ResponseReturnValue:
         else:
             project.requirements = project.requirements + signature_entry
 
-        # Move project to pending assignment once SOW is signed
-        project.status = "Pending Assignment"
+        # Project enters Gate 1 advance payment pending
+        project.status = "Payment Pending"
 
         ActivityLog.log_event(
             project_id=project.id,
@@ -462,7 +469,7 @@ def project_contract(project_id: int) -> ResponseReturnValue:
             category="success",
         )
         db.session.commit()
-        flash("SOW Agreement digitally signed. Project is now active.", "success")
+        flash("SOW Agreement digitally signed. Please authorize Milestone 1 Advance (50%) to begin.", "success")
         return redirect(url_for("customer.project_details", project_id=project.id))
 
     return render_template(
@@ -474,7 +481,7 @@ def project_contract(project_id: int) -> ResponseReturnValue:
 
 
 # =========================================================
-# DELIVERABLE APPROVAL & REVISION GATES
+# SEQUENTIAL 3-GATE DELIVERABLE APPROVAL (50% / 25% / 25%)
 # =========================================================
 
 @customer_bp.route("/project/<project_id>/approve", methods=["POST"])
@@ -495,12 +502,129 @@ def customer_approve_project(project_id: int | str) -> ResponseReturnValue:
         latest_delivery.status = "Approved"
         latest_delivery.reviewed_at = get_ist_now()
 
-    project.status = "Completed"
     project.revision_comment = None
+
+    # Count how many milestone payments have been funded on this project
+    paid_payments_count = Payment.query.filter_by(project_id=project.id, status="Paid").count()
+
+    assigned_app = ProfessionalProjectApplication.query.filter_by(
+        project_id=project.id, status="Assigned"
+    ).first()
+
+    specialist_id = assigned_app.professional_id if assigned_app else None
+    specialist_profile = ProfessionalProfile.query.filter_by(user_id=specialist_id).first() if specialist_id else None
+
+    currency = sanitize_currency(project.currency)
+    gross = get_package_price(project.package, currency, PACKAGE_PRICES)
+    talent_share, _, _ = compute_financial_split(gross, currency)
+    total_talent_payout = assigned_app.proposed_rate or talent_share if assigned_app else talent_share
+
+    # Sequential 3-Step Lifecycle Gate Handling
+    if paid_payments_count <= 1:
+        # STEP 1 SIGN-OFF (UI/UX Prototype & Specs)
+        project.status = "In Progress"
+        milestone_ratio = Decimal("0.50")
+        earned_amount = (total_talent_payout * milestone_ratio).quantize(Decimal("0.01"))
+
+        if specialist_profile:
+            curr_pend = Decimal(str(specialist_profile.pending_balance or 0))
+            curr_avail = Decimal(str(specialist_profile.available_balance or 0))
+            specialist_profile.pending_balance = max(Decimal("0.00"), curr_pend - earned_amount)
+            specialist_profile.available_balance = curr_avail + earned_amount
+
+            # Log Escrow Release
+            tx = WalletTransaction()
+            tx.user_id = specialist_id
+            tx.amount = earned_amount
+            tx.currency = currency
+            tx.transaction_type = "ESCROW_RELEASED"
+            tx.reference_type = "PROJECT"
+            tx.reference_id = project.id
+            tx.description = f"Project #{project.id} Step 1 (UI/UX) approved. ₹{earned_amount} released to available balance."
+            tx.created_at = get_ist_now()
+            db.session.add(tx)
+
+            # Alert Specialist
+            notif = Notification()
+            notif.user_id = specialist_id
+            notif.title = f"Step 1 (UI/UX) Approved! ₹{earned_amount} Unlocked 💰"
+            notif.message = f"Client approved the UI/UX prototype for Project #{project.id}. ₹{earned_amount} is now in your available balance. Client is ready for Gate 2 (25% Staging)."
+            notif.link = "/professional/dashboard"
+            notif.created_at = get_ist_now()
+            db.session.add(notif)
+
+        flash_msg = "Step 1 (UI/UX Prototype) approved! Gate 2 (25% Staging Escrow) is now unlocked for payment."
+
+    elif paid_payments_count == 2:
+        # STEP 2 SIGN-OFF (Functional Staging Build)
+        project.status = "In Progress"
+        milestone_ratio = Decimal("0.25")
+        earned_amount = (total_talent_payout * milestone_ratio).quantize(Decimal("0.01"))
+
+        if specialist_profile:
+            curr_pend = Decimal(str(specialist_profile.pending_balance or 0))
+            curr_avail = Decimal(str(specialist_profile.available_balance or 0))
+            specialist_profile.pending_balance = max(Decimal("0.00"), curr_pend - earned_amount)
+            specialist_profile.available_balance = curr_avail + earned_amount
+
+            # Log Escrow Release
+            tx = WalletTransaction()
+            tx.user_id = specialist_id
+            tx.amount = earned_amount
+            tx.currency = currency
+            tx.transaction_type = "ESCROW_RELEASED"
+            tx.reference_type = "PROJECT"
+            tx.reference_id = project.id
+            tx.description = f"Project #{project.id} Step 2 (Staging) approved. ₹{earned_amount} released to available balance."
+            tx.created_at = get_ist_now()
+            db.session.add(tx)
+
+            # Alert Specialist
+            notif = Notification()
+            notif.user_id = specialist_id
+            notif.title = f"Step 2 (Staging) Approved! ₹{earned_amount} Unlocked 💰"
+            notif.message = f"Client approved the staging build for Project #{project.id}. ₹{earned_amount} is now in your available balance. Ready for Gate 3 (25% Final Production)."
+            notif.link = "/professional/dashboard"
+            notif.created_at = get_ist_now()
+            db.session.add(notif)
+
+        flash_msg = "Step 2 (Staging Build) approved! Gate 3 (25% Final Production & Handover) is now unlocked for payment."
+
+    else:
+        # STEP 3 SIGN-OFF (Final Production & Full IP Handover - 100% COMPLETE)
+        project.status = "Completed"
+
+        if specialist_profile:
+            remaining = Decimal(str(specialist_profile.pending_balance or 0))
+            if remaining > Decimal("0.00"):
+                specialist_profile.available_balance = Decimal(str(specialist_profile.available_balance or 0)) + remaining
+                specialist_profile.pending_balance = Decimal("0.00")
+
+                tx = WalletTransaction()
+                tx.user_id = specialist_id
+                tx.amount = remaining
+                tx.currency = currency
+                tx.transaction_type = "ESCROW_RELEASED"
+                tx.reference_type = "PROJECT"
+                tx.reference_id = project.id
+                tx.description = f"Project #{project.id} final handover approved. Final ₹{remaining} released to available balance."
+                tx.created_at = get_ist_now()
+                db.session.add(tx)
+
+                notif = Notification()
+                notif.user_id = specialist_id
+                notif.title = f"🎉 Project Completed! ₹{remaining} Final Release"
+                notif.message = f"Client approved final handover for Project #{project.id}. All remaining funds are ready for UPI/Bank withdrawal."
+                notif.link = "/professional/dashboard"
+                notif.created_at = get_ist_now()
+                db.session.add(notif)
+
+        flash_msg = "Final milestone approved! Project marked Completed and all remaining escrow funds released."
+
     ActivityLog.log_event(
         project_id=project.id,
         action="MILESTONE_APPROVED",
-        description="Client signed off on milestone deliverable. Scope marked Completed.",
+        description=f"Client approved milestone deliverable. Project status: {project.status}.",
         user_id=current_user.id,
         category="success",
     )
@@ -514,9 +638,13 @@ def customer_approve_project(project_id: int | str) -> ResponseReturnValue:
         pass
 
     db.session.commit()
-    flash("Milestone deliverable approved. Project marked as Completed.", "success")
+    flash(flash_msg, "success")
     return redirect(url_for("customer.project_details", project_id=pid))
 
+
+# =========================================================
+# REVISION REQUEST GATE
+# =========================================================
 
 @customer_bp.route("/project/<project_id>/revision", methods=["POST"])
 @customer_bp.route("/project/<int:project_id>/revision", methods=["POST"])
@@ -687,14 +815,12 @@ def customer_profile() -> ResponseReturnValue:
         db.session.commit()
 
     if request.method == "POST":
-        # Direct Communication
         profile.phone = request.form.get("phone", "").strip()
         profile.secondary_phone = request.form.get("secondary_phone", "").strip()
         profile.preferred_channel = request.form.get("preferred_channel", "WhatsApp").strip()
         profile.available_hours = request.form.get("available_hours", "").strip()
         profile.billing_email = request.form.get("billing_email", "").strip().lower()
 
-        # Legal & Tax Coordinates
         profile.business_name = request.form.get("business_name", "").strip()
         profile.business_type = request.form.get("business_type", "").strip()
         profile.website = request.form.get("website", "").strip()
@@ -703,7 +829,6 @@ def customer_profile() -> ResponseReturnValue:
         profile.pincode = request.form.get("pincode", "").strip()
         profile.location = request.form.get("location", "").strip()
 
-        # Authorized Signatory
         profile.signatory_name = request.form.get("signatory_name", "").strip()
         profile.signatory_title = request.form.get("signatory_title", "").strip()
 
@@ -716,7 +841,7 @@ def customer_profile() -> ResponseReturnValue:
 
 
 # =========================================================
-# START PROJECT (BULLETPROOF SCOPE EXTRACTION)
+# START PROJECT (WITH KYC GATE & INSTANT SKILL TAGGING)
 # =========================================================
 
 @customer_bp.route("/start-project/<service_slug>", methods=["GET", "POST"])
@@ -724,6 +849,11 @@ def customer_profile() -> ResponseReturnValue:
 @login_required
 def start_project(service_slug: str = "website-development") -> ResponseReturnValue:
     businesses = Business.query.filter_by(customer_id=current_user.id).all()
+
+    # KYC Verification Gate for Customer
+    if not getattr(current_user, "is_verified", True) and getattr(current_user, "role", "").lower() != "admin":
+        flash("Your account is currently pending Admin KYC approval. Once approved, you can commission projects.", "warning")
+        return redirect(url_for("customer.dashboard"))
 
     if request.method == "POST":
         service = (
@@ -750,6 +880,17 @@ def start_project(service_slug: str = "website-development") -> ResponseReturnVa
             or request.form.get("description")
             or "Standard project kickoff and milestone deliverables."
         ).strip()
+
+        # Skill Matching Tags extraction (or intelligent auto-inference)
+        raw_skills = request.form.get("required_skills", "").strip() or request.form.get("skills", "").strip()
+        if not raw_skills:
+            lower_service = service.lower()
+            if "seo" in lower_service:
+                raw_skills = "SEO, Technical SEO, Keyword Research, Content Strategy"
+            elif "app" in lower_service or "custom" in lower_service:
+                raw_skills = "Python, Flask, React, PostgreSQL, API Integration"
+            else:
+                raw_skills = "HTML, CSS, JavaScript, Responsive UI, WordPress"
 
         if package not in PACKAGE_PRICES:
             package = "Basic Website"
@@ -798,7 +939,7 @@ def start_project(service_slug: str = "website-development") -> ResponseReturnVa
 
         existing_draft = (
             Project.query.filter_by(
-                customer_id=current_user.id, status="Pending Assignment"
+                customer_id=current_user.id, status="Payment Pending"
             )
             .order_by(Project.created_at.desc())
             .first()
@@ -809,6 +950,7 @@ def start_project(service_slug: str = "website-development") -> ResponseReturnVa
             existing_draft.package = package
             existing_draft.currency = currency
             existing_draft.requirements = reqs
+            existing_draft.required_skills = raw_skills
             existing_draft.business_id = target_business_id
 
             if attachment_url:
@@ -830,7 +972,8 @@ def start_project(service_slug: str = "website-development") -> ResponseReturnVa
         project.package = package
         project.currency = currency
         project.requirements = reqs
-        project.status = "Pending Assignment"
+        project.required_skills = raw_skills
+        project.status = "Payment Pending"
 
         db.session.add(project)
         db.session.flush()
@@ -838,7 +981,7 @@ def start_project(service_slug: str = "website-development") -> ResponseReturnVa
         ActivityLog.log_event(
             project_id=project.id,
             action="PROJECT_CREATED",
-            description=f"Project #{project.id} created and awaiting SOW signature.",
+            description=f"Project #{project.id} created with required skills: {raw_skills}. Awaiting SOW signature.",
             user_id=current_user.id,
             category="info",
         )

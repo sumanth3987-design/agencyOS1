@@ -4,129 +4,171 @@
 {% block content %}
 <main class="max-w-7xl mx-auto px-6 py-8 space-y-8 font-sans">
 
-  <!-- Header -->
   <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-6 border-b border-zinc-800 gap-4">
     <div>
       <div class="flex items-center gap-2 mb-1 font-mono text-xs">
         <span class="badge badge-emerald">SPECIALIST MERITOCRACY LEDGER</span>
         <span class="text-zinc-600">•</span>
-        <span class="text-zinc-400">45% Allocation Protocol</span>
+        <span class="text-zinc-400">Escrow & Payout Protocol</span>
       </div>
       <h1 class="text-2xl font-extrabold text-white tracking-tight">Specialist Talent & Verification</h1>
-      <p class="text-xs font-mono text-zinc-400 mt-1">Review specialist qualifications, audit performance metrics, and authorize UPI payout routes.</p>
+      <p class="text-xs font-mono text-zinc-400 mt-1">Audit specialist credentials, monitor two-stage escrow balances, and authorize UPI / Bank payout routes.</p>
     </div>
 
-    <span class="badge badge-neutral font-mono">
-      {{ profiles|length if profiles else 0 }} Specialists Enrolled
-    </span>
+    <div class="flex items-center gap-2">
+      <span class="badge badge-neutral font-mono text-xs px-3 py-1">
+        {{ profiles|length if profiles else 0 }} Specialists Enrolled
+      </span>
+    </div>
   </div>
 
-  <!-- Specialist Roster Table -->
-  <div class="border border-zinc-800 bg-zinc-900 rounded-lg overflow-hidden">
+  <div class="border border-zinc-800 bg-zinc-900 rounded-xl overflow-hidden shadow-xl">
     <div class="p-4 border-b border-zinc-800 bg-zinc-950 flex items-center justify-between font-mono text-xs">
-      <span class="font-bold uppercase tracking-wider text-white">Talent Allocation Ledger</span>
-      <span class="text-zinc-500">Meritocracy Engine</span>
+      <div class="flex items-center gap-2">
+        <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+        <span class="font-bold uppercase tracking-wider text-white">Talent Allocation & Wallet Ledger</span>
+      </div>
+      <span class="text-zinc-500">Live Escrow System</span>
     </div>
 
     <div class="overflow-x-auto w-full">
-      <table class="data-table">
-        <thead>
+      <table class="w-full text-left border-collapse">
+        <thead class="bg-zinc-950/80 border-b border-zinc-800 text-[11px] font-mono uppercase tracking-wider text-zinc-400">
           <tr>
-            <th>Specialist / Performance Badges</th>
-            <th>Discipline & Velocity Metrics</th>
-            <th>UPI Payout Endpoint</th>
-            <th>Profile Health</th>
-            <th>Verification State</th>
-            <th class="text-right">Admin Actions</th>
+            <th class="p-4">Specialist / Badges</th>
+            <th class="p-4">Discipline & Sprints</th>
+            <th class="p-4">Escrow Wallet</th>
+            <th class="p-4">Payout Route</th>
+            <th class="p-4">KYC State</th>
+            <th class="p-4 text-right">Verification & Actions</th>
           </tr>
         </thead>
-        <tbody class="font-mono text-xs">
+        <tbody class="divide-y divide-zinc-800/60 font-mono text-xs text-zinc-300">
           {% for profile in profiles %}
           {% set metrics = meritocracy_map.get(profile.id, {}) %}
-          <tr>
-            <td>
-              <strong class="text-white font-sans text-xs block">{{ profile.user.name if profile.user else 'Specialist' }}</strong>
-              <span class="text-zinc-500 text-[11px] block">{{ profile.user.email if profile.user else '' }}</span>
-              <div class="mt-2 flex flex-wrap items-center gap-1.5">
+          {% set user = profile.user if profile.user else None %}
+          {% set is_verified_pro = (user and user.is_verified) or profile.verification_status == 'Verified' %}
+          <tr class="hover:bg-zinc-800/40 transition-colors">
+            
+            <td class="p-4">
+              <strong class="text-white font-sans text-sm block">{{ user.name if user else 'Specialist' }}</strong>
+              <span class="text-zinc-500 text-[11px] block">{{ user.email if user else '' }}</span>
+              <div class="mt-1.5 flex flex-wrap items-center gap-1">
                 {% for badge in profile.get_badges(metrics) %}
-                  <span class="badge badge-neutral text-[9px]">
+                  <span class="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-zinc-800 text-zinc-300 border border-zinc-700">
                     {{ badge.name }}
                   </span>
                 {% endfor %}
               </div>
             </td>
-            <td>
-              <span class="text-zinc-200 font-sans font-semibold block">{{ profile.expertise or 'General Specialist' }}</span>
+
+            <td class="p-4">
+              <span class="text-zinc-200 font-sans font-semibold text-xs block">{{ profile.expertise or 'General Specialist' }}</span>
               <span class="text-zinc-400 text-[11px] block">{{ profile.experience or 'Experience unconfigured' }}</span>
               <span class="mt-1 block text-[10px] text-zinc-500">
                 Sprints: {{ metrics.get('completed_sprints', 0) }} Delivered · {{ metrics.get('active_sprints', 0) }} In Flight
               </span>
             </td>
-            <td>
+
+            <td class="p-4">
+              <div class="space-y-0.5">
+                <span class="text-amber-400 font-bold text-xs block" title="Locked in escrow for active projects">
+                  Locked: ₹{{ "%.2f"|format(profile.pending_balance|float) }}
+                </span>
+                <span class="text-emerald-400 font-bold text-xs block" title="Ready for withdrawal">
+                  Available: ₹{{ "%.2f"|format(profile.available_balance|float) }}
+                </span>
+              </div>
+            </td>
+
+            <td class="p-4">
               {% if profile.upi_id %}
-                <span class="badge badge-emerald font-mono text-[10px]">
-                  {{ profile.upi_id }}
+                <span class="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-indigo-950 text-indigo-300 border border-indigo-800 block truncate max-w-[140px]">
+                  📱 {{ profile.upi_id }}
+                </span>
+              {% elif profile.bank_account_number %}
+                <span class="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-zinc-800 text-zinc-300 border border-zinc-700 block truncate max-w-[140px]">
+                  🏦 A/C: ••••{{ profile.bank_account_number[-4:] if profile.bank_account_number|length >= 4 else profile.bank_account_number }}
                 </span>
               {% else %}
-                <span class="text-zinc-500 text-[11px]">Pending UPI Setup</span>
+                <span class="text-zinc-500 text-[11px]">Pending Banking Setup</span>
               {% endif %}
             </td>
-            <td>
-              {% set score = completion_map.get(profile.id, 0) %}
-              <span class="{% if score >= 80 %}text-emerald-400{% else %}text-amber-400{% endif %} font-bold">
-                {{ score }}%
-              </span>
-            </td>
-            <td>
-              {% if profile.verification_status == 'Verified' %}
-                <span class="badge badge-emerald">VERIFIED</span>
+
+            <td class="p-4">
+              {% if is_verified_pro %}
+                <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-950 text-emerald-400 border border-emerald-800">
+                  <svg class="w-3 h-3 text-emerald-400" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+                  VERIFIED
+                </span>
               {% elif profile.verification_status == 'Rejected' %}
-                <span class="badge badge-neutral text-rose-400">REJECTED</span>
+                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-rose-950 text-rose-400 border border-rose-800">
+                  REJECTED
+                </span>
               {% else %}
-                <span class="badge badge-amber">PENDING REVIEW</span>
+                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-950 text-amber-400 border border-amber-800">
+                  PENDING KYC
+                </span>
               {% endif %}
             </td>
-            <td class="text-right">
+
+            <td class="p-4 text-right">
               <div class="flex items-center justify-end gap-1.5 flex-wrap">
+                <!-- Credentials Modal Trigger -->
                 <button
                   type="button"
-                  class="btn btn-secondary text-xs h-7 px-2.5 view-pro-btn cursor-pointer"
-                  data-pro-name="{{ profile.user.name if profile.user else 'Specialist' }}"
-                  data-pro-email="{{ profile.user.email if profile.user else '' }}"
+                  class="px-2.5 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded text-xs view-pro-btn cursor-pointer transition-colors"
+                  data-pro-id="{{ profile.id }}"
+                  data-pro-name="{{ user.name if user else 'Specialist' }}"
+                  data-pro-email="{{ user.email if user else '' }}"
                   data-pro-expertise="{{ profile.expertise }}"
                   data-pro-experience="{{ profile.experience }}"
                   data-pro-upi="{{ profile.upi_id or 'Not configured' }}"
+                  data-pro-bank="{{ profile.bank_account_number or 'Not provided' }}"
+                  data-pro-ifsc="{{ profile.bank_ifsc or 'Not provided' }}"
+                  data-pro-beneficiary="{{ profile.bank_beneficiary_name or user.name if user else 'Not provided' }}"
                   data-pro-pan="{{ profile.pan_number or 'Not provided' }}"
                   data-pro-portfolio="{{ profile.portfolio or 'None' }}"
                   data-pro-skills="{{ profile.skills or 'None' }}"
-                  data-pro-status="{{ profile.verification_status }}"
+                  data-pro-pending="{{ profile.pending_balance|float }}"
+                  data-pro-available="{{ profile.available_balance|float }}"
+                  data-pro-verified="{{ 'true' if is_verified_pro else 'false' }}"
                 >
-                  View Details
+                  Credentials
                 </button>
 
-                {% if profile.verification_status != 'Verified' %}
+                <!-- Full Profile Read-Only View Button -->
+                <a
+                  href="{{ url_for('admin.admin_view_professional', profile_id=profile.id) }}"
+                  class="px-2.5 py-1.5 bg-indigo-950 hover:bg-indigo-900 text-indigo-300 border border-indigo-800 rounded text-xs transition-colors"
+                  title="View Specialist Dossier"
+                >
+                  Profile ↗
+                </a>
+
+                <!-- KYC Verification Actions -->
+                {% if not is_verified_pro %}
                 <form method="POST" action="{{ url_for('admin.verify_professional', profile_id=profile.id) }}" class="inline">
                   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                  <button type="submit" class="btn btn-primary text-xs h-7 px-2 font-semibold cursor-pointer">
-                    Verify
+                  <button type="submit" class="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-xs font-semibold cursor-pointer shadow-sm transition-colors">
+                    Verify ✓
                   </button>
                 </form>
-                {% endif %}
-
-                {% if profile.verification_status != 'Rejected' %}
-                <form method="POST" action="{{ url_for('admin.reject_professional', profile_id=profile.id) }}" class="inline">
+                {% else %}
+                <form method="POST" action="{{ url_for('admin.reject_professional', profile_id=profile.id) }}" class="inline" onsubmit="return confirm('Revoke verification for this specialist?');">
                   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                  <button type="submit" class="btn btn-secondary text-xs h-7 px-2 text-zinc-400 hover:text-rose-400 cursor-pointer">
-                    Reject
+                  <button type="submit" class="px-2 py-1.5 bg-zinc-800 hover:bg-rose-950 text-zinc-500 hover:text-rose-400 rounded text-xs cursor-pointer transition-colors" title="Revoke Verification">
+                    Revoke
                   </button>
                 </form>
                 {% endif %}
               </div>
             </td>
+
           </tr>
           {% else %}
           <tr>
-            <td colspan="6" class="p-12 text-center text-zinc-500 font-mono text-xs">
+            <td colspan="6" class="p-16 text-center text-zinc-500 font-mono text-xs">
               No specialists registered in the network roster yet.
             </td>
           </tr>
@@ -138,15 +180,15 @@
 
 </main>
 
-<!-- SPECIALIST DETAILS MODAL -->
-<div id="proModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs hidden">
-  <div class="w-full max-w-lg p-6 bg-zinc-900 border border-zinc-800 rounded-lg shadow-2xl font-mono text-xs space-y-4">
+<!-- SPECIALIST DETAILS & BANKING MODAL -->
+<div id="proModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm hidden font-mono text-xs">
+  <div class="w-full max-w-lg p-6 bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl space-y-4">
     <div class="flex items-center justify-between pb-3 border-b border-zinc-800">
-      <h3 class="font-bold text-white uppercase tracking-wider">Specialist Credentials &amp; Payout Profile</h3>
-      <button type="button" id="closeProModalBtn" class="text-zinc-400 hover:text-white text-sm cursor-pointer">✕</button>
+      <h3 class="font-bold text-white uppercase tracking-wider text-sm">Specialist Credentials &amp; Banking</h3>
+      <button type="button" id="closeProModalBtn" class="text-zinc-400 hover:text-white text-base cursor-pointer">&times;</button>
     </div>
 
-    <div class="space-y-3 p-4 rounded border border-zinc-800 bg-zinc-950 font-mono text-xs">
+    <div class="space-y-3 p-4 rounded-lg border border-zinc-800 bg-zinc-950 font-mono text-xs">
       <div>
         <span class="text-zinc-500 text-[10px] uppercase block">Specialist Name:</span>
         <strong id="modalProName" class="text-white font-sans text-sm">Specialist Name</strong>
@@ -161,16 +203,42 @@
           <span id="modalProExpertise" class="text-indigo-400 font-bold">Expertise</span>
         </div>
       </div>
-      <div class="grid grid-cols-2 gap-4">
-        <div>
-          <span class="text-zinc-500 text-[10px] uppercase block">UPI Payout VPA:</span>
-          <span id="modalProUpi" class="text-emerald-400 font-bold">UPI ID</span>
+
+      <div class="p-3 bg-zinc-900 border border-zinc-800 rounded space-y-2">
+        <span class="text-emerald-400 text-[10px] font-bold uppercase tracking-wider block">Payout Banking Route</span>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <span class="text-zinc-500 text-[10px] uppercase block">UPI VPA:</span>
+            <span id="modalProUpi" class="text-indigo-300 font-bold">UPI ID</span>
+          </div>
+          <div>
+            <span class="text-zinc-500 text-[10px] uppercase block">PAN Number:</span>
+            <span id="modalProPan" class="text-zinc-200">PAN</span>
+          </div>
         </div>
-        <div>
-          <span class="text-zinc-500 text-[10px] uppercase block">PAN / Tax ID:</span>
-          <span id="modalProPan" class="text-zinc-200">PAN</span>
+        <div class="grid grid-cols-2 gap-3 pt-1 border-t border-zinc-800">
+          <div>
+            <span class="text-zinc-500 text-[10px] uppercase block">Account Number:</span>
+            <span id="modalProBank" class="text-zinc-200">Account</span>
+          </div>
+          <div>
+            <span class="text-zinc-500 text-[10px] uppercase block">IFSC Code:</span>
+            <span id="modalProIfsc" class="text-zinc-200 font-bold">IFSC</span>
+          </div>
         </div>
       </div>
+
+      <div class="grid grid-cols-2 gap-4 p-2.5 bg-zinc-900 border border-zinc-800 rounded">
+        <div>
+          <span class="text-amber-500 text-[10px] uppercase block">Locked Escrow:</span>
+          <span id="modalProPending" class="text-amber-300 font-bold">₹0.00</span>
+        </div>
+        <div>
+          <span class="text-emerald-500 text-[10px] uppercase block">Available for Wire:</span>
+          <span id="modalProAvailable" class="text-emerald-300 font-bold">₹0.00</span>
+        </div>
+      </div>
+
       <div>
         <span class="text-zinc-500 text-[10px] uppercase block">Portfolio / GitHub:</span>
         <a id="modalProPortfolio" href="#" target="_blank" class="text-indigo-400 hover:underline truncate block font-sans">Portfolio URL</a>
@@ -181,9 +249,15 @@
       </div>
     </div>
 
-    <div class="pt-2">
-      <button type="button" id="dismissProModalBtn" class="btn btn-secondary w-full text-xs h-9 cursor-pointer">
-        Close Profile
+    <div class="pt-2 flex gap-2">
+      <form id="modalVerifyForm" method="POST" action="" class="flex-1">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" id="modalVerifyBtn" class="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-xs font-semibold cursor-pointer transition-colors shadow-sm">
+          Verify &amp; Approve Specialist ✓
+        </button>
+      </form>
+      <button type="button" id="dismissProModalBtn" class="px-4 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-white rounded text-xs font-semibold cursor-pointer transition-colors">
+        Close
       </button>
     </div>
   </div>
@@ -194,6 +268,8 @@
     var modal = document.getElementById("proModal");
     var closeBtn = document.getElementById("closeProModalBtn");
     var dismissBtn = document.getElementById("dismissProModalBtn");
+    var modalVerifyForm = document.getElementById("modalVerifyForm");
+    var modalVerifyBtn = document.getElementById("modalVerifyBtn");
 
     function closeModal() {
       if (modal) modal.classList.add("hidden");
@@ -209,12 +285,27 @@
         document.getElementById("modalProEmail").textContent = ds.proEmail;
         document.getElementById("modalProExpertise").textContent = ds.proExpertise;
         document.getElementById("modalProUpi").textContent = ds.proUpi;
+        document.getElementById("modalProBank").textContent = ds.proBank;
+        document.getElementById("modalProIfsc").textContent = ds.proIfsc;
         document.getElementById("modalProPan").textContent = ds.proPan;
         document.getElementById("modalProSkills").textContent = ds.proSkills;
+        document.getElementById("modalProPending").textContent = '₹' + parseFloat(ds.proPending || 0).toFixed(2);
+        document.getElementById("modalProAvailable").textContent = '₹' + parseFloat(ds.proAvailable || 0).toFixed(2);
         
         var portLink = document.getElementById("modalProPortfolio");
         portLink.href = ds.proPortfolio;
         portLink.textContent = ds.proPortfolio;
+
+        if (modalVerifyForm) {
+          modalVerifyForm.action = "/admin/professionals/" + encodeURIComponent(ds.proId) + "/verify";
+        }
+        if (modalVerifyBtn) {
+          if (ds.proVerified === "true") {
+            modalVerifyBtn.classList.add("hidden");
+          } else {
+            modalVerifyBtn.classList.remove("hidden");
+          }
+        }
 
         if (modal) modal.classList.remove("hidden");
       });

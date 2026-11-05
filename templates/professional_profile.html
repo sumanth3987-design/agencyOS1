@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Specialist Credentials & Payout Endpoint — {{ agency_settings.agency_name }}</title>
+  <title>Specialist Career Dossier & Payout Setup — AgencyOS</title>
 
   <!-- Typography: Plus Jakarta Sans & JetBrains Mono -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -37,192 +37,218 @@
     }
   </script>
 </head>
-<body class="bg-zinc-950 text-zinc-100 min-h-screen selection:bg-zinc-100 selection:text-zinc-950 antialiased font-sans" style="--agency-primary: {{ agency_settings.primary_color }}; --agency-on-primary: {{ agency_settings.primary_contrast }};">
+<body class="bg-zinc-950 text-zinc-100 min-h-screen selection:bg-zinc-100 selection:text-zinc-950 antialiased font-sans">
 
-  <!-- TOP WORKBENCH HEADER -->
-  <header class="border-b border-zinc-800 bg-zinc-950/95 sticky top-0 z-50">
-    <div class="max-w-4xl mx-auto px-6 h-16 flex items-center justify-between">
-      <div class="flex items-center gap-3">
-        {% include "includes/agency_brand.html" %}
-        <span class="font-mono text-xs text-zinc-500">/</span>
-        <span class="font-mono text-xs text-zinc-400 font-bold uppercase">Specialist Settings</span>
+  <!-- TOP NAVIGATION BAR -->
+  <header class="border-b border-zinc-800 bg-zinc-950/95 sticky top-0 z-40">
+    <div class="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between">
+      <div class="flex items-center gap-4">
+        <a href="{{ url_for('professional.professional_dashboard') }}" class="flex items-center gap-2 font-mono text-sm font-bold tracking-tight text-white">
+          <span class="w-7 h-7 rounded bg-indigo-600 text-white flex items-center justify-center font-black text-xs">A</span>
+          <span>Agency<span class="text-indigo-400">OS</span></span>
+        </a>
+        <span class="hidden sm:inline-flex items-center px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-indigo-950 text-indigo-300 border border-indigo-800">
+          Specialist Dossier
+        </span>
       </div>
 
-      <a href="{{ url_for('professional.professional_dashboard') }}" class="btn btn-secondary text-xs h-8">
-        ← Return to Specialist Hub
-      </a>
+      <nav class="flex items-center gap-2 font-mono text-xs">
+        <a href="{{ url_for('professional.professional_dashboard') }}" class="px-3 py-1.5 rounded text-zinc-400 hover:text-white hover:bg-zinc-900 transition-colors">Dashboard</a>
+        <a href="{{ url_for('professional.professional_projects') }}" class="px-3 py-1.5 rounded text-zinc-400 hover:text-white hover:bg-zinc-900 transition-colors">Opportunities</a>
+        <a href="{{ url_for('professional.professional_profile') }}" class="px-3 py-1.5 rounded bg-zinc-850 text-white font-semibold">Payout Profile</a>
+        <a href="/auth/logout" class="ml-2 px-3 py-1.5 rounded text-rose-400 hover:bg-rose-950/50 hover:text-rose-300 transition-colors">Logout</a>
+      </nav>
     </div>
   </header>
 
-  <!-- MAIN PROFILE SHELL -->
+  <!-- MAIN CONTAINER -->
   <main class="max-w-4xl mx-auto px-6 py-10 space-y-8">
 
-    <!-- Flash Messages Slot -->
+    <!-- Flash Messages -->
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}
-        <div class="space-y-2">
+        <div class="space-y-2 font-mono text-xs">
           {% for category, message in messages %}
-            <div class="system-alert {{ 'system-alert-success' if category == 'success' else 'system-alert-error' }}">
-              <span class="font-mono text-xs">{{ message }}</span>
-              <button onclick="this.parentElement.remove()" class="text-zinc-400 hover:text-white ml-auto cursor-pointer">✕</button>
+            <div class="p-3 rounded border {% if category == 'success' %}bg-emerald-950/60 border-emerald-800 text-emerald-300{% else %}bg-indigo-950/60 border-indigo-800 text-indigo-300{% endif %} flex justify-between">
+              <span>{{ message }}</span>
+              <button onclick="this.parentElement.remove()" class="text-zinc-400 hover:text-white ml-auto cursor-pointer">&times;</button>
             </div>
           {% endfor %}
         </div>
       {% endif %}
     {% endwith %}
 
-    <!-- Top Executive Header -->
-    <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-6 border-b border-zinc-800 gap-4">
+    <div class="border-b border-zinc-800 pb-6 flex items-center justify-between">
       <div>
-        <div class="flex items-center gap-2 mb-1 font-mono text-xs">
-          <span class="badge badge-emerald">DIRECT IMPS / UPI RAILS</span>
-          <span class="text-zinc-600">•</span>
-          <span class="text-zinc-400">45% Allocation Endpoint</span>
-        </div>
-        <h1 class="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">Specialist Profile &amp; Payout Setup</h1>
-        <p class="text-xs font-mono text-zinc-400 mt-1">Configure your verified Indian UPI ID (VPA), Bank IFSC, and credentials for automated sprint payouts.</p>
+        <span class="badge badge-indigo mb-1">TALENT VERIFICATION DOSSIER</span>
+        <h1 class="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">Specialist Profile &amp; Payout Settings</h1>
+        <p class="text-xs font-mono text-zinc-400 mt-1">Configure your professional background, technical expertise, portfolios, and wire payout coordinates.</p>
       </div>
 
-      <span class="badge badge-neutral font-mono">
-        Active Talent Node
+      <span class="badge {% if current_user.is_verified %}badge-emerald{% else %}badge-amber{% endif %} font-mono">
+        {% if current_user.is_verified %}● VERIFIED PRO{% else %}● KYC PENDING{% endif %}
       </span>
     </div>
 
-    <!-- Payout & Profile Form -->
-    <form method="POST" action="{{ url_for('professional.professional_profile') }}" class="space-y-6 font-mono text-xs">
+    <!-- PROFILE FORM -->
+    <form method="POST" action="{{ url_for('professional.professional_profile') }}" class="space-y-8 font-mono text-xs">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
-      <!-- 1. Indian Banking & UPI Payout Credentials -->
-      <div class="border border-zinc-800 bg-zinc-900 rounded-lg p-6 space-y-4">
-        <div class="flex items-center justify-between pb-3 border-b border-zinc-800">
-          <h2 class="font-bold text-white uppercase tracking-wider text-sm">1. Banking &amp; UPI Payout Credentials</h2>
-          <span class="badge badge-emerald">INR CLEARANCE</span>
+      <!-- SECTION 1: PROFESSIONAL BACKGROUND & BIO -->
+      <div class="border border-zinc-800 bg-zinc-900 rounded-xl p-6 space-y-4 shadow-xl">
+        <h3 class="font-bold text-white uppercase tracking-wider text-sm border-b border-zinc-800 pb-3">1. Professional Background &amp; Bio</h3>
+        
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-zinc-400 mb-1">Primary Expertise / Title *</label>
+            <input type="text" name="expertise" required value="{{ profile.expertise or '' }}" placeholder="e.g. Full-Stack Python & React Architect" class="form-control text-xs">
+          </div>
+          <div>
+            <label class="block text-zinc-400 mb-1">Years of Experience *</label>
+            <input type="text" name="experience" required value="{{ profile.experience or '' }}" placeholder="e.g. 6+ Years" class="form-control text-xs">
+          </div>
         </div>
 
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label class="block text-zinc-400 mb-1">UPI ID (VPA) * (GPay, PhonePe, Paytm)</label>
-            <input
-              type="text"
-              name="upi_id"
-              value="{{ profile.upi_id or '' }}"
-              required
-              placeholder="e.g. specialist@okaxis or 9876543210@upi"
-              class="form-control text-xs"
-            >
+            <label class="block text-zinc-400 mb-1">WhatsApp Phone / Direct Contact</label>
+            <input type="text" name="phone" value="{{ profile.phone or '' }}" placeholder="+91 9876543210" class="form-control text-xs">
           </div>
           <div>
-            <label class="block text-zinc-400 mb-1">PAN Number (Statutory TDS / Tax)</label>
-            <input
-              type="text"
-              name="pan_number"
-              value="{{ profile.pan_number or '' }}"
-              placeholder="ABCDE1234F"
-              class="form-control text-xs uppercase"
-            >
-          </div>
-          <div>
-            <label class="block text-zinc-400 mb-1">Bank Account Number (Fallback Wire)</label>
-            <input
-              type="text"
-              name="bank_account_number"
-              value="{{ profile.bank_account_number or '' }}"
-              placeholder="9876543210123"
-              class="form-control text-xs"
-            >
-          </div>
-          <div>
-            <label class="block text-zinc-400 mb-1">Bank IFSC Code</label>
-            <input
-              type="text"
-              name="bank_ifsc"
-              value="{{ profile.bank_ifsc or '' }}"
-              placeholder="HDFC0001234"
-              class="form-control text-xs uppercase"
-            >
-          </div>
-        </div>
-      </div>
-
-      <!-- 2. Skills & Technical Qualifications -->
-      <div class="border border-zinc-800 bg-zinc-900 rounded-lg p-6 space-y-4">
-        <div class="flex items-center justify-between pb-3 border-b border-zinc-800">
-          <h2 class="font-bold text-white uppercase tracking-wider text-sm">2. Technical Discipline &amp; Portfolio</h2>
-          <span class="badge badge-indigo">MERITOCRACY PROFILE</span>
-        </div>
-
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label class="block text-zinc-400 mb-1">Core Technical Discipline *</label>
-            <select name="expertise" class="form-control text-xs">
-              <option value="Website Design & Development" {% if profile.expertise == 'Website Design & Development' %}selected{% endif %}>Website Design &amp; Development</option>
-              <option value="SEO & Technical Performance" {% if profile.expertise == 'SEO & Technical Performance' %}selected{% endif %}>SEO &amp; Technical Performance</option>
-              <option value="UI/UX Prototyping (Figma)" {% if profile.expertise == 'UI/UX Prototyping (Figma)' %}selected{% endif %}>UI/UX Prototyping (Figma)</option>
-              <option value="Full-Stack Engineering" {% if profile.expertise == 'Full-Stack Engineering' %}selected{% endif %}>Full-Stack Engineering</option>
-            </select>
-          </div>
-
-          <div>
-            <label class="block text-zinc-400 mb-1">Experience Level</label>
-            <input
-              type="text"
-              name="experience"
-              value="{{ profile.experience or '' }}"
-              placeholder="e.g. 5+ Years Lead Architect"
-              class="form-control text-xs"
-            >
-          </div>
-
-          <div>
-            <label class="block text-zinc-400 mb-1">GitHub / Portfolio URL *</label>
-            <input
-              type="url"
-              name="portfolio"
-              value="{{ profile.portfolio or '' }}"
-              required
-              placeholder="https://github.com/specialist"
-              class="form-control text-xs"
-            >
-          </div>
-
-          <div>
-            <label class="block text-zinc-400 mb-1">Sprint Availability State</label>
-            <select name="availability" class="form-control text-xs">
-              <option value="Available (Full-Time Sprints)" {% if profile.availability == 'Available (Full-Time Sprints)' %}selected{% endif %}>Available (Full-Time Sprints)</option>
-              <option value="Available (Part-Time / Overflow)" {% if profile.availability == 'Available (Part-Time / Overflow)' %}selected{% endif %}>Available (Part-Time / Overflow)</option>
-              <option value="Busy with Active Sprints" {% if profile.availability == 'Busy with Active Sprints' %}selected{% endif %}>Busy with Active Sprints</option>
-            </select>
+            <label class="block text-zinc-400 mb-1">City &amp; Country Location</label>
+            <input type="text" name="location" value="{{ profile.location or '' }}" placeholder="Bengaluru, India" class="form-control text-xs">
           </div>
         </div>
 
         <div>
-          <label class="block text-zinc-400 mb-1">Technical Stack &amp; Schema Skills</label>
-          <input
-            type="text"
-            name="skills"
-            value="{{ profile.skills or '' }}"
-            placeholder="Python, Flask, Tailwind CSS, PostgreSQL, React, Razorpay Rails"
-            class="form-control text-xs"
-          >
+          <label class="block text-zinc-400 mb-1">Professional Bio &amp; Summary *</label>
+          <textarea name="about" rows="4" required placeholder="Describe your background, architectural philosophy, and past engineering milestones..." class="w-full p-3 rounded bg-zinc-950 border border-zinc-800 text-white font-sans text-xs focus:outline-none focus:border-indigo-500">{{ profile.about or '' }}</textarea>
+        </div>
+      </div>
+
+      <!-- SECTION 2: TECH STACK & SKILLS -->
+      <div class="border border-zinc-800 bg-zinc-900 rounded-xl p-6 space-y-4 shadow-xl">
+        <h3 class="font-bold text-white uppercase tracking-wider text-sm border-b border-zinc-800 pb-3">2. Tech Stack &amp; Specializations</h3>
+        
+        <div>
+          <label class="block text-zinc-400 mb-1">Skills &amp; Framework Tags (Comma-separated) *</label>
+          <input type="text" name="skills" required value="{{ profile.skills or '' }}" placeholder="Python, Flask, React, Tailwind CSS, PostgreSQL, AWS, Docker" class="form-control text-xs">
+          <span class="text-[10px] text-zinc-500 mt-1 block font-sans">Used by the automated matching engine to pair you with funded client projects.</span>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-zinc-400 mb-1">Technologies &amp; Tools</label>
+            <input type="text" name="technologies" value="{{ profile.technologies or '' }}" placeholder="Docker, Redis, Next.js, Celery, Stripe API" class="form-control text-xs">
+          </div>
+          <div>
+            <label class="block text-zinc-400 mb-1">Skill Proficiency Level</label>
+            <select name="skill_level" class="form-control text-xs">
+              <option value="Senior / Principal" {% if profile.skill_level == 'Senior / Principal' %}selected{% endif %}>Senior / Principal (7+ yrs)</option>
+              <option value="Mid-Level" {% if profile.skill_level == 'Mid-Level' %}selected{% endif %}>Mid-Level Engineer (3-6 yrs)</option>
+              <option value="Junior / Specialist" {% if profile.skill_level == 'Junior / Specialist' %}selected{% endif %}>Specialist / Builder</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- SECTION 3: SOCIALS & PORTFOLIOS -->
+      <div class="border border-zinc-800 bg-zinc-900 rounded-xl p-6 space-y-4 shadow-xl">
+        <h3 class="font-bold text-white uppercase tracking-wider text-sm border-b border-zinc-800 pb-3">3. Portfolios &amp; Code Repositories</h3>
+        
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div>
+            <label class="block text-zinc-400 mb-1">Personal Portfolio / Website</label>
+            <input type="url" name="portfolio" value="{{ profile.portfolio or '' }}" placeholder="https://yourname.dev" class="form-control text-xs">
+          </div>
+          <div>
+            <label class="block text-zinc-400 mb-1">GitHub / GitLab Profile</label>
+            <input type="url" name="github" value="{{ profile.github or '' }}" placeholder="https://github.com/username" class="form-control text-xs">
+          </div>
+          <div>
+            <label class="block text-zinc-400 mb-1">LinkedIn Profile</label>
+            <input type="url" name="linkedin" value="{{ profile.linkedin or '' }}" placeholder="https://linkedin.com/in/username" class="form-control text-xs">
+          </div>
+        </div>
+      </div>
+
+      <!-- SECTION 4: CREDENTIALS & AVAILABILITY -->
+      <div class="border border-zinc-800 bg-zinc-900 rounded-xl p-6 space-y-4 shadow-xl">
+        <h3 class="font-bold text-white uppercase tracking-wider text-sm border-b border-zinc-800 pb-3">4. Education, Certifications &amp; Workload</h3>
+        
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-zinc-400 mb-1">Education &amp; Degree</label>
+            <input type="text" name="education" value="{{ profile.education or '' }}" placeholder="B.Tech in Computer Science / Self-Taught" class="form-control text-xs">
+          </div>
+          <div>
+            <label class="block text-zinc-400 mb-1">Certifications &amp; Awards</label>
+            <input type="text" name="certifications" value="{{ profile.certifications or '' }}" placeholder="AWS Certified Solutions Architect, etc." class="form-control text-xs">
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-zinc-400 mb-1">Availability Status</label>
+            <select name="availability" class="form-control text-xs">
+              <option value="Available (Full-Time)" {% if profile.availability == 'Available (Full-Time)' %}selected{% endif %}>Available (Full-Time Sprints)</option>
+              <option value="Available (Part-Time / Retainer)" {% if profile.availability == 'Available (Part-Time / Retainer)' %}selected{% endif %}>Available (Part-Time / Retainer)</option>
+              <option value="Currently Booked" {% if profile.availability == 'Currently Booked' %}selected{% endif %}>Currently Booked</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-zinc-400 mb-1">Current Workload Capacity</label>
+            <input type="text" name="current_workload" value="{{ profile.current_workload or '' }}" placeholder="e.g. 25 hrs/week" class="form-control text-xs">
+          </div>
+        </div>
+      </div>
+
+      <!-- SECTION 5: PAYOUT & BANKING COORDINATES -->
+      <div class="border border-zinc-800 bg-zinc-900 rounded-xl p-6 space-y-4 shadow-xl">
+        <h3 class="font-bold text-emerald-400 uppercase tracking-wider text-sm border-b border-zinc-800 pb-3">5. Wire &amp; UPI Payout Coordinates</h3>
+        
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-zinc-400 mb-1">UPI ID / VPA (Instant Settlement)</label>
+            <input type="text" name="upi_id" value="{{ profile.upi_id or '' }}" placeholder="username@oksbi" class="form-control text-xs">
+          </div>
+          <div>
+            <label class="block text-zinc-400 mb-1">PAN Number (Tax Compliance)</label>
+            <input type="text" name="pan_number" value="{{ profile.pan_number or '' }}" placeholder="ABCDE1234F" class="form-control text-xs uppercase">
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2 border-t border-zinc-800">
+          <div>
+            <label class="block text-zinc-400 mb-1">Bank Beneficiary Name</label>
+            <input type="text" name="bank_beneficiary_name" value="{{ profile.bank_beneficiary_name or '' }}" placeholder="Account Holder Full Name" class="form-control text-xs">
+          </div>
+          <div>
+            <label class="block text-zinc-400 mb-1">Bank Account Number</label>
+            <input type="text" name="bank_account_number" value="{{ profile.bank_account_number or '' }}" placeholder="Account Number" class="form-control text-xs">
+          </div>
+          <div>
+            <label class="block text-zinc-400 mb-1">Bank IFSC Code</label>
+            <input type="text" name="bank_ifsc" value="{{ profile.bank_ifsc or '' }}" placeholder="SBIN0001234" class="form-control text-xs uppercase">
+          </div>
         </div>
       </div>
 
       <!-- Submit Action -->
-      <div class="pt-4 flex items-center justify-between border-t border-zinc-800">
-        <span class="text-[11px] text-zinc-500 font-sans">Payout redemptions are routed directly to this verified UPI endpoint.</span>
-        <button type="submit" class="btn btn-primary text-xs h-11 px-6 font-semibold cursor-pointer">
-          Save Specialist Credentials ⚡
+      <div class="pt-4 flex items-center justify-end gap-3">
+        <a href="{{ url_for('professional.professional_dashboard') }}" class="px-4 py-2.5 border border-zinc-800 text-zinc-400 rounded-xl text-xs hover:text-white transition-colors">
+          Cancel
+        </a>
+        <button type="submit" class="btn btn-primary text-xs h-10 px-6 font-semibold cursor-pointer shadow-md shadow-indigo-600/25">
+          Save Comprehensive Profile &amp; Banking ⚡
         </button>
       </div>
 
     </form>
-
   </main>
 
-  <!-- FOOTER -->
-  <footer class="border-t border-zinc-800 bg-zinc-950 py-6 px-6 text-center text-xs font-mono text-zinc-500">
-    {{ agency_settings.agency_name }} Specialist Partner Network • Instant UPI Clearance
+  <footer class="border-t border-zinc-800 bg-zinc-950 py-6 px-6 text-center text-xs font-mono text-zinc-500 mt-12">
+    AgencyOS Specialist Node &bull; Escrow Protection &bull; SAC 998311
   </footer>
-
 </body>
 </html>

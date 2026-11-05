@@ -1,0 +1,194 @@
+<!-- Save this directly into: templates/admin_professional_profile.html -->
+{% extends "admin_base.html" %}
+{% block title %}{{ profile.user.name if profile.user else 'Specialist' }} Comprehensive Dossier — AgencyOS{% endblock %}
+{% block content %}
+<main class="max-w-6xl mx-auto px-6 py-8 space-y-8 font-sans">
+
+  <!-- Header -->
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-6 border-b border-zinc-800 gap-4">
+    <div>
+      <div class="flex items-center gap-2 mb-1 font-mono text-xs">
+        <span class="badge badge-indigo">COMPREHENSIVE TALENT DOSSIER</span>
+        <span class="text-zinc-600">•</span>
+        <span class="text-zinc-400">Admin Audit View</span>
+      </div>
+      <h1 class="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">{{ profile.user.name if profile.user else 'Specialist' }}</h1>
+      <p class="text-xs font-mono text-zinc-400 mt-1">
+        {{ profile.user.email if profile.user else '' }} 
+        {% if profile.phone %} &bull; 📱 {{ profile.phone }}{% endif %}
+        {% if profile.location %} &bull; 📍 {{ profile.location }}{% endif %}
+      </p>
+    </div>
+
+    <div class="flex items-center gap-3">
+      <span class="badge {% if profile.verification_status == 'Verified' %}badge-emerald{% else %}badge-amber{% endif %} font-mono">
+        ● {{ profile.verification_status|upper }}
+      </span>
+      <a href="{{ url_for('admin.admin_professionals') }}" class="btn btn-secondary text-xs h-9">
+        ← Back to Roster
+      </a>
+    </div>
+  </div>
+
+  <!-- Main Dossier Grid -->
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 font-mono text-xs">
+    
+    <!-- Column 1 & 2: Professional Background, Tech Stack, Experience & Education -->
+    <div class="lg:col-span-2 space-y-6">
+      
+      <!-- 1. Expertise & Bio -->
+      <div class="border border-zinc-800 bg-zinc-900 rounded-xl p-6 space-y-4 shadow-xl">
+        <h3 class="font-bold text-white uppercase tracking-wider text-sm border-b border-zinc-800 pb-3">1. Professional Expertise &amp; Bio</h3>
+        
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <span class="text-zinc-500 text-[10px] uppercase block">Primary Expertise / Title:</span>
+            <strong class="text-indigo-400 font-sans text-sm block">{{ profile.expertise or 'General Specialist' }}</strong>
+          </div>
+          <div>
+            <span class="text-zinc-500 text-[10px] uppercase block">Years of Experience:</span>
+            <strong class="text-white text-sm block">{{ profile.experience or 'Not specified' }}</strong>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+          <div>
+            <span class="text-zinc-500 text-[10px] uppercase block">Skill Proficiency Level:</span>
+            <span class="text-zinc-200 font-bold">{{ profile.skill_level or 'Standard' }}</span>
+          </div>
+          <div>
+            <span class="text-zinc-500 text-[10px] uppercase block">Availability Status:</span>
+            <span class="text-emerald-400 font-bold">{{ profile.availability or 'Available' }} ({{ profile.current_workload or 'Flexible' }})</span>
+          </div>
+        </div>
+
+        <div>
+          <span class="text-zinc-500 text-[10px] uppercase block mb-1">Professional Summary &amp; Bio:</span>
+          <p class="text-zinc-300 font-sans text-xs leading-relaxed whitespace-pre-wrap p-3 rounded-lg bg-zinc-950 border border-zinc-800">{{ profile.about or 'No biography provided by specialist.' }}</p>
+        </div>
+      </div>
+
+      <!-- 2. Tech Stack & Project Types -->
+      <div class="border border-zinc-800 bg-zinc-900 rounded-xl p-6 space-y-4 shadow-xl">
+        <h3 class="font-bold text-white uppercase tracking-wider text-sm border-b border-zinc-800 pb-3">2. Tech Stack &amp; Specializations</h3>
+        
+        <div>
+          <span class="text-zinc-500 text-[10px] uppercase block mb-1.5">Tagged Skills:</span>
+          <div class="flex flex-wrap gap-1.5">
+            {% for s in profile.get_skills_list() %}
+              <span class="px-2.5 py-1 rounded bg-zinc-950 border border-zinc-800 text-indigo-300 font-mono text-xs">
+                #{{ s }}
+              </span>
+            {% else %}
+              <span class="text-zinc-500">No skills tagged</span>
+            {% endfor %}
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+          <div>
+            <span class="text-zinc-500 text-[10px] uppercase block">Technologies &amp; Tools:</span>
+            <span class="text-zinc-200 font-sans">{{ profile.technologies or 'None specified' }}</span>
+          </div>
+          <div>
+            <span class="text-zinc-500 text-[10px] uppercase block">Preferred Project Types:</span>
+            <span class="text-zinc-200 font-sans">{{ profile.project_types or 'All Web & SaaS Sprints' }}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 3. Credentials, Education & Work History -->
+      <div class="border border-zinc-800 bg-zinc-900 rounded-xl p-6 space-y-4 shadow-xl">
+        <h3 class="font-bold text-white uppercase tracking-wider text-sm border-b border-zinc-800 pb-3">3. Credentials &amp; Work History</h3>
+        
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <span class="text-zinc-500 text-[10px] uppercase block mb-1">Education &amp; Degree:</span>
+            <p class="text-zinc-300 font-sans text-xs p-3 rounded bg-zinc-950 border border-zinc-800">{{ profile.education or 'Not provided' }}</p>
+          </div>
+          <div>
+            <span class="text-zinc-500 text-[10px] uppercase block mb-1">Certifications &amp; Awards:</span>
+            <p class="text-zinc-300 font-sans text-xs p-3 rounded bg-zinc-950 border border-zinc-800">{{ profile.certifications or 'None recorded' }}</p>
+          </div>
+        </div>
+
+        <div>
+          <span class="text-zinc-500 text-[10px] uppercase block mb-1">Work Experience Summary:</span>
+          <p class="text-zinc-300 font-sans text-xs leading-relaxed whitespace-pre-wrap p-3 rounded bg-zinc-950 border border-zinc-800">{{ profile.work_experience or 'No work history summary provided.' }}</p>
+        </div>
+
+        {% if profile.portfolio or profile.github or profile.linkedin %}
+        <div class="pt-2 border-t border-zinc-800 space-y-2">
+          <span class="text-zinc-500 text-[10px] uppercase block">Portfolios &amp; Social Repositories:</span>
+          <div class="flex flex-wrap gap-4 font-sans text-xs">
+            {% if profile.portfolio %}
+              <a href="{{ profile.portfolio }}" target="_blank" rel="noopener noreferrer" class="text-indigo-400 hover:underline">🌐 Portfolio Website ↗</a>
+            {% endif %}
+            {% if profile.github %}
+              <a href="{{ profile.github }}" target="_blank" rel="noopener noreferrer" class="text-indigo-400 hover:underline">💻 GitHub Profile ↗</a>
+            {% endif %}
+            {% if profile.linkedin %}
+              <a href="{{ profile.linkedin }}" target="_blank" rel="noopener noreferrer" class="text-indigo-400 hover:underline">🔗 LinkedIn Profile ↗</a>
+            {% endif %}
+          </div>
+        </div>
+        {% endif %}
+      </div>
+
+    </div>
+
+    <!-- Column 3: Banking Coordinates & Escrow Wallet Ledger -->
+    <div class="space-y-6">
+      
+      <!-- Banking Route -->
+      <div class="border border-zinc-800 bg-zinc-900 rounded-xl p-6 space-y-3 shadow-xl">
+        <h3 class="font-bold text-emerald-400 uppercase tracking-wider text-xs border-b border-zinc-800 pb-3">Payout Coordinates</h3>
+        
+        <div>
+          <span class="text-zinc-500 text-[10px] uppercase block">UPI ID (VPA):</span>
+          <strong class="text-white text-xs select-all block mt-0.5">{{ profile.upi_id or 'Not configured' }}</strong>
+        </div>
+
+        <div>
+          <span class="text-zinc-500 text-[10px] uppercase block">Beneficiary Name:</span>
+          <strong class="text-white text-xs block mt-0.5">{{ profile.bank_beneficiary_name or (profile.user.name if profile.user else '—') }}</strong>
+        </div>
+
+        <div>
+          <span class="text-zinc-500 text-[10px] uppercase block">Bank Account Number:</span>
+          <strong class="text-white text-xs select-all block mt-0.5">{{ profile.bank_account_number or 'Not provided' }}</strong>
+        </div>
+
+        <div>
+          <span class="text-zinc-500 text-[10px] uppercase block">IFSC Code:</span>
+          <strong class="text-white text-xs select-all block mt-0.5">{{ profile.bank_ifsc or 'Not provided' }}</strong>
+        </div>
+
+        <div>
+          <span class="text-zinc-500 text-[10px] uppercase block">PAN / Tax ID:</span>
+          <strong class="text-white text-xs select-all block mt-0.5">{{ profile.pan_number or 'Not provided' }}</strong>
+        </div>
+      </div>
+
+      <!-- Escrow Wallet Balances -->
+      <div class="border border-zinc-800 bg-zinc-900 rounded-xl p-6 space-y-3 shadow-xl">
+        <h3 class="font-bold text-amber-400 uppercase tracking-wider text-xs border-b border-zinc-800 pb-3">Escrow Ledger</h3>
+        
+        <div>
+          <span class="text-zinc-500 text-[10px] uppercase block">Locked Escrow (In-Flight):</span>
+          <span class="text-amber-300 font-bold text-base block mt-0.5">₹{{ "%.2f"|format(profile.pending_balance|float) }}</span>
+        </div>
+
+        <div>
+          <span class="text-zinc-500 text-[10px] uppercase block">Available for Wire:</span>
+          <span class="text-emerald-400 font-bold text-base block mt-0.5">₹{{ "%.2f"|format(profile.available_balance|float) }}</span>
+        </div>
+
+        <div class="pt-3 border-t border-zinc-800 text-[11px] text-zinc-500 font-sans">
+          Completed Sprints: <strong class="text-white font-mono">{{ metrics.completed_sprints }}</strong> &bull; Rating: <strong class="text-white font-mono">{{ "%.1f"|format(metrics.average_rating) if metrics.average_rating else '5.0' }} ⭐</strong>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+{% endblock %}
