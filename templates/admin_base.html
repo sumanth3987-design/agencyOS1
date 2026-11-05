@@ -27,10 +27,10 @@
     <aside class="w-16 shrink-0 border-r border-zinc-800 bg-zinc-950 hidden md:flex flex-col items-center py-5 justify-between h-full z-50">
       <div class="flex flex-col items-center gap-6">
         <a href="/" class="h-8 w-8 rounded bg-white text-zinc-950 font-mono font-bold text-xs flex items-center justify-center shadow" title="Home">
-          {% if agency_settings.logo_url %}
+          {% if agency_settings and agency_settings.logo_url %}
             <img src="{{ agency_settings.logo_url }}" class="h-full w-full object-contain p-1">
           {% else %}
-            {{ agency_settings.agency_name[:2]|upper }}
+            {{ agency_settings.agency_name[:2]|upper if agency_settings else 'AO' }}
           {% endif %}
         </a>
         <nav class="flex flex-col gap-2">
@@ -39,8 +39,9 @@
           <a href="{{ url_for('admin.admin_project_review') }}" class="p-2.5 rounded border border-transparent {% if request.endpoint == 'admin.admin_project_review' %}border-zinc-700 bg-zinc-900 text-white{% else %}text-zinc-400 hover:text-white hover:bg-zinc-900{% endif %} transition" title="Quality Review Gate"><i data-lucide="check-circle-2" class="w-4 h-4"></i></a>
           <a href="{{ url_for('admin.admin_applications') }}" class="p-2.5 rounded border border-transparent {% if request.endpoint == 'admin.admin_applications' %}border-zinc-700 bg-zinc-900 text-white{% else %}text-zinc-400 hover:text-white hover:bg-zinc-900{% endif %} transition" title="Talent Applications"><i data-lucide="user-check" class="w-4 h-4"></i></a>
           <a href="{{ url_for('admin.admin_customers') }}" class="p-2.5 rounded border border-transparent {% if request.endpoint == 'admin.admin_customers' %}border-zinc-700 bg-zinc-900 text-white{% else %}text-zinc-400 hover:text-white hover:bg-zinc-900{% endif %} transition" title="Client CRM"><i data-lucide="users" class="w-4 h-4"></i></a>
-          <a href="{{ url_for('admin.admin_professionals') }}" class="p-2.5 rounded border border-transparent {% if request.endpoint == 'admin.admin_professionals' %}border-zinc-700 bg-zinc-900 text-white{% else %}text-zinc-400 hover:text-white hover:bg-zinc-900{% endif %} transition" title="Specialists Management"><i data-lucide="briefcase" class="w-4 h-4"></i></a>
+          <a href="{{ url_for('admin.admin_professionals') }}" class="p-2.5 rounded border border-transparent {% if 'professional' in request.path %}border-zinc-700 bg-zinc-900 text-white{% else %}text-zinc-400 hover:text-white hover:bg-zinc-900{% endif %} transition" title="Specialists Management"><i data-lucide="briefcase" class="w-4 h-4"></i></a>
           <a href="{{ url_for('admin.admin_transactions') }}" class="p-2.5 rounded border border-transparent {% if 'transaction' in request.path %}border-zinc-700 bg-zinc-900 text-white{% else %}text-zinc-400 hover:text-white hover:bg-zinc-900{% endif %} transition" title="Payments & Ledger"><i data-lucide="receipt" class="w-4 h-4"></i></a>
+          <a href="{{ url_for('admin.admin_disputes') }}" class="p-2.5 rounded border border-transparent {% if 'dispute' in request.path %}border-zinc-700 bg-zinc-900 text-white{% else %}text-zinc-400 hover:text-white hover:bg-zinc-900{% endif %} transition" title="Arbitration & Disputes"><i data-lucide="scale" class="w-4 h-4"></i></a>
           <a href="{{ url_for('admin.agency_settings') }}" class="p-2.5 rounded border border-transparent {% if request.endpoint == 'admin.agency_settings' %}border-zinc-700 bg-zinc-900 text-white{% else %}text-zinc-400 hover:text-white hover:bg-zinc-900{% endif %} transition" title="Agency Settings"><i data-lucide="settings-2" class="w-4 h-4"></i></a>
         </nav>
       </div>
@@ -71,8 +72,9 @@
             <a href="{{ url_for('admin.admin_project_review') }}" class="px-3 py-1.5 rounded border {% if request.endpoint == 'admin.admin_project_review' %}border-white bg-white text-zinc-950 font-bold{% else %}border-transparent text-zinc-400 hover:text-white hover:bg-zinc-900{% endif %} transition">Review Gate</a>
             <a href="{{ url_for('admin.admin_applications') }}" class="px-3 py-1.5 rounded border {% if request.endpoint == 'admin.admin_applications' %}border-white bg-white text-zinc-950 font-bold{% else %}border-transparent text-zinc-400 hover:text-white hover:bg-zinc-900{% endif %} transition">Applications</a>
             <a href="{{ url_for('admin.admin_transactions') }}" class="px-3 py-1.5 rounded border {% if 'transaction' in request.path %}border-white bg-white text-zinc-950 font-bold{% else %}border-transparent text-zinc-400 hover:text-white hover:bg-zinc-900{% endif %} transition">Ledger</a>
+            <a href="{{ url_for('admin.admin_disputes') }}" class="px-3 py-1.5 rounded border {% if 'dispute' in request.path %}border-white bg-white text-zinc-950 font-bold{% else %}border-transparent text-zinc-400 hover:text-white hover:bg-zinc-900{% endif %} transition text-amber-400">Disputes</a>
             <a href="{{ url_for('admin.admin_customers') }}" class="px-3 py-1.5 rounded border {% if request.endpoint == 'admin.admin_customers' %}border-white bg-white text-zinc-950 font-bold{% else %}border-transparent text-zinc-400 hover:text-white hover:bg-zinc-900{% endif %} transition">Clients</a>
-            <a href="{{ url_for('admin.admin_professionals') }}" class="px-3 py-1.5 rounded border {% if request.endpoint == 'admin.admin_professionals' %}border-white bg-white text-zinc-950 font-bold{% else %}border-transparent text-zinc-400 hover:text-white hover:bg-zinc-900{% endif %} transition">Specialists</a>
+            <a href="{{ url_for('admin.admin_professionals') }}" class="px-3 py-1.5 rounded border {% if 'professional' in request.path %}border-white bg-white text-zinc-950 font-bold{% else %}border-transparent text-zinc-400 hover:text-white hover:bg-zinc-900{% endif %} transition">Specialists</a>
             <a href="{{ url_for('admin.agency_settings') }}" class="px-3 py-1.5 rounded border {% if request.endpoint == 'admin.agency_settings' %}border-white bg-white text-zinc-950 font-bold{% else %}border-transparent text-zinc-400 hover:text-white hover:bg-zinc-900{% endif %} transition">Settings</a>
           </nav>
         </div>
