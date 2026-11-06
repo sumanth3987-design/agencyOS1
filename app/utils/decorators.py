@@ -1,5 +1,3 @@
-# Save this directly into your file: app/utils/decorators.py
-
 from functools import wraps
 from flask import flash, redirect, url_for, jsonify, request, session
 from flask_login import current_user
@@ -43,11 +41,17 @@ def role_required(*allowed_roles):
                 if is_api_request:
                     return jsonify({"error": "Forbidden: insufficient permissions", "code": "FORBIDDEN"}), 403
                 flash("You do not have permission to access this resource.", "danger")
-                if user_role == "admin":
-                    return redirect(url_for("admin.dashboard"))
-                elif user_role == "professional":
-                    return redirect(url_for("professional.dashboard"))
-                return redirect(url_for("customer.dashboard"))
+                
+                # Standardized redirects matching application structure
+                try:
+                    if user_role == "admin":
+                        return redirect(url_for("admin.dashboard"))
+                    elif user_role == "professional":
+                        return redirect(url_for("professional.dashboard"))
+                    return redirect(url_for("customer.dashboard"))
+                except Exception:
+                    # Fallback if standard route is temporarily unavailable
+                    return redirect(url_for("public.index"))
 
             return f(*args, **kwargs)
         return decorated_function

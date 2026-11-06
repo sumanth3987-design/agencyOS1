@@ -8,6 +8,7 @@ from datetime import datetime
 from decimal import Decimal
 import json
 import logging
+from typing import Any
 from urllib.parse import urlsplit
 
 from flask import (
@@ -20,9 +21,8 @@ from flask import (
     send_file,
     url_for,
 )
-from flask.typing import ResponseReturnValue
 from flask_login import current_user, login_required
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from app.extensions import db
 from app.models import (
@@ -70,7 +70,7 @@ logger = logging.getLogger(__name__)
 @customer_bp.route("/dashboard")
 @customer_bp.route("/customer/dashboard")
 @login_required
-def dashboard() -> ResponseReturnValue:
+def dashboard() -> Any:
     user_role = getattr(current_user, "role", "").lower()
     if user_role not in ("customer", "client"):
         if user_role == "admin":
@@ -121,7 +121,7 @@ def dashboard() -> ResponseReturnValue:
 
 @customer_bp.route("/dashboard/quick-message", methods=["POST"])
 @login_required
-def dashboard_quick_message() -> ResponseReturnValue:
+def dashboard_quick_message() -> Any:
     text = request.form.get("message", "").strip()
     project_id_str = request.form.get("project_id", "").strip().rstrip("-/")
 
@@ -160,7 +160,7 @@ def dashboard_quick_message() -> ResponseReturnValue:
 @customer_bp.route("/project/<project_id>")
 @customer_bp.route("/project/<int:project_id>")
 @login_required
-def project_details(project_id: int | str) -> ResponseReturnValue:
+def project_details(project_id: int | str) -> Any:
     clean_id = str(project_id).strip().rstrip("-/")
     try:
         pid = int(clean_id)
@@ -258,7 +258,7 @@ def project_details(project_id: int | str) -> ResponseReturnValue:
 @customer_bp.route("/project/<project_id>/message", methods=["POST"])
 @customer_bp.route("/project/<int:project_id>/message", methods=["POST"])
 @login_required
-def send_project_message(project_id: int | str) -> ResponseReturnValue:
+def send_project_message(project_id: int | str) -> Any:
     clean_id = str(project_id).strip().rstrip("-/")
     try:
         pid = int(clean_id)
@@ -296,13 +296,13 @@ def send_project_message(project_id: int | str) -> ResponseReturnValue:
 
 
 # =========================================================
-# PRINTABLE GST TAX INVOICE (SAC 998311 & EXPORT LUT)
+# PRINTABLE GST TAX INVOICE
 # =========================================================
 
 @customer_bp.route("/project/<project_id>/invoice")
 @customer_bp.route("/project/<int:project_id>/invoice")
 @login_required
-def view_invoice(project_id: int | str) -> ResponseReturnValue:
+def view_invoice(project_id: int | str) -> Any:
     clean_id = str(project_id).strip().rstrip("-/")
     try:
         pid = int(clean_id)
@@ -358,7 +358,10 @@ def view_invoice(project_id: int | str) -> ResponseReturnValue:
 
     is_retainer_invoice = bool(
         invoice_record
-        and SubscriptionCharge.query.filter_by(invoice_id=invoice_record.id).first()
+        and (
+            SubscriptionCharge.query.filter_by(invoice_id=invoice_record.id).first()
+            or (invoice_record.invoice_number and invoice_record.invoice_number.startswith("RET-"))
+        )
     )
 
     return render_template(
@@ -391,10 +394,18 @@ def view_invoice(project_id: int | str) -> ResponseReturnValue:
     )
 
 
+@customer_bp.route("/project/<project_id>/sow-pdf")
 @customer_bp.route("/project/<int:project_id>/sow-pdf")
 @login_required
-def download_sow_pdf(project_id: int) -> ResponseReturnValue:
-    project = Project.query.get_or_404(project_id)
+def download_sow_pdf(project_id: int | str) -> Any:
+    clean_id = str(project_id).strip().rstrip("-/")
+    try:
+        pid = int(clean_id)
+    except ValueError:
+        flash("Invalid project reference.", "danger")
+        return redirect(url_for("customer.dashboard"))
+
+    project = Project.query.get_or_404(pid)
     user_role = getattr(current_user, "role", "").lower()
     if user_role != "admin" and project.customer_id != current_user.id:
         flash("Unauthorized access to agreement.", "danger")
@@ -422,12 +433,13 @@ def download_sow_pdf(project_id: int) -> ResponseReturnValue:
 
 
 # =========================================================
-# CLIENT INVOICES / BILLING LEDGER
+# CLIENT INVOICES / BILLING LEDGER (BOTH ROUTE SPELLINGS)
 # =========================================================
 
 @customer_bp.route("/invoices")
+@customer_bp.route("/customer/invoices")
 @login_required
-def invoices_list() -> ResponseReturnValue:
+def invoices_list() -> Any:
     user_role = getattr(current_user, "role", "").lower()
     if user_role == "admin":
         invoices = Invoice.query.order_by(Invoice.id.desc()).all()
@@ -445,10 +457,18 @@ def invoices_list() -> ResponseReturnValue:
 # DIGITAL SOW CONTRACT & E-SIGNATURE
 # =========================================================
 
+@customer_bp.route("/project/<project_id>/contract", methods=["GET", "POST"])
 @customer_bp.route("/project/<int:project_id>/contract", methods=["GET", "POST"])
 @login_required
-def project_contract(project_id: int) -> ResponseReturnValue:
-    project = Project.query.get_or_404(project_id)
+def project_contract(project_id: int | str) -> Any:
+    clean_id = str(project_id).strip().rstrip("-/")
+    try:
+        pid = int(clean_id)
+    except ValueError:
+        flash("Invalid project reference.", "danger")
+        return redirect(url_for("customer.dashboard"))
+
+    project = Project.query.get_or_404(pid)
     user_role = getattr(current_user, "role", "").lower()
 
     if user_role != "admin" and project.customer_id != current_user.id:
@@ -480,7 +500,6 @@ def project_contract(project_id: int) -> ResponseReturnValue:
             else:
                 project.requirements = project.requirements + signature_entry
 
-            # Project enters Gate 1 advance payment pending
             project.status = "Payment Pending"
 
             ActivityLog.log_event(
@@ -509,13 +528,13 @@ def project_contract(project_id: int) -> ResponseReturnValue:
 
 
 # =========================================================
-# SEQUENTIAL 3-GATE DELIVERABLE APPROVAL (50% / 25% / 25%)
+# SEQUENTIAL 3-GATE DELIVERABLE APPROVAL
 # =========================================================
 
 @customer_bp.route("/project/<project_id>/approve", methods=["POST"])
 @customer_bp.route("/project/<int:project_id>/approve", methods=["POST"])
 @login_required
-def customer_approve_project(project_id: int | str) -> ResponseReturnValue:
+def customer_approve_project(project_id: int | str) -> Any:
     clean_id = str(project_id).strip().rstrip("-/")
     try:
         pid = int(clean_id)
@@ -538,7 +557,6 @@ def customer_approve_project(project_id: int | str) -> ResponseReturnValue:
 
         project.revision_comment = None
 
-        # Count how many milestone payments have been completed
         paid_payments_count = Payment.query.filter_by(project_id=project.id, status="Paid", addon_id=None).count()
 
         assigned_app = ProfessionalProjectApplication.query.filter_by(
@@ -551,16 +569,14 @@ def customer_approve_project(project_id: int | str) -> ResponseReturnValue:
         currency = sanitize_currency(project.currency)
         gross = get_package_price(project.package, currency, PACKAGE_PRICES)
         talent_share, _, _ = compute_financial_split(gross, currency)
-        total_talent_payout = assigned_app.proposed_rate or talent_share if (assigned_app and assigned_app.proposed_rate) else talent_share
+        total_talent_payout = Decimal(str(assigned_app.proposed_rate)) if (assigned_app and assigned_app.proposed_rate is not None) else talent_share
 
-        # Target milestone record for this stage
         milestones = Milestone.query.filter_by(project_id=project.id).order_by(Milestone.id.asc()).all()
 
         if paid_payments_count <= 1:
-            # STEP 1 SIGN-OFF (UI/UX Prototype & Specs)
             project.status = "In Progress"
             milestone_ratio = Decimal("0.50")
-            earned_amount = (Decimal(str(total_talent_payout)) * milestone_ratio).quantize(Decimal("0.01"))
+            earned_amount = (total_talent_payout * milestone_ratio).quantize(Decimal("0.01"))
 
             if specialist_profile:
                 curr_pend = Decimal(str(specialist_profile.pending_balance or 0))
@@ -582,7 +598,7 @@ def customer_approve_project(project_id: int | str) -> ResponseReturnValue:
                 notif = Notification()
                 notif.user_id = specialist_id
                 notif.title = f"Step 1 (UI/UX) Approved! {format_currency(earned_amount, currency)} Unlocked 💰"
-                notif.message = f"Client approved UI/UX prototype for Project #{project.id}. {format_currency(earned_amount, currency)} is now available for withdrawal. Client ready for Gate 2."
+                notif.message = f"Client approved UI/UX prototype for Project #{project.id}."
                 notif.link = "/professional/dashboard"
                 notif.created_at = get_ist_now()
                 db.session.add(notif)
@@ -594,10 +610,9 @@ def customer_approve_project(project_id: int | str) -> ResponseReturnValue:
             flash_msg = "Step 1 (UI/UX Prototype) approved! Gate 2 (25% Staging Escrow) is now unlocked for payment."
 
         elif paid_payments_count == 2:
-            # STEP 2 SIGN-OFF (Functional Staging Build)
             project.status = "In Progress"
             milestone_ratio = Decimal("0.25")
-            earned_amount = (Decimal(str(total_talent_payout)) * milestone_ratio).quantize(Decimal("0.01"))
+            earned_amount = (total_talent_payout * milestone_ratio).quantize(Decimal("0.01"))
 
             if specialist_profile:
                 curr_pend = Decimal(str(specialist_profile.pending_balance or 0))
@@ -619,7 +634,7 @@ def customer_approve_project(project_id: int | str) -> ResponseReturnValue:
                 notif = Notification()
                 notif.user_id = specialist_id
                 notif.title = f"Step 2 (Staging) Approved! {format_currency(earned_amount, currency)} Unlocked 💰"
-                notif.message = f"Client approved the staging build for Project #{project.id}. {format_currency(earned_amount, currency)} is now available. Ready for Gate 3."
+                notif.message = f"Client approved the staging build for Project #{project.id}."
                 notif.link = "/professional/dashboard"
                 notif.created_at = get_ist_now()
                 db.session.add(notif)
@@ -631,13 +646,12 @@ def customer_approve_project(project_id: int | str) -> ResponseReturnValue:
             flash_msg = "Step 2 (Staging Build) approved! Gate 3 (25% Final Production & Handover) is now unlocked for payment."
 
         else:
-            # STEP 3 SIGN-OFF (Final Production & Full IP Handover - 100% COMPLETE)
             project.status = "Completed"
 
             if specialist_profile:
                 curr_pend = Decimal(str(specialist_profile.pending_balance or 0))
                 curr_avail = Decimal(str(specialist_profile.available_balance or 0))
-                remaining_to_release = curr_pend if curr_pend > Decimal("0.00") else (Decimal(str(total_talent_payout)) * Decimal("0.25")).quantize(Decimal("0.01"))
+                remaining_to_release = curr_pend if curr_pend > Decimal("0.00") else (total_talent_payout * Decimal("0.25")).quantize(Decimal("0.01"))
                 
                 specialist_profile.available_balance = curr_avail + remaining_to_release
                 specialist_profile.pending_balance = Decimal("0.00")
@@ -649,14 +663,14 @@ def customer_approve_project(project_id: int | str) -> ResponseReturnValue:
                 tx.transaction_type = "ESCROW_RELEASED"
                 tx.reference_type = "PROJECT"
                 tx.reference_id = project.id
-                tx.description = f"Project #{project.id} final handover approved. Final {format_currency(remaining_to_release, currency)} released to available balance."
+                tx.description = f"Project #{project.id} final handover approved."
                 tx.created_at = get_ist_now()
                 db.session.add(tx)
 
                 notif = Notification()
                 notif.user_id = specialist_id
                 notif.title = f"🎉 Project Completed! {format_currency(remaining_to_release, currency)} Final Release"
-                notif.message = f"Client approved final handover for Project #{project.id}. All remaining funds are ready for UPI/Bank withdrawal."
+                notif.message = f"Client approved final handover for Project #{project.id}."
                 notif.link = "/professional/dashboard"
                 notif.created_at = get_ist_now()
                 db.session.add(notif)
@@ -694,7 +708,7 @@ def customer_approve_project(project_id: int | str) -> ResponseReturnValue:
 @customer_bp.route("/project/<project_id>/revision", methods=["POST"])
 @customer_bp.route("/project/<int:project_id>/revision", methods=["POST"])
 @login_required
-def customer_request_revision(project_id: int | str) -> ResponseReturnValue:
+def customer_request_revision(project_id: int | str) -> Any:
     clean_id = str(project_id).strip().rstrip("-/")
     try:
         pid = int(clean_id)
@@ -751,10 +765,18 @@ def customer_request_revision(project_id: int | str) -> ResponseReturnValue:
 # CLIENT REVIEW & TESTIMONIAL SUBMISSION
 # =========================================================
 
+@customer_bp.route("/project/<project_id>/review", methods=["POST"])
 @customer_bp.route("/project/<int:project_id>/review", methods=["POST"])
 @login_required
-def submit_project_review(project_id: int) -> ResponseReturnValue:
-    project = Project.query.get_or_404(project_id)
+def submit_project_review(project_id: int | str) -> Any:
+    clean_id = str(project_id).strip().rstrip("-/")
+    try:
+        pid = int(clean_id)
+    except ValueError:
+        flash("Invalid project reference.", "danger")
+        return redirect(url_for("customer.dashboard"))
+
+    project = Project.query.get_or_404(pid)
     if project.customer_id != current_user.id and getattr(current_user, "role", "").lower() != "admin":
         flash("Unauthorized action.", "danger")
         return redirect(url_for("customer.dashboard"))
@@ -801,15 +823,18 @@ def submit_project_review(project_id: int) -> ResponseReturnValue:
 # =========================================================
 
 @customer_bp.route("/businesses")
+@customer_bp.route("/business")
 @login_required
-def businesses() -> ResponseReturnValue:
+def businesses() -> Any:
     user_businesses = Business.query.filter_by(customer_id=current_user.id).all()
     return render_template("businesses.html", businesses=user_businesses)
 
 
 @customer_bp.route("/add-business", methods=["GET", "POST"])
+@customer_bp.route("/business/add", methods=["GET", "POST"])
+@customer_bp.route("/businesses/add", methods=["GET", "POST"])
 @login_required
-def add_business() -> ResponseReturnValue:
+def add_business() -> Any:
     if request.method == "POST":
         name = request.form.get("name", "").strip()
         b_type = request.form.get("business_type", "").strip()
@@ -840,8 +865,9 @@ def add_business() -> ResponseReturnValue:
 
 
 @customer_bp.route("/business/<int:business_id>/edit", methods=["GET", "POST"])
+@customer_bp.route("/businesses/<int:business_id>/edit", methods=["GET", "POST"])
 @login_required
-def edit_business(business_id: int) -> ResponseReturnValue:
+def edit_business(business_id: int) -> Any:
     business = Business.query.filter_by(id=business_id, customer_id=current_user.id).first_or_404()
 
     if request.method == "POST":
@@ -867,8 +893,9 @@ def edit_business(business_id: int) -> ResponseReturnValue:
 
 
 @customer_bp.route("/business/<int:business_id>/delete", methods=["POST"])
+@customer_bp.route("/businesses/<int:business_id>/delete", methods=["POST"])
 @login_required
-def delete_business(business_id: int) -> ResponseReturnValue:
+def delete_business(business_id: int) -> Any:
     business = Business.query.filter_by(id=business_id, customer_id=current_user.id).first_or_404()
     try:
         Project.query.filter_by(business_id=business.id).update({"business_id": None})
@@ -884,20 +911,31 @@ def delete_business(business_id: int) -> ResponseReturnValue:
 
 
 # =========================================================
-# CUSTOMER PROFILE & SETTINGS (WITH DIRECT CONTACT & TAXES)
+# CUSTOMER PROFILE & SETTINGS
 # =========================================================
 
 @customer_bp.route("/customer/profile", methods=["GET", "POST"])
 @customer_bp.route("/profile", methods=["GET", "POST"])
 @customer_bp.route("/customer_profile", methods=["GET", "POST"])
 @login_required
-def customer_profile() -> ResponseReturnValue:
+def customer_profile() -> Any:
     profile = CustomerProfile.query.filter_by(user_id=current_user.id).first()
+    
     if not profile:
-        profile = CustomerProfile()
-        profile.user_id = current_user.id
-        db.session.add(profile)
-        db.session.commit()
+        try:
+            profile = CustomerProfile(user_id=current_user.id)
+            db.session.add(profile)
+            db.session.commit()
+        except IntegrityError:
+            db.session.rollback()
+            profile = CustomerProfile.query.filter_by(user_id=current_user.id).first()
+        except Exception as e:
+            db.session.rollback()
+            logger.error("Error auto-creating customer profile: %s", str(e))
+
+    if profile is None:
+        flash("Unable to load or initialize customer profile coordinates.", "danger")
+        return redirect(url_for("customer.dashboard"))
 
     if request.method == "POST":
         try:
@@ -931,16 +969,16 @@ def customer_profile() -> ResponseReturnValue:
 
 
 # =========================================================
-# START PROJECT (WITH KYC GATE & INSTANT SKILL TAGGING)
+# START PROJECT
 # =========================================================
 
 @customer_bp.route("/start-project/<service_slug>", methods=["GET", "POST"])
 @customer_bp.route("/start-project", methods=["GET", "POST"])
+@customer_bp.route("/project/start", methods=["GET", "POST"])
 @login_required
-def start_project(service_slug: str = "website-development") -> ResponseReturnValue:
+def start_project(service_slug: str = "website-development") -> Any:
     businesses = Business.query.filter_by(customer_id=current_user.id).all()
 
-    # KYC Verification Gate for Customer
     if not getattr(current_user, "is_verified", True) and getattr(current_user, "role", "").lower() != "admin":
         flash("Your account is currently pending Admin KYC approval. Once approved, you can commission projects.", "warning")
         return redirect(url_for("customer.dashboard"))
@@ -1068,7 +1106,6 @@ def start_project(service_slug: str = "website-development") -> ResponseReturnVa
             db.session.add(project)
             db.session.flush()
 
-            # Seed the 3 standard sequential escrow milestones via direct attribute assignment
             pkg_gross = get_package_price(package, currency, PACKAGE_PRICES)
             m1_val = int(round(pkg_gross * Decimal("0.50")))
             m2_val = int(round(pkg_gross * Decimal("0.25")))
@@ -1129,21 +1166,30 @@ def start_project(service_slug: str = "website-development") -> ResponseReturnVa
 # CANCEL UNPAID DRAFT PROJECT
 # =========================================================
 
+@customer_bp.route("/project/<project_id>/cancel", methods=["POST"])
 @customer_bp.route("/project/<int:project_id>/cancel", methods=["POST"])
 @login_required
-def cancel_project(project_id: int) -> ResponseReturnValue:
-    project = Project.query.filter_by(id=project_id, customer_id=current_user.id).first_or_404()
+def cancel_project(project_id: int | str) -> Any:
+    clean_id = str(project_id).strip().rstrip("-/")
+    try:
+        pid = int(clean_id)
+    except ValueError:
+        flash("Invalid project reference.", "danger")
+        return redirect(url_for("customer.dashboard"))
+
+    project = Project.query.filter_by(id=pid, customer_id=current_user.id).first_or_404()
 
     if project.status not in ("Payment Pending", "Pending Assignment"):
         flash("Cannot cancel an active or paid project.", "warning")
         return redirect(url_for("customer.dashboard"))
 
     try:
-        Payment.query.filter_by(project_id=project.id).delete()
-        Milestone.query.filter_by(project_id=project.id).delete()
+        db.session.execute(db.delete(Payment).where(Payment.project_id == project.id))
+        db.session.execute(db.delete(Milestone).where(Milestone.project_id == project.id))
         db.session.delete(project)
+        
         db.session.commit()
-        flash(f"Draft Project #{project_id} cancelled.", "info")
+        flash(f"Draft Project #{pid} cancelled.", "info")
     except Exception as e:
         db.session.rollback()
         logger.error("Error cancelling project: %s", str(e), exc_info=True)
@@ -1152,10 +1198,18 @@ def cancel_project(project_id: int) -> ResponseReturnValue:
     return redirect(url_for("customer.dashboard"))
 
 
+@customer_bp.route("/project/<project_id>/raise-dispute", methods=["POST"])
 @customer_bp.route("/project/<int:project_id>/raise-dispute", methods=["POST"])
 @login_required
-def raise_dispute(project_id: int):
-    project = Project.query.get_or_404(project_id)
+def raise_dispute(project_id: int | str) -> Any:
+    clean_id = str(project_id).strip().rstrip("-/")
+    try:
+        pid = int(clean_id)
+    except ValueError:
+        flash("Invalid project reference.", "danger")
+        return redirect(url_for("customer.dashboard"))
+
+    project = Project.query.get_or_404(pid)
     if project.customer_id != current_user.id and getattr(current_user, "role", "").lower() != "admin":
         flash("Unauthorized action.", "danger")
         return redirect(url_for("customer.dashboard"))
@@ -1204,7 +1258,7 @@ def raise_dispute(project_id: int):
 
 @customer_bp.route("/api/project/<int:project_id>/messages")
 @login_required
-def api_get_messages(project_id: int):
+def api_get_messages(project_id: int) -> Any:
     project = Project.query.get_or_404(project_id)
     if project.customer_id != current_user.id and getattr(current_user, "role", "").lower() != "admin":
         return jsonify({"error": "Unauthorized"}), 403

@@ -26,7 +26,7 @@ login_manager.login_message_category = "warning"
 csrf = CSRFProtect()
 migrate = Migrate()
 
-# Shared rate limiter. Storage is configured through RATELIMIT_STORAGE_URL.
+# Shared rate limiter. Storage is configured through RATELIMIT_STORAGE_URL in app/__init__.py.
 limiter = Limiter(
     key_func=get_remote_address,
 )

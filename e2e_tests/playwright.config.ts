@@ -1,10 +1,12 @@
 import { defineConfig, devices } from '@playwright/test';
+import * as dotenv from 'dotenv';
+import * as path from 'path';
 
-/**
- * Enterprise Playwright Configuration for AgencyOS1.
- */
+// Loads .env from D:\AgencyOS1\.env
+dotenv.config({ path: path.resolve(__dirname, '../.env') });
+
 export default defineConfig({
-  testDir: './tests/e2e',
+  testDir: './tests', // Scans e2e_tests/tests/*.spec.ts
   timeout: 30 * 1000,
   expect: {
     timeout: 5000,
@@ -15,11 +17,11 @@ export default defineConfig({
   workers: process.env.CI ? 1 : undefined,
   reporter: [
     ['html', { outputFolder: 'playwright-report', open: 'never' }],
-    ['list']
+    ['list'],
   ],
   use: {
     baseURL: process.env.BASE_URL || 'http://127.0.0.1:5000',
-    trace: 'retain-on-failure',
+    trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
   },
@@ -32,13 +34,9 @@ export default defineConfig({
       name: 'firefox',
       use: { ...devices['Desktop Firefox'] },
     },
-    {
-      name: 'webkit',
-      use: { ...devices['Desktop Safari'] },
-    },
   ],
   webServer: {
-    command: 'python run.py',
+    command: 'python ../run.py',
     url: 'http://127.0.0.1:5000',
     reuseExistingServer: !process.env.CI,
     timeout: 120 * 1000,

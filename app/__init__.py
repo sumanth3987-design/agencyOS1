@@ -20,6 +20,8 @@ from flask import (
     session,
     url_for,
 )
+from flask_wtf.csrf import CSRFError
+from werkzeug.exceptions import HTTPException
 
 from app.config import (
     config_by_name,
@@ -53,7 +55,6 @@ def _build_bare_endpoint_map(view_functions) -> dict[str, str]:
 
 
 def configure_logging(app: Flask) -> None:
-    # Skip file logging in testing mode to prevent Windows [WinError 32] file lock crashes
     if app.config.get("TESTING"):
         app.logger.setLevel(logging.INFO)
         return
@@ -92,19 +93,22 @@ def _auto_sync_sqlite_columns(app: Flask) -> None:
             return
 
     try:
-        conn = sqlite3.connect(path)
+        conn = sqlite3.connect(path, timeout=10)
         cur = conn.cursor()
 
         def cols(tbl: str) -> list[str]:
             try:
                 cur.execute(f"PRAGMA table_info({tbl});")
                 return [r[1] for r in cur.fetchall()]
-            except Exception:
+            except sqlite3.OperationalError:
                 return []
 
-        # 1. Update user table
         u_cols = cols("user")
         if u_cols:
+            if "role" not in u_cols:
+                cur.execute("ALTER TABLE user ADD COLUMN role VARCHAR(30) DEFAULT 'customer';")
+            if "email" not in u_cols:
+                cur.execute("ALTER TABLE user ADD COLUMN email VARCHAR(120);")
             if "is_verified" not in u_cols:
                 cur.execute("ALTER TABLE user ADD COLUMN is_verified BOOLEAN DEFAULT 0;")
             if "verification_status" not in u_cols:
@@ -115,7 +119,6 @@ def _auto_sync_sqlite_columns(app: Flask) -> None:
                 cur.execute("ALTER TABLE user ADD COLUMN rejection_reason TEXT;")
             cur.execute("UPDATE user SET is_verified = 1, verification_status = 'Verified' WHERE role = 'admin';")
 
-        # 2. Update project table
         p_cols = cols("project")
         if p_cols:
             if "required_skills" not in p_cols:
@@ -123,7 +126,6 @@ def _auto_sync_sqlite_columns(app: Flask) -> None:
             if "assigned_professional_id" not in p_cols:
                 cur.execute("ALTER TABLE project ADD COLUMN assigned_professional_id INTEGER;")
 
-        # 3. Update professional_profile table
         pp_cols = cols("professional_profile")
         if pp_cols:
             if "pending_balance" not in pp_cols:
@@ -133,7 +135,6 @@ def _auto_sync_sqlite_columns(app: Flask) -> None:
             if "bank_beneficiary_name" not in pp_cols:
                 cur.execute("ALTER TABLE professional_profile ADD COLUMN bank_beneficiary_name VARCHAR(120);")
 
-        # 4. Update professional_project_application table
         ppa_cols = cols("professional_project_application")
         if ppa_cols:
             if "proposal" not in ppa_cols:
@@ -196,7 +197,6 @@ def create_app(config_name: str = "default", config_overrides: dict[str, Any] | 
     csrf.init_app(app)
     limiter.init_app(app)
 
-    # Automatic Table & Column Synchronization
     with app.app_context():
         os.makedirs(app.instance_path, exist_ok=True)
         db.create_all()
@@ -213,7 +213,10 @@ def create_app(config_name: str = "default", config_overrides: dict[str, Any] | 
         from flask_login import current_user, logout_user
         if current_user.is_authenticated:
             expected_version = getattr(current_user, "session_version", 0)
-            if session.get("session_version") != expected_version:
+            session_ver = session.get("session_version")
+            if session_ver is None:
+                session["session_version"] = expected_version
+            elif session_ver != expected_version:
                 logout_user()
                 session.clear()
                 flash("Your session has expired. Please log in again.", "warning")
@@ -221,15 +224,52 @@ def create_app(config_name: str = "default", config_overrides: dict[str, Any] | 
 
     @app.errorhandler(429)
     def handle_rate_limit_exceeded(error):
-        if request.path.startswith("/payment") or request.path.startswith("/api/"):
+        if request.path.startswith("/payment") or request.path.startswith("/api/") or request.is_json:
             return jsonify({"success": False, "message": "Too many requests. Please try again later."}), 429
         return "Too many requests. Please try again later.", 429
+
+    @app.errorhandler(CSRFError)
+    def handle_csrf_error(error):
+        app.logger.warning(f"CSRF Error: {error.description} - Path: {request.path}")
+        if request.is_json or request.path.startswith("/api/") or request.path.startswith("/subscription/") or request.path.startswith("/payment"):
+            return jsonify({"success": False, "message": "CSRF token missing or invalid."}), 400
+        return f"Bad Request: {error.description}", 400
+
+    @app.errorhandler(401)
+    @app.errorhandler(403)
+    def handle_auth_errors(error):
+        if request.is_json or request.path.startswith("/api/"):
+            return jsonify({"error": "Unauthorized Access", "code": "UNAUTHORIZED"}), error.code
+        flash("You do not have permission to access this page.", "danger")
+        return redirect(url_for("auth.login"))
+
+    @app.errorhandler(404)
+    def not_found_error(error):
+        if request.path.startswith("/api/") or request.path.startswith("/payment") or request.is_json:
+            return jsonify({"success": False, "message": "Not found."}), 404
+        if app.config.get("TESTING"):
+            return "Page not found.", 404
+        dist_dir = os.path.abspath(os.path.join(app.root_path, "..", "static", "dist"))
+        index_file = os.path.join(dist_dir, "index.html")
+        if os.path.exists(index_file):
+            return send_from_directory(dist_dir, "index.html")
+        try:
+            return render_template("404.html"), 404
+        except Exception:
+            return "Page not found.", 404
 
     @app.errorhandler(500)
     def internal_error(error):
         db.session.rollback()
         app.logger.error("Server Error: %s", error)
-        return jsonify({"error": "An internal server error occurred", "code": "SERVER_ERROR"}), 500
+        if request.is_json or request.path.startswith("/api/") or request.path.startswith("/payment"):
+            return jsonify({"success": False, "message": "Internal server error."}), 500
+        return "Internal server error.", 500
+            
+    @app.errorhandler(HTTPException)
+    def handle_http_exception(error):
+        db.session.rollback()
+        return error
 
     @login_manager.user_loader
     def load_user(user_id):
@@ -237,37 +277,38 @@ def create_app(config_name: str = "default", config_overrides: dict[str, Any] | 
 
     @app.cli.command("send-reminders")
     def send_reminders_command():
-        """Send due payment and deliverable review reminders."""
         from click import ClickException
         from app.services.reminders import run_due_reminders
-
         summary = run_due_reminders()
         print(f"Reminder run complete: {summary['payment_sent']} payment, {summary['review_sent']} review, {summary['failed']} failed.")
         if summary["failed"]:
             raise ClickException("Some reminders could not be sent; inspect application logs.")
 
     # Register Blueprints
-    from app.blueprints.admin import admin_bp
-    from app.blueprints.api import api_bp
-    from app.blueprints.auth import auth_bp
-    from app.blueprints.collaboration import collaboration_bp
-    from app.blueprints.customer import customer_bp
-    from app.blueprints.payments import payments_bp
-    from app.blueprints.payments.stripe import stripe_bp
-    from app.blueprints.payments.wire import wire_bp
-    from app.blueprints.professional import professional_bp
-    from app.routes.public import public_bp
+    try:
+        from app.blueprints.admin import admin_bp
+        from app.blueprints.api import api_bp
+        from app.blueprints.auth import auth_bp
+        from app.blueprints.collaboration import collaboration_bp
+        from app.blueprints.customer import customer_bp
+        from app.blueprints.payments import payments_bp
+        from app.blueprints.payments.stripe import stripe_bp
+        from app.blueprints.payments.wire import wire_bp
+        from app.blueprints.professional import professional_bp
+        from app.routes.public import public_bp
 
-    app.register_blueprint(auth_bp)
-    app.register_blueprint(customer_bp)
-    app.register_blueprint(professional_bp)
-    app.register_blueprint(admin_bp)
-    app.register_blueprint(collaboration_bp)
-    app.register_blueprint(payments_bp)
-    app.register_blueprint(wire_bp)
-    app.register_blueprint(stripe_bp)
-    app.register_blueprint(api_bp)
-    app.register_blueprint(public_bp)
+        app.register_blueprint(auth_bp)
+        app.register_blueprint(customer_bp)
+        app.register_blueprint(professional_bp)
+        app.register_blueprint(admin_bp)
+        app.register_blueprint(collaboration_bp)
+        app.register_blueprint(payments_bp)
+        app.register_blueprint(wire_bp)
+        app.register_blueprint(stripe_bp)
+        app.register_blueprint(api_bp)
+        app.register_blueprint(public_bp)
+    except ImportError as e:
+        app.logger.error(f"Failed to load blueprints: {e}")
 
     bare_map = _build_bare_endpoint_map(app.view_functions)
 
@@ -289,11 +330,15 @@ def create_app(config_name: str = "default", config_overrides: dict[str, Any] | 
 
         defaults = {
             "agency_name": "AgencyOS",
-            "primary_color": "#09090b",
+            "primary_color": "#6366f1",
             "logo_url": None,
             "whatsapp_support_number": "+919876543210",
         }
-        settings = db.session.get(AgencySetting, 1)
+        try:
+            settings = db.session.get(AgencySetting, 1)
+        except Exception:
+            settings = None
+            
         if settings is not None:
             name = (settings.agency_name or "").strip()
             color = settings.primary_color or ""
@@ -339,8 +384,11 @@ def create_app(config_name: str = "default", config_overrides: dict[str, Any] | 
         defaults["primary_contrast"] = "#09090b" if luminance > 0.179 else "#ffffff"
         return {"agency_settings": SimpleNamespace(**defaults)}
 
-    from app.cli import create_admin_command
-    app.cli.add_command(create_admin_command)
+    try:
+        from app.cli import create_admin_command
+        app.cli.add_command(create_admin_command)
+    except ImportError:
+        pass
 
     dist_dir = os.path.abspath(os.path.join(app.root_path, "..", "static", "dist"))
     assets_dir = os.path.join(dist_dir, "assets")
@@ -350,17 +398,5 @@ def create_app(config_name: str = "default", config_overrides: dict[str, Any] | 
         if os.path.exists(os.path.join(assets_dir, filename)):
             return send_from_directory(assets_dir, filename)
         return jsonify({"error": "Asset not found"}), 404
-
-    @app.errorhandler(404)
-    def not_found_error(error):
-        if request.path.startswith("/api/") or request.is_json:
-            return jsonify({"error": "Resource not found", "code": "NOT_FOUND"}), 404
-        index_file = os.path.join(dist_dir, "index.html")
-        if os.path.exists(index_file):
-            return send_from_directory(dist_dir, "index.html")
-        try:
-            return render_template("404.html"), 404
-        except Exception:
-            return jsonify({"error": "Page not found", "code": "NOT_FOUND"}), 404
 
     return app

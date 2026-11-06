@@ -8,12 +8,12 @@ invoice margin splits, two-stage escrow wallets, withdrawal requests, and activi
 from datetime import datetime
 import json
 import re
+import secrets
 from typing import Any
 from urllib.parse import urlparse
 from zoneinfo import ZoneInfo
 
 from flask_login import UserMixin
-from sqlalchemy.orm import Mapped, mapped_column
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from app.extensions import db
@@ -86,25 +86,25 @@ services = [
 ]
 
 
-class User(UserMixin, db.Model):
+class User(db.Model, UserMixin):
     __tablename__ = "user"
 
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(100), nullable=False)
-    full_name = db.Column(db.String(120), nullable=True)
-    email = db.Column(db.String(120), nullable=False, unique=True, index=True)
-    password = db.Column(db.String(255), nullable=False)
-    role: Mapped[str] = mapped_column(db.String(30), default="customer", nullable=False)
-    is_active = db.Column(db.Boolean, default=True, nullable=False)  # type: ignore[override]
+    id: Any = db.Column(db.Integer, primary_key=True)
+    name: Any = db.Column(db.String(100), nullable=False)
+    full_name: Any = db.Column(db.String(120), nullable=True)
+    email: Any = db.Column(db.String(120), nullable=False, unique=True, index=True)
+    password: Any = db.Column(db.String(255), nullable=False)
+    role: Any = db.Column(db.String(30), default="customer", nullable=False)
+    is_active: Any = db.Column(db.Boolean, default=True, nullable=False)
 
-    is_verified: Mapped[bool] = mapped_column(db.Boolean, default=False, nullable=False)
-    verification_status = db.Column(db.String(30), default="Pending", nullable=False)
-    verified_at = db.Column(db.DateTime, nullable=True)
-    rejection_reason = db.Column(db.Text, nullable=True)
+    is_verified: Any = db.Column(db.Boolean, default=False, nullable=False)
+    verification_status: Any = db.Column(db.String(30), default="Pending", nullable=False)
+    verified_at: Any = db.Column(db.DateTime, nullable=True)
+    rejection_reason: Any = db.Column(db.Text, nullable=True)
 
-    created_at = db.Column(db.DateTime, server_default=db.func.now(), nullable=False)
-    email_verified_at = db.Column(db.DateTime, nullable=True)
-    session_version = db.Column(db.Integer, nullable=False, default=0)
+    created_at: Any = db.Column(db.DateTime, server_default=db.func.now(), nullable=False)
+    email_verified_at: Any = db.Column(db.DateTime, nullable=True)
+    session_version: Any = db.Column(db.Integer, nullable=False, default=0)
 
     def __init__(self, name: str = "", email: str = "", password: str = "", role: str = "customer", **kwargs: Any) -> None:
         super().__init__(**kwargs)
@@ -114,7 +114,11 @@ class User(UserMixin, db.Model):
         if email:
             self.email = email
         if password:
-            self.set_password(password)
+            # Prevent double-hashing if password is already a Werkzeug hash
+            if password.startswith(("scrypt:", "pbkdf2:", "argon2:")):
+                self.password = password
+            else:
+                self.set_password(password)
         if role:
             self.role = role
 
@@ -136,30 +140,30 @@ class User(UserMixin, db.Model):
 class CustomerProfile(db.Model):
     __tablename__ = "customer_profile"
 
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), unique=True, nullable=False, index=True)
-    phone = db.Column(db.String(30), nullable=True)
-    secondary_phone = db.Column(db.String(30), nullable=True)
-    preferred_channel = db.Column(db.String(50), nullable=True, default="WhatsApp")
-    available_hours = db.Column(db.String(100), nullable=True)
-    billing_email = db.Column(db.String(120), nullable=True)
-    business_name = db.Column(db.String(150), nullable=True)
-    business_type = db.Column(db.String(100), nullable=True)
-    website = db.Column(db.String(300), nullable=True)
-    gstin = db.Column(db.String(20), nullable=True)
-    billing_address = db.Column(db.Text, nullable=True)
-    pincode = db.Column(db.String(15), nullable=True)
-    location = db.Column(db.String(150), nullable=True)
-    signatory_name = db.Column(db.String(120), nullable=True)
-    signatory_title = db.Column(db.String(100), nullable=True)
-    social_links = db.Column(db.Text, nullable=True)
-    business_description = db.Column(db.Text, nullable=True)
-    target_audience = db.Column(db.Text, nullable=True)
-    business_goals = db.Column(db.Text, nullable=True)
-    preferred_budget = db.Column(db.String(100), nullable=True)
-    profile_completed = db.Column(db.Boolean, default=False, nullable=False)
-    created_at = db.Column(db.DateTime, server_default=db.func.now(), nullable=False)
-    updated_at = db.Column(db.DateTime, server_default=db.func.now(), onupdate=db.func.now(), nullable=False)
+    id: Any = db.Column(db.Integer, primary_key=True)
+    user_id: Any = db.Column(db.Integer, db.ForeignKey("user.id"), unique=True, nullable=False, index=True)
+    phone: Any = db.Column(db.String(30), nullable=True)
+    secondary_phone: Any = db.Column(db.String(30), nullable=True)
+    preferred_channel: Any = db.Column(db.String(50), nullable=True, default="WhatsApp")
+    available_hours: Any = db.Column(db.String(100), nullable=True)
+    billing_email: Any = db.Column(db.String(120), nullable=True)
+    business_name: Any = db.Column(db.String(150), nullable=True)
+    business_type: Any = db.Column(db.String(100), nullable=True)
+    website: Any = db.Column(db.String(300), nullable=True)
+    gstin: Any = db.Column(db.String(20), nullable=True)
+    billing_address: Any = db.Column(db.Text, nullable=True)
+    pincode: Any = db.Column(db.String(15), nullable=True)
+    location: Any = db.Column(db.String(150), nullable=True)
+    signatory_name: Any = db.Column(db.String(120), nullable=True)
+    signatory_title: Any = db.Column(db.String(100), nullable=True)
+    social_links: Any = db.Column(db.Text, nullable=True)
+    business_description: Any = db.Column(db.Text, nullable=True)
+    target_audience: Any = db.Column(db.Text, nullable=True)
+    business_goals: Any = db.Column(db.Text, nullable=True)
+    preferred_budget: Any = db.Column(db.String(100), nullable=True)
+    profile_completed: Any = db.Column(db.Boolean, default=False, nullable=False)
+    created_at: Any = db.Column(db.DateTime, server_default=db.func.now(), nullable=False)
+    updated_at: Any = db.Column(db.DateTime, server_default=db.func.now(), onupdate=db.func.now(), nullable=False)
 
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(**kwargs)
@@ -168,19 +172,19 @@ class CustomerProfile(db.Model):
 class Business(db.Model):
     __tablename__ = "business"
 
-    id = db.Column(db.Integer, primary_key=True)
-    customer_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
-    name = db.Column(db.String(200), nullable=False)
-    business_type = db.Column(db.String(150), nullable=True)
-    location = db.Column(db.String(250), nullable=True)
-    website = db.Column(db.String(500), nullable=True)
-    social_links = db.Column(db.Text, nullable=True)
-    description = db.Column(db.Text, nullable=True)
-    target_audience = db.Column(db.Text, nullable=True)
-    goals = db.Column(db.Text, nullable=True)
-    preferred_budget = db.Column(db.String(100), nullable=True)
-    created_at = db.Column(db.DateTime, default=get_ist_now, nullable=False)
-    updated_at = db.Column(db.DateTime, default=get_ist_now, onupdate=get_ist_now, nullable=False)
+    id: Any = db.Column(db.Integer, primary_key=True)
+    customer_id: Any = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    name: Any = db.Column(db.String(200), nullable=False)
+    business_type: Any = db.Column(db.String(150), nullable=True)
+    location: Any = db.Column(db.String(250), nullable=True)
+    website: Any = db.Column(db.String(500), nullable=True)
+    social_links: Any = db.Column(db.Text, nullable=True)
+    description: Any = db.Column(db.Text, nullable=True)
+    target_audience: Any = db.Column(db.Text, nullable=True)
+    goals: Any = db.Column(db.Text, nullable=True)
+    preferred_budget: Any = db.Column(db.String(100), nullable=True)
+    created_at: Any = db.Column(db.DateTime, default=get_ist_now, nullable=False)
+    updated_at: Any = db.Column(db.DateTime, default=get_ist_now, onupdate=get_ist_now, nullable=False)
 
     customer = db.relationship("User", back_populates="businesses")
     projects = db.relationship("Project", back_populates="business", lazy=True)
@@ -198,13 +202,13 @@ class Business(db.Model):
 class UserToken(db.Model):
     __tablename__ = "user_token"
 
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
-    purpose = db.Column(db.String(40), nullable=False, index=True)
-    token_hash = db.Column(db.String(64), nullable=False, unique=True, index=True)
-    expires_at = db.Column(db.DateTime, nullable=False, index=True)
-    used_at = db.Column(db.DateTime, nullable=True)
-    created_at = db.Column(db.DateTime, server_default=db.func.now(), nullable=False)
+    id: Any = db.Column(db.Integer, primary_key=True)
+    user_id: Any = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    purpose: Any = db.Column(db.String(40), nullable=False, index=True)
+    token_hash: Any = db.Column(db.String(64), nullable=False, unique=True, index=True)
+    expires_at: Any = db.Column(db.DateTime, nullable=False, index=True)
+    used_at: Any = db.Column(db.DateTime, nullable=True)
+    created_at: Any = db.Column(db.DateTime, server_default=db.func.now(), nullable=False)
 
     __table_args__ = (db.Index("ix_user_token_user_purpose", "user_id", "purpose"),)
 
@@ -225,40 +229,40 @@ class UserToken(db.Model):
 class ProfessionalProfile(db.Model):
     __tablename__ = "professional_profile"
 
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), unique=True, nullable=False, index=True)
-    expertise = db.Column(db.String(100), nullable=False, default="")
-    experience = db.Column(db.String(50), nullable=False, default="")
-    about = db.Column(db.Text, nullable=True)
-    phone = db.Column(db.String(30), nullable=True)
-    location = db.Column(db.String(150), nullable=True)
-    skills = db.Column(db.Text, nullable=True)
-    technologies = db.Column(db.Text, nullable=True)
-    skill_level = db.Column(db.String(50), nullable=True)
-    project_types = db.Column(db.Text, nullable=True)
-    portfolio = db.Column(db.String(500), nullable=True)
-    github = db.Column(db.String(300), nullable=True)
-    linkedin = db.Column(db.String(300), nullable=True)
-    education = db.Column(db.Text, nullable=True)
-    certifications = db.Column(db.Text, nullable=True)
-    work_experience = db.Column(db.Text, nullable=True)
-    availability = db.Column(db.String(50), nullable=True)
-    current_workload = db.Column(db.String(100), nullable=True)
+    id: Any = db.Column(db.Integer, primary_key=True)
+    user_id: Any = db.Column(db.Integer, db.ForeignKey("user.id"), unique=True, nullable=False, index=True)
+    expertise: Any = db.Column(db.String(100), nullable=False, default="")
+    experience: Any = db.Column(db.String(50), nullable=False, default="")
+    about: Any = db.Column(db.Text, nullable=True)
+    phone: Any = db.Column(db.String(30), nullable=True)
+    location: Any = db.Column(db.String(150), nullable=True)
+    skills: Any = db.Column(db.Text, nullable=True)
+    technologies: Any = db.Column(db.Text, nullable=True)
+    skill_level: Any = db.Column(db.String(50), nullable=True)
+    project_types: Any = db.Column(db.Text, nullable=True)
+    portfolio: Any = db.Column(db.String(500), nullable=True)
+    github: Any = db.Column(db.String(300), nullable=True)
+    linkedin: Any = db.Column(db.String(300), nullable=True)
+    education: Any = db.Column(db.Text, nullable=True)
+    certifications: Any = db.Column(db.Text, nullable=True)
+    work_experience: Any = db.Column(db.Text, nullable=True)
+    availability: Any = db.Column(db.String(50), nullable=True)
+    current_workload: Any = db.Column(db.String(100), nullable=True)
 
-    pending_balance = db.Column(db.Numeric(12, 2), default=0.00, nullable=False)
-    available_balance = db.Column(db.Numeric(12, 2), default=0.00, nullable=False)
+    pending_balance: Any = db.Column(db.Numeric(12, 2), default=0.00, nullable=False)
+    available_balance: Any = db.Column(db.Numeric(12, 2), default=0.00, nullable=False)
 
-    upi_id = db.Column(db.String(100), nullable=True)
-    bank_account_number = db.Column(db.String(50), nullable=True)
-    bank_ifsc = db.Column(db.String(20), nullable=True)
-    bank_beneficiary_name = db.Column(db.String(120), nullable=True)
-    pan_number = db.Column(db.String(20), nullable=True)
+    upi_id: Any = db.Column(db.String(100), nullable=True)
+    bank_account_number: Any = db.Column(db.String(50), nullable=True)
+    bank_ifsc: Any = db.Column(db.String(20), nullable=True)
+    bank_beneficiary_name: Any = db.Column(db.String(120), nullable=True)
+    pan_number: Any = db.Column(db.String(20), nullable=True)
 
-    verification_status = db.Column(db.String(30), default="Pending", nullable=False)
-    verification_notes = db.Column(db.Text, nullable=True)
-    profile_completed = db.Column(db.Boolean, default=False, nullable=False)
-    created_at = db.Column(db.DateTime, server_default=db.func.now(), nullable=False)
-    updated_at = db.Column(db.DateTime, server_default=db.func.now(), onupdate=db.func.now(), nullable=False)
+    verification_status: Any = db.Column(db.String(30), default="Pending", nullable=False)
+    verification_notes: Any = db.Column(db.Text, nullable=True)
+    profile_completed: Any = db.Column(db.Boolean, default=False, nullable=False)
+    created_at: Any = db.Column(db.DateTime, server_default=db.func.now(), nullable=False)
+    updated_at: Any = db.Column(db.DateTime, server_default=db.func.now(), onupdate=db.func.now(), nullable=False)
 
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(**kwargs)
@@ -363,20 +367,20 @@ class ProfessionalProfile(db.Model):
 class Project(db.Model):
     __tablename__ = "project"
 
-    id = db.Column(db.Integer, primary_key=True)
-    customer_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
-    business_id = db.Column(db.Integer, db.ForeignKey("business.id"), nullable=True, index=True)
+    id: Any = db.Column(db.Integer, primary_key=True)
+    customer_id: Any = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    business_id: Any = db.Column(db.Integer, db.ForeignKey("business.id"), nullable=True, index=True)
     business = db.relationship("Business", back_populates="projects")
-    service: Mapped[str] = mapped_column(db.String(100), nullable=False)
-    package = db.Column(db.String(100), nullable=False)
-    currency = db.Column(db.String(3), nullable=False, default="INR")
-    requirements: Mapped[str] = mapped_column(db.Text, nullable=False)
-    required_skills = db.Column(db.Text, nullable=True)
-    status: Mapped[str] = mapped_column(db.String(50), default="Pending Assignment", nullable=False)
-    assigned_professional_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True, index=True)
-    revision_comment = db.Column(db.Text, nullable=True)
-    payment_reminder_sent_at = db.Column(db.DateTime, nullable=True)
-    created_at = db.Column(db.DateTime, server_default=db.func.now(), nullable=False)
+    service: Any = db.Column(db.String(100), nullable=False)
+    package: Any = db.Column(db.String(100), nullable=False)
+    currency: Any = db.Column(db.String(3), nullable=False, default="INR")
+    requirements: Any = db.Column(db.Text, nullable=False)
+    required_skills: Any = db.Column(db.Text, nullable=True)
+    status: Any = db.Column(db.String(50), default="Pending Assignment", nullable=False)
+    assigned_professional_id: Any = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True, index=True)
+    revision_comment: Any = db.Column(db.Text, nullable=True)
+    payment_reminder_sent_at: Any = db.Column(db.DateTime, nullable=True)
+    created_at: Any = db.Column(db.DateTime, server_default=db.func.now(), nullable=False)
 
     milestones = db.relationship("Milestone", backref="project", cascade="all, delete-orphan", lazy=True)
 
@@ -426,20 +430,20 @@ class Payment(db.Model):
         ),
     )
 
-    id = db.Column(db.Integer, primary_key=True)
-    project_id = db.Column(db.Integer, db.ForeignKey("project.id"), nullable=False, index=True)
-    customer_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
-    addon_id = db.Column(db.Integer, db.ForeignKey("project_add_ons.id", ondelete="CASCADE"), nullable=True, index=True)
-    razorpay_order_id = db.Column(db.String(100), nullable=True)
-    razorpay_payment_id = db.Column(db.String(100), nullable=True)
-    gateway_payment_id = db.Column(db.String(100), unique=True, nullable=True, index=True)
-    stripe_session_id = db.Column(db.String(100), nullable=True, index=True)
-    gateway_type = db.Column(db.String(20), default="razorpay", nullable=False)
-    amount = db.Column(db.Numeric(12, 2), nullable=False)
-    currency = db.Column(db.String(10), default="INR", nullable=False)
-    status: Mapped[str] = mapped_column(db.String(30), default="Created", nullable=False)
-    created_at = db.Column(db.DateTime, server_default=db.func.now(), nullable=False)
-    paid_at = db.Column(db.DateTime, nullable=True)
+    id: Any = db.Column(db.Integer, primary_key=True)
+    project_id: Any = db.Column(db.Integer, db.ForeignKey("project.id"), nullable=False, index=True)
+    customer_id: Any = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    addon_id: Any = db.Column(db.Integer, db.ForeignKey("project_add_ons.id", ondelete="CASCADE"), nullable=True, index=True)
+    razorpay_order_id: Any = db.Column(db.String(100), nullable=True)
+    razorpay_payment_id: Any = db.Column(db.String(100), nullable=True)
+    gateway_payment_id: Any = db.Column(db.String(100), unique=True, nullable=True, index=True)
+    stripe_session_id: Any = db.Column(db.String(100), nullable=True, index=True)
+    gateway_type: Any = db.Column(db.String(20), default="razorpay", nullable=False)
+    amount: Any = db.Column(db.Numeric(12, 2), nullable=False)
+    currency: Any = db.Column(db.String(10), default="INR", nullable=False)
+    status: Any = db.Column(db.String(30), default="Created", nullable=False)
+    created_at: Any = db.Column(db.DateTime, server_default=db.func.now(), nullable=False)
+    paid_at: Any = db.Column(db.DateTime, nullable=True)
 
     project = db.relationship("Project", backref="payments")
     customer = db.relationship("User", backref="payments", foreign_keys=[customer_id])
@@ -470,15 +474,15 @@ class Payment(db.Model):
 class Milestone(db.Model):
     __tablename__ = "milestones"
 
-    id = db.Column(db.Integer, primary_key=True)
-    project_id: Mapped[int] = mapped_column(db.Integer, db.ForeignKey("project.id", ondelete="CASCADE"), nullable=False, index=True)
-    title = db.Column(db.String(200), nullable=False)
-    amount = db.Column(db.Integer, nullable=False)
-    status = db.Column(db.String(30), default="pending", nullable=False)
-    fund_flow_type = db.Column(db.String(50), default="escrow_milestone", nullable=False)
-    due_date: Mapped[datetime] = mapped_column(db.DateTime, nullable=True)
-    released_at = db.Column(db.DateTime, nullable=True)
-    created_at = db.Column(db.DateTime, server_default=db.func.now(), nullable=False)
+    id: Any = db.Column(db.Integer, primary_key=True)
+    project_id: Any = db.Column(db.Integer, db.ForeignKey("project.id", ondelete="CASCADE"), nullable=False, index=True)
+    title: Any = db.Column(db.String(200), nullable=False)
+    amount: Any = db.Column(db.Integer, nullable=False)
+    status: Any = db.Column(db.String(30), default="pending", nullable=False)
+    fund_flow_type: Any = db.Column(db.String(50), default="escrow_milestone", nullable=False)
+    due_date: Any = db.Column(db.DateTime, nullable=True)
+    released_at: Any = db.Column(db.DateTime, nullable=True)
+    created_at: Any = db.Column(db.DateTime, server_default=db.func.now(), nullable=False)
 
     def __init__(self, project_id: int | None = None, title: str = "", amount: int = 0, due_date: datetime | None = None, status: str = "pending", **kwargs: Any) -> None:
         super().__init__(**kwargs)
@@ -497,14 +501,14 @@ class Milestone(db.Model):
 class ProfessionalProjectApplication(db.Model):
     __tablename__ = "professional_project_application"
 
-    id = db.Column(db.Integer, primary_key=True)
-    project_id: Mapped[int] = mapped_column(db.Integer, db.ForeignKey("project.id"), nullable=False, index=True)
-    professional_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
-    proposal = db.Column(db.Text, nullable=True)
-    proposed_rate = db.Column(db.Numeric(12, 2), nullable=True)
-    estimated_days = db.Column(db.Integer, nullable=True)
-    status = db.Column(db.String(30), default="Applied", nullable=False)
-    created_at = db.Column(db.DateTime, server_default=db.func.now(), nullable=False)
+    id: Any = db.Column(db.Integer, primary_key=True)
+    project_id: Any = db.Column(db.Integer, db.ForeignKey("project.id"), nullable=False, index=True)
+    professional_id: Any = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    proposal: Any = db.Column(db.Text, nullable=True)
+    proposed_rate: Any = db.Column(db.Numeric(12, 2), nullable=True)
+    estimated_days: Any = db.Column(db.Integer, nullable=True)
+    status: Any = db.Column(db.String(30), default="Applied", nullable=False)
+    created_at: Any = db.Column(db.DateTime, server_default=db.func.now(), nullable=False)
 
     project = db.relationship("Project", backref="applications")
     professional = db.relationship("User", backref="project_applications", foreign_keys=[professional_id])
@@ -516,19 +520,19 @@ class ProfessionalProjectApplication(db.Model):
 class ProjectDelivery(db.Model):
     __tablename__ = "project_delivery"
 
-    id: Mapped[int] = mapped_column(db.Integer, primary_key=True)
-    project_id: Mapped[int] = mapped_column(db.Integer, db.ForeignKey("project.id"), nullable=False, index=True)
-    professional_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
-    submission_number: Mapped[int] = mapped_column(db.Integer, nullable=False, default=1)
-    live_url = db.Column(db.String(500), nullable=True)
-    source_url = db.Column(db.String(500), nullable=True)
-    preview_url = db.Column(db.String(500), nullable=True)
-    completion_notes = db.Column(db.Text, nullable=False)
-    status: Mapped[str] = mapped_column(db.String(30), nullable=False, default="Submitted")
-    review_comment = db.Column(db.Text, nullable=True)
-    submitted_at: Mapped[datetime] = mapped_column(db.DateTime, nullable=False, default=get_ist_now)
-    reviewed_at = db.Column(db.DateTime, nullable=True)
-    review_reminder_sent_at = db.Column(db.DateTime, nullable=True)
+    id: Any = db.Column(db.Integer, primary_key=True)
+    project_id: Any = db.Column(db.Integer, db.ForeignKey("project.id"), nullable=False, index=True)
+    professional_id: Any = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    submission_number: Any = db.Column(db.Integer, nullable=False, default=1)
+    live_url: Any = db.Column(db.String(500), nullable=True)
+    source_url: Any = db.Column(db.String(500), nullable=True)
+    preview_url: Any = db.Column(db.String(500), nullable=True)
+    completion_notes: Any = db.Column(db.Text, nullable=False)
+    status: Any = db.Column(db.String(30), nullable=False, default="Submitted")
+    review_comment: Any = db.Column(db.Text, nullable=True)
+    submitted_at: Any = db.Column(db.DateTime, nullable=False, default=get_ist_now)
+    reviewed_at: Any = db.Column(db.DateTime, nullable=True)
+    review_reminder_sent_at: Any = db.Column(db.DateTime, nullable=True)
 
     project = db.relationship("Project", backref=db.backref("deliveries", lazy=True, order_by="ProjectDelivery.submission_number"))
     professional = db.relationship("User", backref="project_deliveries", foreign_keys=[professional_id])
@@ -554,12 +558,12 @@ class ProjectDelivery(db.Model):
 class ChatMessage(db.Model):
     __tablename__ = "chat_message"
 
-    id = db.Column(db.Integer, primary_key=True)
-    project_id = db.Column(db.Integer, db.ForeignKey("project.id"), nullable=False, index=True)
-    sender_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
-    message = db.Column(db.Text, nullable=False)
-    attachment_url = db.Column(db.String(500), nullable=True)
-    created_at = db.Column(db.DateTime, default=get_ist_now, nullable=False)
+    id: Any = db.Column(db.Integer, primary_key=True)
+    project_id: Any = db.Column(db.Integer, db.ForeignKey("project.id"), nullable=False, index=True)
+    sender_id: Any = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    message: Any = db.Column(db.Text, nullable=False)
+    attachment_url: Any = db.Column(db.String(500), nullable=True)
+    created_at: Any = db.Column(db.DateTime, default=get_ist_now, nullable=False)
 
     project = db.relationship("Project", backref=db.backref("chat_messages", lazy=True, order_by="ChatMessage.created_at.asc()"))
     sender = db.relationship("User", backref="sent_messages")
@@ -571,20 +575,20 @@ class ChatMessage(db.Model):
 class WithdrawalRequest(db.Model):
     __tablename__ = "withdrawal_requests"
 
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
-    amount = db.Column(db.Numeric(12, 2), nullable=False)
-    currency = db.Column(db.String(10), default="INR", nullable=False)
-    payout_mode = db.Column(db.String(30), default="UPI", nullable=False)
-    upi_id = db.Column(db.String(100), nullable=True)
-    bank_account_number = db.Column(db.String(50), nullable=True)
-    bank_ifsc = db.Column(db.String(20), nullable=True)
-    bank_beneficiary_name = db.Column(db.String(120), nullable=True)
-    status = db.Column(db.String(30), default="Pending", nullable=False)
-    utr_reference = db.Column(db.String(100), nullable=True)
-    admin_notes = db.Column(db.Text, nullable=True)
-    requested_at = db.Column(db.DateTime, default=get_ist_now, nullable=False)
-    processed_at = db.Column(db.DateTime, nullable=True)
+    id: Any = db.Column(db.Integer, primary_key=True)
+    user_id: Any = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    amount: Any = db.Column(db.Numeric(12, 2), nullable=False)
+    currency: Any = db.Column(db.String(10), default="INR", nullable=False)
+    payout_mode: Any = db.Column(db.String(30), default="UPI", nullable=False)
+    upi_id: Any = db.Column(db.String(100), nullable=True)
+    bank_account_number: Any = db.Column(db.String(50), nullable=True)
+    bank_ifsc: Any = db.Column(db.String(20), nullable=True)
+    bank_beneficiary_name: Any = db.Column(db.String(120), nullable=True)
+    status: Any = db.Column(db.String(30), default="Pending", nullable=False)
+    utr_reference: Any = db.Column(db.String(100), nullable=True)
+    admin_notes: Any = db.Column(db.Text, nullable=True)
+    requested_at: Any = db.Column(db.DateTime, default=get_ist_now, nullable=False)
+    processed_at: Any = db.Column(db.DateTime, nullable=True)
 
     specialist = db.relationship("User", back_populates="withdrawal_requests")
 
@@ -595,15 +599,15 @@ class WithdrawalRequest(db.Model):
 class WalletTransaction(db.Model):
     __tablename__ = "wallet_transactions"
 
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
-    amount = db.Column(db.Numeric(12, 2), nullable=False)
-    currency = db.Column(db.String(10), default="INR", nullable=False)
-    transaction_type = db.Column(db.String(40), nullable=False)
-    reference_type = db.Column(db.String(40), nullable=True)
-    reference_id = db.Column(db.Integer, nullable=True)
-    description = db.Column(db.Text, nullable=False)
-    created_at = db.Column(db.DateTime, default=get_ist_now, nullable=False)
+    id: Any = db.Column(db.Integer, primary_key=True)
+    user_id: Any = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    amount: Any = db.Column(db.Numeric(12, 2), nullable=False)
+    currency: Any = db.Column(db.String(10), default="INR", nullable=False)
+    transaction_type: Any = db.Column(db.String(40), nullable=False)
+    reference_type: Any = db.Column(db.String(40), nullable=True)
+    reference_id: Any = db.Column(db.Integer, nullable=True)
+    description: Any = db.Column(db.Text, nullable=False)
+    created_at: Any = db.Column(db.DateTime, default=get_ist_now, nullable=False)
 
     user = db.relationship("User", back_populates="wallet_transactions")
 
@@ -614,29 +618,28 @@ class WalletTransaction(db.Model):
 class Invoice(db.Model):
     __tablename__ = "invoice"
 
-    id = db.Column(db.Integer, primary_key=True)
-    invoice_number = db.Column(db.String(100), unique=True, nullable=False)
-    razorpay_order_id = db.Column(db.String(100), unique=True, nullable=True, index=True)
-    project_id: Mapped[int] = mapped_column(db.Integer, db.ForeignKey("project.id"), nullable=False, index=True)
-    customer_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
-    gross_amount = db.Column(db.Numeric(12, 2), nullable=False)
-    talent_payout = db.Column(db.Numeric(12, 2), nullable=False)
-    agency_profit = db.Column(db.Numeric(12, 2), nullable=False)
-    tax_amount = db.Column(db.Numeric(12, 2), default=0, nullable=False)
-    currency = db.Column(db.String(3), default="INR", nullable=False)
-    status: Mapped[str] = mapped_column(db.String(30), default="Paid", nullable=False)
-    payout_status: Mapped[str] = mapped_column(db.String(30), default="Pending Approval", nullable=False)
-    payout_utr = db.Column(db.String(100), nullable=True)
-    payout_paid_at = db.Column(db.DateTime, nullable=True)
-    created_at = db.Column(db.DateTime, default=get_ist_now, nullable=False)
+    id: Any = db.Column(db.Integer, primary_key=True)
+    invoice_number: Any = db.Column(db.String(100), unique=True, nullable=False)
+    razorpay_order_id: Any = db.Column(db.String(100), unique=True, nullable=True, index=True)
+    project_id: Any = db.Column(db.Integer, db.ForeignKey("project.id"), nullable=False, index=True)
+    customer_id: Any = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    gross_amount: Any = db.Column(db.Numeric(12, 2), nullable=False)
+    talent_payout: Any = db.Column(db.Numeric(12, 2), nullable=False)
+    agency_profit: Any = db.Column(db.Numeric(12, 2), nullable=False)
+    tax_amount: Any = db.Column(db.Numeric(12, 2), default=0, nullable=False)
+    currency: Any = db.Column(db.String(3), default="INR", nullable=False)
+    status: Any = db.Column(db.String(30), default="Paid", nullable=False)
+    payout_status: Any = db.Column(db.String(30), default="Pending Approval", nullable=False)
+    payout_utr: Any = db.Column(db.String(100), nullable=True)
+    payout_paid_at: Any = db.Column(db.DateTime, nullable=True)
+    created_at: Any = db.Column(db.DateTime, default=get_ist_now, nullable=False)
 
     project = db.relationship("Project", backref=db.backref("invoice_records", lazy=True, order_by="Invoice.id.desc()"))
     customer = db.relationship("User", backref="invoices", foreign_keys=[customer_id])
 
     def __init__(self, invoice_number: str = "", project_id: int | None = None, customer_id: int | None = None, gross_amount: Any = 0, talent_payout: Any = 0, agency_profit: Any = 0, tax_amount: Any = 0, currency: str = "INR", status: str = "Paid", payout_status: str = "Pending Approval", **kwargs: Any) -> None:
         super().__init__(**kwargs)
-        if invoice_number:
-            self.invoice_number = invoice_number
+        self.invoice_number = invoice_number if invoice_number else f"INV-{secrets.token_hex(4).upper()}"
         if project_id is not None:
             self.project_id = project_id
         if customer_id is not None:
@@ -660,12 +663,12 @@ class Invoice(db.Model):
 class AgencySetting(db.Model):
     __tablename__ = "agency_settings"
 
-    id = db.Column(db.Integer, primary_key=True, default=1)
-    agency_name = db.Column(db.String(120), nullable=False, default="AgencyOS")
-    primary_color = db.Column(db.String(7), nullable=False, default="#09090b")
-    logo_url = db.Column(db.String(500), nullable=True)
-    whatsapp_support_number = db.Column(db.String(16), nullable=False, default="+919876543210")
-    updated_at = db.Column(db.DateTime, nullable=False, default=get_ist_now, onupdate=get_ist_now)
+    id: Any = db.Column(db.Integer, primary_key=True, default=1)
+    agency_name: Any = db.Column(db.String(120), nullable=False, default="AgencyOS")
+    primary_color: Any = db.Column(db.String(7), nullable=False, default="#09090b")
+    logo_url: Any = db.Column(db.String(500), nullable=True)
+    whatsapp_support_number: Any = db.Column(db.String(16), nullable=False, default="+919876543210")
+    updated_at: Any = db.Column(db.DateTime, nullable=False, default=get_ist_now, onupdate=get_ist_now)
 
     def __init__(self, id: int = 1, agency_name: str = "AgencyOS", primary_color: str = "#09090b", logo_url: str | None = None, whatsapp_support_number: str = "+919876543210", **kwargs: Any) -> None:
         super().__init__(**kwargs)
@@ -683,13 +686,13 @@ class AgencySetting(db.Model):
 class RazorpaySubscriptionPlan(db.Model):
     __tablename__ = "razorpay_subscription_plan"
 
-    id = db.Column(db.Integer, primary_key=True)
-    code = db.Column(db.String(80), nullable=False, unique=True)
-    razorpay_plan_id = db.Column(db.String(100), nullable=True, unique=True)
-    name = db.Column(db.String(150), nullable=False)
-    amount = db.Column(db.Integer, nullable=False)
-    currency = db.Column(db.String(10), nullable=False, default="INR")
-    created_at = db.Column(db.DateTime, nullable=False, default=get_ist_now)
+    id: Any = db.Column(db.Integer, primary_key=True)
+    code: Any = db.Column(db.String(80), nullable=False, unique=True)
+    razorpay_plan_id: Any = db.Column(db.String(100), nullable=True, unique=True)
+    name: Any = db.Column(db.String(150), nullable=False)
+    amount: Any = db.Column(db.Integer, nullable=False)
+    currency: Any = db.Column(db.String(10), nullable=False, default="INR")
+    created_at: Any = db.Column(db.DateTime, nullable=False, default=get_ist_now)
 
     def __init__(self, code: str = "", razorpay_plan_id: str | None = None, name: str = "", amount: int = 0, currency: str = "INR", **kwargs: Any) -> None:
         super().__init__(**kwargs)
@@ -717,17 +720,17 @@ class RazorpaySubscription(db.Model):
         ),
     )
 
-    id = db.Column(db.Integer, primary_key=True)
-    project_id = db.Column(db.Integer, db.ForeignKey("project.id", ondelete="CASCADE"), nullable=False, index=True)
-    customer_id = db.Column(db.Integer, db.ForeignKey("user.id", ondelete="CASCADE"), nullable=False, index=True)
-    plan_id = db.Column(db.Integer, db.ForeignKey("razorpay_subscription_plan.id"), nullable=False)
-    razorpay_subscription_id = db.Column(db.String(100), nullable=True, unique=True)
-    amount = db.Column(db.Integer, nullable=False)
-    currency = db.Column(db.String(10), nullable=False, default="INR")
-    status = db.Column(db.String(30), nullable=False, default="created")
-    start_at = db.Column(db.DateTime, nullable=False)
-    created_at = db.Column(db.DateTime, nullable=False, default=get_ist_now)
-    updated_at = db.Column(db.DateTime, nullable=False, default=get_ist_now, onupdate=get_ist_now)
+    id: Any = db.Column(db.Integer, primary_key=True)
+    project_id: Any = db.Column(db.Integer, db.ForeignKey("project.id", ondelete="CASCADE"), nullable=False, index=True)
+    customer_id: Any = db.Column(db.Integer, db.ForeignKey("user.id", ondelete="CASCADE"), nullable=False, index=True)
+    plan_id: Any = db.Column(db.Integer, db.ForeignKey("razorpay_subscription_plan.id"), nullable=False)
+    razorpay_subscription_id: Any = db.Column(db.String(100), nullable=True, unique=True)
+    amount: Any = db.Column(db.Integer, nullable=False)
+    currency: Any = db.Column(db.String(10), nullable=False, default="INR")
+    status: Any = db.Column(db.String(30), nullable=False, default="created")
+    start_at: Any = db.Column(db.DateTime, nullable=False)
+    created_at: Any = db.Column(db.DateTime, nullable=False, default=get_ist_now)
+    updated_at: Any = db.Column(db.DateTime, nullable=False, default=get_ist_now, onupdate=get_ist_now)
 
     project = db.relationship("Project", backref=db.backref("retainer_subscriptions", lazy=True))
     customer = db.relationship("User", backref=db.backref("retainer_subscriptions", lazy=True), foreign_keys=[customer_id])
@@ -757,15 +760,15 @@ class RazorpaySubscription(db.Model):
 class SubscriptionCharge(db.Model):
     __tablename__ = "subscription_charge"
 
-    id = db.Column(db.Integer, primary_key=True)
-    subscription_id = db.Column(db.Integer, db.ForeignKey("razorpay_subscription.id", ondelete="CASCADE"), nullable=False, index=True)
-    payment_id = db.Column(db.Integer, db.ForeignKey("payment.id", ondelete="CASCADE"), nullable=False, unique=True)
-    invoice_id = db.Column(db.Integer, db.ForeignKey("invoice.id", ondelete="CASCADE"), nullable=False, unique=True)
-    razorpay_payment_id = db.Column(db.String(100), nullable=False, unique=True)
-    event_id = db.Column(db.String(100), nullable=True, unique=True)
-    amount = db.Column(db.Integer, nullable=False)
-    currency = db.Column(db.String(10), nullable=False, default="INR")
-    charged_at = db.Column(db.DateTime, nullable=False, default=get_ist_now)
+    id: Any = db.Column(db.Integer, primary_key=True)
+    subscription_id: Any = db.Column(db.Integer, db.ForeignKey("razorpay_subscription.id", ondelete="CASCADE"), nullable=False, index=True)
+    payment_id: Any = db.Column(db.Integer, db.ForeignKey("payment.id", ondelete="CASCADE"), nullable=False, unique=True)
+    invoice_id: Any = db.Column(db.Integer, db.ForeignKey("invoice.id", ondelete="CASCADE"), nullable=False, unique=True)
+    razorpay_payment_id: Any = db.Column(db.String(100), nullable=False, unique=True)
+    event_id: Any = db.Column(db.String(100), nullable=True, unique=True)
+    amount: Any = db.Column(db.Integer, nullable=False)
+    currency: Any = db.Column(db.String(10), nullable=False, default="INR")
+    charged_at: Any = db.Column(db.DateTime, nullable=False, default=get_ist_now)
 
     subscription = db.relationship("RazorpaySubscription", back_populates="charges")
     payment = db.relationship("Payment")
@@ -778,14 +781,14 @@ class SubscriptionCharge(db.Model):
 class Review(db.Model):
     __tablename__ = "reviews"
 
-    id = db.Column(db.Integer, primary_key=True)
-    project_id: Mapped[int] = mapped_column(db.Integer, db.ForeignKey(Project.id, ondelete="CASCADE"), nullable=False, index=True)
-    customer_id = db.Column(db.Integer, db.ForeignKey(User.id, ondelete="CASCADE"), nullable=False, index=True)
-    rating = db.Column(db.Integer, default=5, nullable=False)
-    tags = db.Column(db.String(255), nullable=True)
-    feedback = db.Column(db.Text, nullable=False)
-    is_public = db.Column(db.Boolean, default=True, nullable=False)
-    created_at = db.Column(db.DateTime, default=get_ist_now, nullable=False)
+    id: Any = db.Column(db.Integer, primary_key=True)
+    project_id: Any = db.Column(db.Integer, db.ForeignKey(Project.id, ondelete="CASCADE"), nullable=False, index=True)
+    customer_id: Any = db.Column(db.Integer, db.ForeignKey(User.id, ondelete="CASCADE"), nullable=False, index=True)
+    rating: Any = db.Column(db.Integer, default=5, nullable=False)
+    tags: Any = db.Column(db.String(255), nullable=True)
+    feedback: Any = db.Column(db.Text, nullable=False)
+    is_public: Any = db.Column(db.Boolean, default=True, nullable=False)
+    created_at: Any = db.Column(db.DateTime, default=get_ist_now, nullable=False)
 
     project = db.relationship("Project", backref=db.backref("review", uselist=False), foreign_keys=[project_id])
     customer = db.relationship("User", backref="reviews", foreign_keys=[customer_id])
@@ -805,13 +808,13 @@ class Review(db.Model):
 class ProjectAddOn(db.Model):
     __tablename__ = "project_add_ons"
 
-    id = db.Column(db.Integer, primary_key=True)
-    project_id = db.Column(db.Integer, db.ForeignKey("project.id", ondelete="CASCADE"), nullable=False, index=True)
-    invoice_id = db.Column(db.Integer, db.ForeignKey("invoice.id", ondelete="CASCADE"), nullable=False, unique=True)
-    title = db.Column(db.String(200), nullable=False)
-    amount = db.Column(db.Numeric(12, 2), nullable=False)
-    status = db.Column(db.String(30), default="Pending Payment", nullable=False)
-    created_at = db.Column(db.DateTime, default=get_ist_now, nullable=False)
+    id: Any = db.Column(db.Integer, primary_key=True)
+    project_id: Any = db.Column(db.Integer, db.ForeignKey("project.id", ondelete="CASCADE"), nullable=False, index=True)
+    invoice_id: Any = db.Column(db.Integer, db.ForeignKey("invoice.id", ondelete="CASCADE"), nullable=False, unique=True)
+    title: Any = db.Column(db.String(200), nullable=False)
+    amount: Any = db.Column(db.Numeric(12, 2), nullable=False)
+    status: Any = db.Column(db.String(30), default="Pending Payment", nullable=False)
+    created_at: Any = db.Column(db.DateTime, default=get_ist_now, nullable=False)
 
     project = db.relationship("Project", backref=db.backref("add_ons", cascade="all, delete-orphan", lazy=True))
     invoice = db.relationship("Invoice", backref=db.backref("project_add_on", uselist=False))
@@ -824,13 +827,13 @@ class ActivityLog(db.Model):
     __tablename__ = "activity_logs"
     __table_args__ = (db.Index("ix_activity_logs_project_created_at", "project_id", "created_at"),)
 
-    id = db.Column(db.Integer, primary_key=True)
-    project_id = db.Column(db.Integer, db.ForeignKey("project.id", ondelete="CASCADE"), nullable=False, index=True)
-    user_id = db.Column(db.Integer, db.ForeignKey("user.id", ondelete="SET NULL"), nullable=True, index=True)
-    action = db.Column(db.String(100), nullable=False)
-    description = db.Column(db.Text, nullable=False)
-    category = db.Column(db.String(30), default="info", nullable=False)
-    created_at = db.Column(db.DateTime, default=get_ist_now, nullable=False)
+    id: Any = db.Column(db.Integer, primary_key=True)
+    project_id: Any = db.Column(db.Integer, db.ForeignKey("project.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id: Any = db.Column(db.Integer, db.ForeignKey("user.id", ondelete="SET NULL"), nullable=True, index=True)
+    action: Any = db.Column(db.String(100), nullable=False)
+    description: Any = db.Column(db.Text, nullable=False)
+    category: Any = db.Column(db.String(30), default="info", nullable=False)
+    created_at: Any = db.Column(db.DateTime, default=get_ist_now, nullable=False)
 
     project = db.relationship("Project", backref=db.backref("activity_logs", cascade="all, delete-orphan", lazy=True))
     actor = db.relationship("User", backref="activity_logs", foreign_keys=[user_id])
@@ -865,12 +868,12 @@ class ActivityLog(db.Model):
 class StripeWebhookEvent(db.Model):
     __tablename__ = "stripe_webhook_event"
 
-    id = db.Column(db.Integer, primary_key=True)
-    event_id = db.Column(db.String(100), nullable=False, unique=True, index=True)
-    event_type = db.Column(db.String(100), nullable=False)
-    project_id = db.Column(db.Integer, db.ForeignKey("project.id", ondelete="CASCADE"), nullable=True, index=True)
-    processed_at = db.Column(db.DateTime, nullable=False, default=get_ist_now)
-    payload = db.Column(db.Text, nullable=True)
+    id: Any = db.Column(db.Integer, primary_key=True)
+    event_id: Any = db.Column(db.String(100), nullable=False, unique=True, index=True)
+    event_type: Any = db.Column(db.String(100), nullable=False)
+    project_id: Any = db.Column(db.Integer, db.ForeignKey("project.id", ondelete="CASCADE"), nullable=True, index=True)
+    processed_at: Any = db.Column(db.DateTime, nullable=False, default=get_ist_now)
+    payload: Any = db.Column(db.Text, nullable=True)
 
     project = db.relationship("Project", backref="stripe_webhook_events")
 
@@ -941,13 +944,13 @@ def get_latest_project_delivery(project_id: int) -> ProjectDelivery | None:
 class Notification(db.Model):
     __tablename__ = "notification"
 
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
-    title = db.Column(db.String(200), nullable=False)
-    message = db.Column(db.Text, nullable=False)
-    link = db.Column(db.String(500), nullable=True)
-    is_read = db.Column(db.Boolean, default=False, nullable=False)
-    created_at = db.Column(db.DateTime, default=get_ist_now, nullable=False)
+    id: Any = db.Column(db.Integer, primary_key=True)
+    user_id: Any = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    title: Any = db.Column(db.String(200), nullable=False)
+    message: Any = db.Column(db.Text, nullable=False)
+    link: Any = db.Column(db.String(500), nullable=True)
+    is_read: Any = db.Column(db.Boolean, default=False, nullable=False)
+    created_at: Any = db.Column(db.DateTime, default=get_ist_now, nullable=False)
 
     user = db.relationship("User", backref=db.backref("notifications", lazy=True, order_by="Notification.created_at.desc()"), foreign_keys=[user_id])
 
@@ -966,14 +969,14 @@ class Notification(db.Model):
 class Dispute(db.Model):
     __tablename__ = "disputes"
 
-    id = db.Column(db.Integer, primary_key=True)
-    project_id = db.Column(db.Integer, db.ForeignKey("project.id", ondelete="CASCADE"), nullable=False, index=True)
-    raised_by_user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
-    reason = db.Column(db.Text, nullable=False)
-    status = db.Column(db.String(30), default="OPEN", nullable=False)
-    admin_verdict_notes = db.Column(db.Text, nullable=True)
-    resolved_at = db.Column(db.DateTime, nullable=True)
-    created_at = db.Column(db.DateTime, default=get_ist_now, nullable=False)
+    id: Any = db.Column(db.Integer, primary_key=True)
+    project_id: Any = db.Column(db.Integer, db.ForeignKey("project.id", ondelete="CASCADE"), nullable=False, index=True)
+    raised_by_user_id: Any = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    reason: Any = db.Column(db.Text, nullable=False)
+    status: Any = db.Column(db.String(30), default="OPEN", nullable=False)
+    admin_verdict_notes: Any = db.Column(db.Text, nullable=True)
+    resolved_at: Any = db.Column(db.DateTime, nullable=True)
+    created_at: Any = db.Column(db.DateTime, default=get_ist_now, nullable=False)
 
     project = db.relationship("Project", backref=db.backref("disputes", cascade="all, delete-orphan", lazy=True))
     raised_by = db.relationship("User", foreign_keys=[raised_by_user_id])
@@ -988,4 +991,3 @@ class Dispute(db.Model):
             self.reason = reason
         if status:
             self.status = status
-            

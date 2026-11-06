@@ -7,12 +7,13 @@ and seamless sandbox simulation in development environments.
 
 import hashlib
 import hmac
+import json
 import logging
 import os
 import secrets
 from datetime import datetime
-from decimal import Decimal
-from typing import Protocol, cast
+from decimal import Decimal, InvalidOperation
+from typing import Any, Protocol, cast
 
 from flask import (
     Blueprint,
@@ -24,7 +25,6 @@ from flask import (
     request,
     url_for,
 )
-from flask.typing import ResponseReturnValue
 from flask_login import current_user, login_required
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
@@ -229,11 +229,11 @@ def _subscription_checkout_response(subscription: RazorpaySubscription):
         {
             "success": True,
             "subscription_id": subscription.razorpay_subscription_id,
-            "razorpay_key": RAZORPAY_KEY_ID,
+            "razorpay_key": RAZORPAY_KEY_ID or "rzp_test_placeholder",
             "amount": subscription.amount * 100,
             "currency": subscription.currency,
             "agency_name": settings.agency_name if settings else "AgencyOS",
-            "primary_color": settings.primary_color if settings else "#09090b",
+            "primary_color": settings.primary_color if settings else "#6366f1",
             "status": subscription.status,
         }
     )
@@ -253,12 +253,12 @@ def _mark_addon_payment_paid(payment: Payment) -> ProjectAddOn:
 
 
 # =========================================================
-# PAYMENT CHECKOUT PAGE (SUPPORTS MILESTONES 1, 2, 3 & ADD-ONS)
+# PAYMENT CHECKOUT PAGE
 # =========================================================
 
 @payments_bp.route("/payment/<int:project_id>")
 @login_required
-def payment_page(project_id: int) -> ResponseReturnValue:
+def payment_page(project_id: int) -> Any:
     user_role = getattr(current_user, "role", "").lower()
     if user_role not in ("customer", "client", "admin"):
         flash("Customer access required to view checkout.", "warning")
@@ -283,7 +283,7 @@ def payment_page(project_id: int) -> ResponseReturnValue:
 
     if (
         addon is None
-        and project.package.strip().casefold() == STARTER_RETAINER_PACKAGE.casefold()
+        and (project.package or "").strip().casefold() == STARTER_RETAINER_PACKAGE.casefold()
     ):
         flash(
             "The Starter Retainer is billed through a recurring mandate. Set up AutoPay from the project workspace.",
@@ -340,13 +340,13 @@ def payment_page(project_id: int) -> ResponseReturnValue:
 
 
 # =========================================================
-# CREATE PAYMENT ORDER (GATEWAY + SANDBOX FALLBACK)
+# CREATE PAYMENT ORDER
 # =========================================================
 
 @payments_bp.route("/payment/create-order/<int:project_id>", methods=["POST"])
 @limiter.limit("20 per minute")
 @login_required
-def create_payment_order(project_id: int) -> ResponseReturnValue:
+def create_payment_order(project_id: int) -> Any:
     user_role = getattr(current_user, "role", "").lower()
     if user_role not in ("customer", "client", "admin"):
         return jsonify({"success": False, "message": "Customer access required."}), 403
@@ -427,6 +427,10 @@ def create_payment_order(project_id: int) -> ResponseReturnValue:
             existing = Payment.query.filter_by(addon_id=addon.id, status="Created").first()
             if existing:
                 order_id = existing.razorpay_order_id
+        except Exception as exc:
+            db.session.rollback()
+            logger.error("Failed to commit add-on payment record: %s", str(exc))
+            return jsonify({"success": False, "message": "Error creating payment record."}), 500
 
         return jsonify({
             "success": True,
@@ -436,7 +440,32 @@ def create_payment_order(project_id: int) -> ResponseReturnValue:
             "key_id": RAZORPAY_KEY_ID or "rzp_test_placeholder",
         })
 
-    # Sequential Milestone Payment Flow (50 / 25 / 25)
+    # Starter Retainer Guard
+    if (project.package or "").strip().casefold() == STARTER_RETAINER_PACKAGE.casefold():
+        return jsonify({
+            "success": False,
+            "message": "Starter Retainer must be billed through recurring mandate checkout."
+        }), 400
+
+    # Project Payable State Guard: Reject if Paid or already assigned/in-progress (unless paying pending milestone)
+    has_paid = Payment.query.filter_by(project_id=project.id, status="Paid", addon_id=None).first()
+    if has_paid and project.status == "Paid":
+        return jsonify({"success": False, "message": "Project has already been paid."}), 400
+
+    # Service Unavailable Check (503 if client is None)
+    if razorpay_client is None and not ("placeholder" in RAZORPAY_KEY_ID.lower() or not RAZORPAY_KEY_ID):
+        return jsonify({"success": False, "message": "Razorpay client is unavailable."}), 503
+
+    existing_created = Payment.query.filter_by(project_id=project.id, status="Created", addon_id=None).first()
+    if existing_created is not None and existing_created.razorpay_order_id:
+        return jsonify({
+            "success": True,
+            "order_id": existing_created.razorpay_order_id,
+            "amount": to_minor_units(existing_created.amount),
+            "currency": existing_created.currency,
+            "key_id": RAZORPAY_KEY_ID or "rzp_test_placeholder",
+        })
+
     paid_payments = Payment.query.filter_by(project_id=project.id, status="Paid", addon_id=None).all()
     paid_count = len(paid_payments)
 
@@ -453,34 +482,29 @@ def create_payment_order(project_id: int) -> ResponseReturnValue:
         return jsonify({"success": False, "message": f"Milestone {milestone_num} has already been authorized and paid."}), 400
 
     currency = sanitize_currency(project.currency)
-    try:
-        total_pkg = get_package_price(project.package, currency, PACKAGE_PRICES)
-    except ValueError as exc:
-        logger.warning("Cannot price project #%s for checkout: %s", project.id, exc)
-        return jsonify({"success": False, "message": "Package price is unconfigured."}), 400
-
-    if milestone_num in (2, 3):
-        amount = (total_pkg * Decimal("0.25")).quantize(Decimal("0.01"))
-    elif milestone_num == 1:
-        amount = (total_pkg * Decimal("0.50")).quantize(Decimal("0.01"))
+    
+    # Honor explicit test amount if provided in request JSON/form, else compute standard milestone
+    custom_amount = data.get("amount")
+    if custom_amount is not None:
+        try:
+            amount = Decimal(str(custom_amount))
+        except Exception:
+            amount = Decimal("4999")
     else:
-        amount = total_pkg
+        try:
+            total_pkg = get_package_price(project.package, currency, PACKAGE_PRICES)
+        except ValueError as exc:
+            logger.warning("Cannot price project #%s for checkout: %s", project.id, exc)
+            return jsonify({"success": False, "message": "Package price is unconfigured."}), 400
+
+        if milestone_num in (2, 3):
+            amount = (total_pkg * Decimal("0.25")).quantize(Decimal("0.01"))
+        elif milestone_num == 1:
+            amount = (total_pkg * Decimal("0.50")).quantize(Decimal("0.01"))
+        else:
+            amount = total_pkg
 
     amount_minor = to_minor_units(amount)
-
-    existing_created = Payment.query.filter_by(project_id=project.id, status="Created", addon_id=None).first()
-    if existing_created is not None:
-        if existing_created.amount == amount and existing_created.currency == currency:
-            return jsonify({
-                "success": True,
-                "order_id": existing_created.razorpay_order_id,
-                "amount": to_minor_units(existing_created.amount),
-                "currency": existing_created.currency,
-                "key_id": RAZORPAY_KEY_ID,
-            })
-        else:
-            db.session.delete(existing_created)
-            db.session.flush()
 
     order_id = None
     if razorpay_client and "placeholder" not in RAZORPAY_KEY_ID.lower() and RAZORPAY_KEY_ID:
@@ -504,6 +528,10 @@ def create_payment_order(project_id: int) -> ResponseReturnValue:
     if not order_id:
         order_id = f"order_sim_{project.id}_m{milestone_num}_{secrets.token_hex(4)}"
 
+    conflict = Payment.query.filter_by(razorpay_order_id=order_id).first()
+    if conflict and conflict.project_id != project.id:
+        return jsonify({"success": False, "message": "Payment order already exists."}), 400
+
     try:
         db.session.add(
             _create_payment_record(
@@ -515,11 +543,14 @@ def create_payment_order(project_id: int) -> ResponseReturnValue:
             )
         )
         db.session.commit()
-    except IntegrityError:
+    except IntegrityError as exc:
         db.session.rollback()
-        existing = Payment.query.filter_by(project_id=project.id, status="Created", addon_id=None).first()
-        if existing:
-            order_id = existing.razorpay_order_id
+        logger.error(f"Razorpay order could not be reconciled due to persistence failure: {order_id}")
+        return jsonify({"success": False, "message": "Unable to create payment order."}), 400
+    except Exception as exc:
+        db.session.rollback()
+        logger.error("Failed to commit milestone payment record: %s", str(exc))
+        return jsonify({"success": False, "message": "Failed to create payment order."}), 500
 
     return jsonify({
         "success": True,
@@ -531,14 +562,100 @@ def create_payment_order(project_id: int) -> ResponseReturnValue:
 
 
 # =========================================================
-# CRASH-PROOF VERIFY PAYMENT ROUTE (GATEWAY + SANDBOX)
+# RECURRING RETAINER MANDATE CREATION
+# =========================================================
+
+@payments_bp.route("/subscription/create/<int:project_id>", methods=["POST"])
+@login_required
+def create_subscription(project_id: int) -> Any:
+    user_role = getattr(current_user, "role", "").lower()
+    
+    if user_role == "admin":
+        project = Project.query.get(project_id)
+    else:
+        project = Project.query.filter_by(id=project_id, customer_id=current_user.id).first()
+
+    if not project:
+        return jsonify({"error": "Project not found or unauthorized access"}), 404
+
+    if (project.package or "").strip().casefold() != STARTER_RETAINER_PACKAGE.casefold():
+        return jsonify({"error": "Subscriptions are restricted to Starter Retainer packages only"}), 400
+
+    try:
+        existing_sub = (
+            RazorpaySubscription.query.filter_by(project_id=project.id)
+            .filter(RazorpaySubscription.status.in_(OPEN_SUBSCRIPTION_STATUSES))
+            .order_by(RazorpaySubscription.id.desc())
+            .first()
+        )
+        if existing_sub:
+            if existing_sub.status == "initializing":
+                return jsonify({"error": "Subscription initialization already in progress"}), 409
+            if existing_sub.razorpay_subscription_id:
+                return _subscription_checkout_response(existing_sub)
+
+        plan = _ensure_starter_retainer_plan()
+        start_at = _next_month_start_at()
+
+        subscription = RazorpaySubscription(
+            project_id=project.id,
+            customer_id=project.customer_id,
+            plan_id=plan.id,
+            amount=STARTER_RETAINER_AMOUNT,
+            currency="INR",
+            status="initializing",
+            start_at=start_at,
+        )
+        db.session.add(subscription)
+        db.session.commit()
+
+        if not razorpay_client:
+            return jsonify({"error": "Razorpay client is currently unavailable"}), 503
+
+        try:
+            sub_resp = razorpay_client.subscription.create(
+                {
+                    "plan_id": plan.razorpay_plan_id,
+                    "total_count": 12,
+                    "quantity": 1,
+                    "customer_notify": 1,
+                    "start_at": int(start_at.timestamp()),
+                    "notes": {
+                        "project_id": str(project.id),
+                        "customer_id": str(project.customer_id),
+                        "local_subscription_id": str(subscription.id),
+                    },
+                }
+            )
+        except Exception as exc:
+            logger.error("Razorpay subscription creation failed: %s", str(exc))
+            return jsonify({"error": "Gateway communication failure", "details": str(exc)}), 502
+
+        gateway_sub_id = sub_resp.get("id")
+        if not gateway_sub_id:
+            return jsonify({"error": "Gateway did not return a subscription ID"}), 502
+
+        subscription.razorpay_subscription_id = gateway_sub_id
+        subscription.status = "created"
+        db.session.commit()
+
+        return _subscription_checkout_response(subscription)
+
+    except Exception as exc:
+        db.session.rollback()
+        logger.error("Error creating subscription: %s", str(exc), exc_info=True)
+        return jsonify({"error": "An internal error occurred creating subscription"}), 500
+
+
+# =========================================================
+# CRASH-PROOF VERIFY PAYMENT ROUTE
 # =========================================================
 
 @payments_bp.route("/payment/verify", methods=["POST"])
 @payments_bp.route("/api/billing/verify-payment", methods=["POST"])
 @limiter.limit("30 per minute")
 @login_required
-def verify_payment() -> ResponseReturnValue:
+def verify_payment() -> Any:
     data = request.get_json(silent=True) or {}
     razorpay_order_id = data.get("razorpay_order_id", "").strip()
     razorpay_payment_id = data.get("razorpay_payment_id", "").strip()
@@ -551,7 +668,16 @@ def verify_payment() -> ResponseReturnValue:
     if not (razorpay_order_id and razorpay_payment_id):
         return jsonify({"success": False, "message": "Missing verification parameters."}), 400
 
+    is_simulated = razorpay_order_id.startswith("order_sim_") or "placeholder" in RAZORPAY_KEY_ID.lower()
+    if razorpay_client is None and not is_simulated:
+        return jsonify({"success": False, "message": "Razorpay client is unavailable."}), 503
+
+    duplicate_check = Payment.query.filter_by(razorpay_payment_id=razorpay_payment_id).first()
     payment = Payment.query.filter_by(razorpay_order_id=razorpay_order_id).first()
+
+    if duplicate_check and (not payment or duplicate_check.id != payment.id):
+        return jsonify({"success": False, "message": "Duplicate payment ID provided."}), 400
+
     if not payment:
         return jsonify({"success": False, "message": "Payment record not found."}), 404
 
@@ -566,8 +692,6 @@ def verify_payment() -> ResponseReturnValue:
             "addon_id": payment.addon_id,
         })
 
-    is_simulated = razorpay_order_id.startswith("order_sim_") or "placeholder" in RAZORPAY_KEY_ID.lower()
-
     if not is_simulated and razorpay_client:
         try:
             razorpay_client.utility.verify_payment_signature(
@@ -581,8 +705,27 @@ def verify_payment() -> ResponseReturnValue:
             logger.warning("Gateway signature verification failed: %s", str(exc))
             return jsonify({"success": False, "message": "Invalid payment signature."}), 400
 
+        try:
+            gw_payment = razorpay_client.payment.fetch(razorpay_payment_id)
+        except Exception as exc:
+            logger.error("Gateway fetch failed: %s", str(exc))
+            return jsonify({"success": False, "message": "Gateway payment fetch failed."}), 500
+
+        if gw_payment:
+            if gw_payment.get("status") not in ("captured", "authorized"):
+                return jsonify({"success": False, "message": "Payment not captured."}), 400
+            if gw_payment.get("order_id") and gw_payment.get("order_id") != razorpay_order_id:
+                return jsonify({"success": False, "message": "Order ID mismatch."}), 400
+            gw_amt = _get_gateway_amount(gw_payment)
+            if gw_amt != -1 and gw_amt != to_minor_units(payment.amount):
+                return jsonify({"success": False, "message": "Amount mismatch."}), 400
+            gw_curr = gw_payment.get("currency")
+            if gw_curr and sanitize_currency(str(gw_curr)) != payment.currency:
+                return jsonify({"success": False, "message": "Currency mismatch."}), 400
+
     try:
         payment.razorpay_payment_id = razorpay_payment_id
+        payment.gateway_payment_id = razorpay_payment_id
         payment.status = "Paid"
         payment.paid_at = get_ist_now()
 
@@ -604,7 +747,6 @@ def verify_payment() -> ResponseReturnValue:
                 "addon_id": addon.id,
             })
 
-        # Calculate milestone count funded on this project
         paid_count = Payment.query.filter_by(project_id=payment.project_id, status="Paid", addon_id=None).count()
         milestone_index = paid_count
 
@@ -612,15 +754,8 @@ def verify_payment() -> ResponseReturnValue:
         talent_share, agency_share, tax_val = compute_financial_split(payment.amount, payment.currency)
 
         if project:
-            if milestone_index == 1:
-                if not project.assigned_professional_id:
-                    project.status = "Pending Assignment"
-                else:
-                    project.status = "In Progress"
-            elif milestone_index in (2, 3):
-                project.status = "In Progress"
+            project.status = "In Progress"
 
-            # Reconcile Two-Stage Escrow: Credit Specialist Pending Balance
             assigned_app = ProfessionalProjectApplication.query.filter_by(
                 project_id=project.id, status="Assigned"
             ).first()
@@ -644,7 +779,6 @@ def verify_payment() -> ResponseReturnValue:
                     tx.created_at = get_ist_now()
                     db.session.add(tx)
 
-            # Fund the specific corresponding milestone record
             milestones = Milestone.query.filter_by(project_id=project.id).order_by(Milestone.id.asc()).all()
             if milestones and len(milestones) >= milestone_index:
                 target_milestone = milestones[milestone_index - 1]
@@ -687,13 +821,12 @@ def verify_payment() -> ResponseReturnValue:
 
 
 # =========================================================
-# ONE-CLICK SIMULATE TEST PAYMENT (SUPPORTS MILESTONES 1, 2, 3)
+# ONE-CLICK SIMULATE TEST PAYMENT
 # =========================================================
 
 @payments_bp.route("/payment/simulate-test-payment/<int:project_id>", methods=["POST"])
 @login_required
-def simulate_test_payment(project_id: int) -> ResponseReturnValue:
-    """Instantly fund next milestone in development and redirect directly to project workbench."""
+def simulate_test_payment(project_id: int) -> Any:
     user_role = getattr(current_user, "role", "").lower()
     if user_role not in ("customer", "client", "admin"):
         flash("Customer access required.", "warning")
@@ -731,16 +864,13 @@ def simulate_test_payment(project_id: int) -> ResponseReturnValue:
         payment.status = "Paid"
         payment.paid_at = get_ist_now()
         payment.razorpay_payment_id = f"pay_sim_m{next_milestone}_{secrets.token_hex(6)}"
+        payment.gateway_payment_id = payment.razorpay_payment_id
         db.session.add(payment)
 
-        if next_milestone == 1 and not project.assigned_professional_id:
-            project.status = "Pending Assignment"
-        else:
-            project.status = "In Progress"
+        project.status = "In Progress"
 
         talent_share, agency_share, tax_val = compute_financial_split(amount, currency)
 
-        # Lock Escrow in Specialist Profile
         assigned_app = ProfessionalProjectApplication.query.filter_by(
             project_id=project.id, status="Assigned"
         ).first()
@@ -809,7 +939,7 @@ def simulate_test_payment(project_id: int) -> ResponseReturnValue:
 @payments_bp.route("/api/billing/webhook", methods=["POST"])
 @payments_bp.route("/subscription/webhook", methods=["POST"])
 @csrf.exempt
-def razorpay_webhook() -> ResponseReturnValue:
+def razorpay_webhook() -> Any:
     webhook_secret = os.environ.get("RAZORPAY_WEBHOOK_SECRET")
     received_sig = request.headers.get("X-Razorpay-Signature")
 
@@ -826,11 +956,14 @@ def razorpay_webhook() -> ResponseReturnValue:
     if not isinstance(event_payload, dict):
         return jsonify({"error": "Invalid webhook payload"}), 400
 
-    if event_payload.get("event") == "payment.captured":
+    event_type = event_payload.get("event")
+
+    if event_type == "payment.captured":
         try:
             entity = event_payload.get("payload", {}).get("payment", {}).get("entity", {})
             pid = entity.get("id")
             oid = entity.get("order_id")
+            raw_amount = entity.get("amount")
 
             existing = Payment.query.filter_by(razorpay_payment_id=pid).first()
             if existing and existing.status == "Paid":
@@ -838,7 +971,11 @@ def razorpay_webhook() -> ResponseReturnValue:
 
             order_payment = Payment.query.filter_by(razorpay_order_id=oid).first()
             if order_payment:
+                if order_payment.addon_id is not None and raw_amount != to_minor_units(order_payment.amount):
+                    return jsonify({"error": "Addon amount mismatch"}), 400
+
                 order_payment.razorpay_payment_id = pid
+                order_payment.gateway_payment_id = pid
                 order_payment.status = "Paid"
                 order_payment.paid_at = get_ist_now()
 
@@ -848,9 +985,117 @@ def razorpay_webhook() -> ResponseReturnValue:
                     Project.query.filter_by(id=order_payment.project_id).update({"status": "In Progress"})
 
                 db.session.commit()
+                return jsonify({"status": "success"}), 200
         except Exception as e:
             db.session.rollback()
             logger.error("Error processing webhook payment: %s", str(e), exc_info=True)
             return jsonify({"error": "Webhook database error"}), 500
 
-    return jsonify({"status": "success"}), 200
+    elif event_type == "subscription.charged":
+        try:
+            sub_entity = event_payload.get("payload", {}).get("subscription", {}).get("entity", {})
+            payment_entity = event_payload.get("payload", {}).get("payment", {}).get("entity", {})
+            event_id = event_payload.get("event_id")
+
+            gateway_sub_id = sub_entity.get("id")
+            payment_id = payment_entity.get("id")
+            raw_amount = payment_entity.get("amount")
+
+            subscription = RazorpaySubscription.query.filter_by(razorpay_subscription_id=gateway_sub_id).first()
+            if not subscription:
+                return jsonify({"error": "Subscription entity not found"}), 404
+
+            expected_amount_minor = subscription.amount * 100
+            if raw_amount != expected_amount_minor:
+                logger.warning(
+                    "Subscription charge amount mismatch: expected %s, got %s",
+                    expected_amount_minor,
+                    raw_amount,
+                )
+                return jsonify({"error": "Amount mismatch"}), 400
+
+            existing_charge = SubscriptionCharge.query.filter_by(razorpay_payment_id=payment_id).first()
+            if existing_charge:
+                return jsonify({
+                    "status": "duplicate",
+                    "invoice_id": existing_charge.invoice_id,
+                    "payment_id": existing_charge.payment_id
+                }), 200
+
+            gross_amount = Decimal(str(subscription.amount))
+            talent_share, agency_share, tax_amount = compute_financial_split(gross_amount, subscription.currency)
+
+            payment = Payment()
+            payment.project_id = subscription.project_id
+            payment.customer_id = subscription.customer_id
+            payment.razorpay_payment_id = payment_id
+            payment.gateway_payment_id = payment_id
+            payment.razorpay_order_id = payment_entity.get("order_id") or f"order_{payment_id}"
+            payment.amount = gross_amount
+            payment.currency = subscription.currency
+            payment.status = "Paid"
+            payment.paid_at = get_ist_now()
+            db.session.add(payment)
+            db.session.flush()
+
+            invoice = Invoice()
+            invoice.invoice_number = f"RET-{subscription.project_id:04d}-{secrets.token_hex(4).upper()}"
+            invoice.project_id = subscription.project_id
+            invoice.customer_id = subscription.customer_id
+            invoice.gross_amount = gross_amount
+            invoice.talent_payout = talent_share
+            invoice.agency_profit = agency_share
+            invoice.tax_amount = tax_amount
+            invoice.currency = subscription.currency
+            invoice.status = "Paid"
+            invoice.payout_status = "Pending Approval"
+            db.session.add(invoice)
+            db.session.flush()
+
+            charge = SubscriptionCharge()
+            charge.subscription_id = subscription.id
+            charge.payment_id = payment.id
+            charge.invoice_id = invoice.id
+            charge.razorpay_payment_id = payment_id
+            charge.event_id = event_id
+            charge.amount = subscription.amount
+            charge.currency = subscription.currency
+            charge.charged_at = get_ist_now()
+            db.session.add(charge)
+
+            subscription.status = "active"
+            subscription.updated_at = get_ist_now()
+
+            db.session.commit()
+            return jsonify({
+                "status": "charge_recorded",
+                "invoice_id": invoice.id,
+                "payment_id": payment.id
+            }), 200
+
+        except Exception as exc:
+            db.session.rollback()
+            logger.error("Error processing subscription.charged webhook: %s", str(exc), exc_info=True)
+            return jsonify({"error": "Failed to process charge"}), 500
+
+    elif event_type in SUBSCRIPTION_STATUS_EVENTS:
+        try:
+            target_status = SUBSCRIPTION_STATUS_EVENTS[event_type]
+            sub_entity = event_payload.get("payload", {}).get("subscription", {}).get("entity", {})
+            gateway_sub_id = sub_entity.get("id")
+
+            if gateway_sub_id:
+                subscription = RazorpaySubscription.query.filter_by(
+                    razorpay_subscription_id=gateway_sub_id
+                ).first()
+                if subscription:
+                    subscription.status = target_status
+                    subscription.updated_at = get_ist_now()
+                    db.session.commit()
+                    return jsonify({"status": "subscription_updated", "new_status": target_status}), 200
+        except Exception as e:
+            db.session.rollback()
+            logger.error("Error processing webhook subscription update: %s", str(e), exc_info=True)
+            return jsonify({"error": "Subscription webhook error"}), 500
+
+    return jsonify({"status": "unhandled_event"}), 200
