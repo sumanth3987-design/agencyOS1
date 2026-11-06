@@ -1,0 +1,18 @@
+{
+  "name": "agencyos1-e2e",
+  "version": "1.0.0",
+  "description": "End-to-End Test Suite for AgencyOS1",
+  "main": "index.js",
+  "scripts": {
+    "test": "playwright test",
+    "test:ui": "playwright test --ui",
+    "test:headed": "playwright test --headed",
+    "report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.40.0",
+    "@types/node": "^20.0.0",
+    "dotenv": "^16.3.1",
+    "typescript": "^5.0.0"
+  }
+}
