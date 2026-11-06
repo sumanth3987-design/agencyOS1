@@ -1,6 +1,8 @@
 """Project workflow tests: application, assignment, submission, and approval."""
 
 import pytest
+from app.extensions import db
+from app.models import ProfessionalProfile, ProfessionalProjectApplication, Project
 
 
 class TestAdminVerification:
@@ -23,10 +25,8 @@ class TestAdminVerification:
         )
         assert response.status_code == 302
 
-        from app.models import ProfessionalProfile
-
         with app.app_context():
-            profile = ProfessionalProfile.query.get(prof_id)
+            profile = db.session.get(ProfessionalProfile, prof_id)
             assert profile.verification_status == 'Verified'
 
         # Reject the professional
@@ -38,7 +38,7 @@ class TestAdminVerification:
         assert response.status_code == 302
 
         with app.app_context():
-            profile = ProfessionalProfile.query.get(prof_id)
+            profile = db.session.get(ProfessionalProfile, prof_id)
             assert profile.verification_status == 'Rejected'
 
 
@@ -61,8 +61,6 @@ class TestApply:
             follow_redirects=False,
         )
         assert response.status_code == 302
-
-        from app.models import ProfessionalProjectApplication
 
         with app.app_context():
             count = ProfessionalProjectApplication.query.filter_by(
@@ -94,8 +92,6 @@ class TestApply:
         )
         assert response2.status_code == 302
 
-        from app.models import ProfessionalProjectApplication
-
         with app.app_context():
             count = ProfessionalProjectApplication.query.filter_by(
                 project_id=project_id, professional_id=prof_id
@@ -121,8 +117,6 @@ class TestApply:
         )
         assert response.status_code == 302
 
-        from app.models import ProfessionalProjectApplication
-
         with app.app_context():
             count = ProfessionalProjectApplication.query.filter_by(
                 project_id=project_id, professional_id=prof_id
@@ -145,8 +139,6 @@ class TestApply:
             follow_redirects=False,
         )
         assert response.status_code == 302
-
-        from app.models import ProfessionalProjectApplication
 
         with app.app_context():
             count = ProfessionalProjectApplication.query.filter_by(
@@ -171,9 +163,6 @@ class TestApply:
             follow_redirects=False,
         )
         assert response.status_code == 302
-
-        from app.extensions import db
-        from app.models import ProfessionalProjectApplication, Project
 
         with app.app_context():
             app_row = ProfessionalProjectApplication.query.filter_by(
@@ -207,12 +196,10 @@ class TestAssignAndStart:
         )
         assert response.status_code == 302
 
-        from app.models import ProfessionalProjectApplication, Project
-
         with app.app_context():
-            application = ProfessionalProjectApplication.query.get(app_id)
+            application = db.session.get(ProfessionalProjectApplication, app_id)
             assert application.status == 'Not Selected'
-            assert Project.query.get(project_id).status == 'Pending Assignment'
+            assert db.session.get(Project, project_id).status == 'Pending Assignment'
 
     def test_assign_blocked_when_project_not_pending(
         self, app, client, login, factories, csrf_post
@@ -234,13 +221,11 @@ class TestAssignAndStart:
         )
         assert response.status_code == 302
 
-        from app.models import ProfessionalProjectApplication, Project
-
         with app.app_context():
-            application = ProfessionalProjectApplication.query.get(app_id)
+            application = db.session.get(ProfessionalProjectApplication, app_id)
             assert application.status == 'Applied'
             # Project remains 'Assigned' (was never 'Pending Assignment')
-            assert Project.query.get(project_id).status == 'Assigned'
+            assert db.session.get(Project, project_id).status == 'Assigned'
 
     def test_assign_transitions_all_applications(
         self, app, client, login, factories, csrf_post
@@ -265,9 +250,6 @@ class TestAssignAndStart:
             follow_redirects=False,
         )
         assert response.status_code == 302
-
-        from app.extensions import db
-        from app.models import ProfessionalProjectApplication, Project
 
         with app.app_context():
             app1 = db.session.get(ProfessionalProjectApplication, app1_id)
@@ -304,9 +286,6 @@ class TestAssignAndStart:
         )
         assert response.status_code == 302
 
-        from app.extensions import db
-        from app.models import ProfessionalProjectApplication, Project
-
         with app.app_context():
             selected = db.session.get(ProfessionalProjectApplication, selected_app_id)
             competing = db.session.get(ProfessionalProjectApplication, competing_app_id)
@@ -341,9 +320,6 @@ class TestAssignAndStart:
             follow_redirects=False,
         )
         assert response.status_code == 302
-
-        from app.extensions import db
-        from app.models import ProfessionalProjectApplication, Project
 
         with app.app_context():
             selected = db.session.get(ProfessionalProjectApplication, selected_app_id)
@@ -380,9 +356,6 @@ class TestAssignAndStart:
         )
         assert response.status_code == 302
 
-        from app.extensions import db
-        from app.models import ProfessionalProjectApplication, Project
-
         with app.app_context():
             selected = db.session.get(ProfessionalProjectApplication, selected_app_id)
             competing = db.session.get(ProfessionalProjectApplication, competing_app_id)
@@ -417,9 +390,6 @@ class TestAssignAndStart:
         )
         assert response.status_code == 302
 
-        from app.extensions import db
-        from app.models import ProfessionalProjectApplication, Project
-
         with app.app_context():
             selected = db.session.get(ProfessionalProjectApplication, selected_app_id)
             competing = db.session.get(ProfessionalProjectApplication, competing_app_id)
@@ -449,9 +419,6 @@ class TestAssignAndStart:
         )
         assert response.status_code == 302
 
-        from app.extensions import db
-        from app.models import Project
-
         with app.app_context():
             project = db.session.get(Project, project_id)
             assert project is not None
@@ -475,9 +442,6 @@ class TestAssignAndStart:
         )
         assert response.status_code == 302
 
-        from app.extensions import db
-        from app.models import Project
-
         with app.app_context():
             project = db.session.get(Project, project_id)
             assert project is not None
@@ -499,9 +463,6 @@ class TestAssignAndStart:
             follow_redirects=False,
         )
         assert response.status_code == 302
-
-        from app.extensions import db
-        from app.models import Project
 
         with app.app_context():
             project = db.session.get(Project, project_id)
@@ -531,10 +492,8 @@ class TestRevisionResubmitApprove:
         )
         assert response.status_code == 302
 
-        from app.models import Project
-
         with app.app_context():
-            assert Project.query.get(project_id).status == 'In Progress'
+            assert db.session.get(Project, project_id).status == 'In Progress'
 
     def test_full_review_cycle(
         self, app, client, login, factories, csrf_post
@@ -561,10 +520,8 @@ class TestRevisionResubmitApprove:
             follow_redirects=False,
         )
 
-        from app.models import Project
-
         with app.app_context():
-            assert Project.query.get(project_id).status == 'Submitted'
+            assert db.session.get(Project, project_id).status == 'Submitted'
 
         # Admin requests revision
         admin_id = factories.user('admin', 'review-cycle-admin@example.com')
@@ -579,7 +536,7 @@ class TestRevisionResubmitApprove:
         assert response.status_code == 302
 
         with app.app_context():
-            assert Project.query.get(project_id).status == 'Revision'
+            assert db.session.get(Project, project_id).status == 'Revision'
 
         # Professional resubmits
         login('review-cycle-prof@example.com', 'professional')
@@ -591,7 +548,7 @@ class TestRevisionResubmitApprove:
         assert response.status_code == 302
 
         with app.app_context():
-            assert Project.query.get(project_id).status == 'Submitted'
+            assert db.session.get(Project, project_id).status == 'Submitted'
 
         # Admin approves
         login('review-cycle-admin@example.com', 'admin')
@@ -603,7 +560,7 @@ class TestRevisionResubmitApprove:
         assert response.status_code == 302
 
         with app.app_context():
-            assert Project.query.get(project_id).status == 'Completed'
+            assert db.session.get(Project, project_id).status == 'Completed'
 
     def test_resubmit_blocked_when_not_revision(
         self, app, client, login, factories, csrf_post
@@ -623,10 +580,8 @@ class TestRevisionResubmitApprove:
         )
         assert response.status_code == 302
 
-        from app.models import Project
-
         with app.app_context():
-            assert Project.query.get(project_id).status == 'In Progress'
+            assert db.session.get(Project, project_id).status == 'In Progress'
 
     def test_revision_blocked_when_not_submitted(
         self, app, client, login, factories, csrf_post
@@ -647,10 +602,8 @@ class TestRevisionResubmitApprove:
         )
         assert response.status_code == 302
 
-        from app.models import Project
-
         with app.app_context():
-            assert Project.query.get(project_id).status == 'In Progress'
+            assert db.session.get(Project, project_id).status == 'In Progress'
 
     def test_revision_requires_comment(
         self, app, client, login, factories, csrf_post
@@ -671,9 +624,6 @@ class TestRevisionResubmitApprove:
             follow_redirects=False,
         )
         assert response.status_code == 302
-
-        from app.extensions import db
-        from app.models import Project
 
         with app.app_context():
             project = db.session.get(Project, project_id)
@@ -703,13 +653,11 @@ class TestStartProjectPaymentGate:
         )
         assert response.status_code == 302
 
-        from app.models import ProfessionalProjectApplication, Project
-
         with app.app_context():
-            application = ProfessionalProjectApplication.query.get(app_id)
+            application = db.session.get(ProfessionalProjectApplication, app_id)
             assert application.status == 'Applied'
             # Project remains 'Payment Pending'
-            assert Project.query.get(project_id).status == 'Payment Pending'
+            assert db.session.get(Project, project_id).status == 'Payment Pending'
 
     def test_professional_cannot_apply_to_payment_pending_project(
         self, app, client, login, factories, csrf_post
@@ -728,8 +676,6 @@ class TestStartProjectPaymentGate:
         )
         assert response.status_code == 302
 
-        from app.models import ProfessionalProjectApplication
-
         with app.app_context():
             count = ProfessionalProjectApplication.query.filter_by(
                 project_id=project_id, professional_id=prof_id
@@ -744,10 +690,8 @@ class TestStartProjectPaymentGate:
         project_id = factories.project(customer_id, status='Payment Pending')
         login('paygate-start@example.com', 'customer')
 
-        from app.models import Project
-
         with app.app_context():
-            project = Project.query.get(project_id)
+            project = db.session.get(Project, project_id)
             assert project.status == 'Payment Pending'
 
 class TestSubmit:
@@ -771,10 +715,8 @@ class TestSubmit:
         )
         assert response.status_code == 302
 
-        from app.models import Project
-
         with app.app_context():
-            assert Project.query.get(project_id).status == 'Assigned'
+            assert db.session.get(Project, project_id).status == 'Assigned'
 
     def test_submit_in_progress_project(
         self, app, client, login, factories, csrf_post
@@ -794,10 +736,8 @@ class TestSubmit:
         )
         assert response.status_code == 302
 
-        from app.models import Project
-
         with app.app_context():
-            assert Project.query.get(project_id).status == 'Submitted'
+            assert db.session.get(Project, project_id).status == 'Submitted'
 
     def test_submit_rejects_invalid_live_url(
         self, app, client, login, factories, csrf_post
@@ -817,10 +757,8 @@ class TestSubmit:
         )
         assert response.status_code == 302
 
-        from app.models import Project
-
         with app.app_context():
-            assert Project.query.get(project_id).status == 'In Progress'
+            assert db.session.get(Project, project_id).status == 'In Progress'
 
     def test_submit_requires_completion_notes(
         self, app, client, login, factories, csrf_post
@@ -840,7 +778,5 @@ class TestSubmit:
         )
         assert response.status_code == 302
 
-        from app.models import Project
-
         with app.app_context():
-            assert Project.query.get(project_id).status == 'In Progress'
+            assert db.session.get(Project, project_id).status == 'In Progress'

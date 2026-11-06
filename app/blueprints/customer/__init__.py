@@ -7,6 +7,7 @@ sequential 3-gate deliverable reviews (50/25/25), chat dispatch, automated escro
 from datetime import datetime
 from decimal import Decimal
 import json
+import logging
 from urllib.parse import urlsplit
 
 from flask import (
@@ -21,6 +22,7 @@ from flask import (
 )
 from flask.typing import ResponseReturnValue
 from flask_login import current_user, login_required
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.extensions import db
 from app.models import (
@@ -51,12 +53,14 @@ from app.services.pdf_generator import extract_sow_signature, generate_sow_pdf
 from app.utils.currency import (
     SUPPORTED_CURRENCIES,
     compute_financial_split,
+    format_currency,
     get_package_price,
     sanitize_currency,
 )
 from app.utils.project_uploads import save_project_upload
 
 customer_bp = Blueprint("customer", __name__)
+logger = logging.getLogger(__name__)
 
 
 # =========================================================
@@ -143,6 +147,7 @@ def dashboard_quick_message() -> ResponseReturnValue:
         flash(f"Note posted to Project #{pid} workspace successfully.", "success")
     except Exception as e:
         db.session.rollback()
+        logger.error("Error in dashboard_quick_message: %s", str(e), exc_info=True)
         flash(f"Could not dispatch message: {str(e)}", "danger")
 
     return redirect(url_for("customer.dashboard"))
@@ -255,7 +260,11 @@ def project_details(project_id: int | str) -> ResponseReturnValue:
 @login_required
 def send_project_message(project_id: int | str) -> ResponseReturnValue:
     clean_id = str(project_id).strip().rstrip("-/")
-    pid = int(clean_id)
+    try:
+        pid = int(clean_id)
+    except ValueError:
+        flash("Invalid project reference.", "danger")
+        return redirect(url_for("customer.dashboard"))
 
     project = Project.query.get_or_404(pid)
     user_role = getattr(current_user, "role", "").lower()
@@ -280,6 +289,7 @@ def send_project_message(project_id: int | str) -> ResponseReturnValue:
         flash("Note dispatched to project discussion.", "success")
     except Exception as e:
         db.session.rollback()
+        logger.error("Error in send_project_message: %s", str(e), exc_info=True)
         flash(f"Could not dispatch message: {str(e)}", "danger")
 
     return redirect(url_for("customer.project_details", project_id=pid))
@@ -294,7 +304,12 @@ def send_project_message(project_id: int | str) -> ResponseReturnValue:
 @login_required
 def view_invoice(project_id: int | str) -> ResponseReturnValue:
     clean_id = str(project_id).strip().rstrip("-/")
-    pid = int(clean_id)
+    try:
+        pid = int(clean_id)
+    except ValueError:
+        flash("Invalid project identifier.", "danger")
+        return redirect(url_for("customer.dashboard"))
+
     project = Project.query.get_or_404(pid)
 
     user_role = getattr(current_user, "role", "").lower()
@@ -390,15 +405,20 @@ def download_sow_pdf(project_id: int) -> ResponseReturnValue:
         flash("Sign the SOW before downloading the signed agreement.", "warning")
         return redirect(url_for("customer.project_contract", project_id=project.id))
 
-    pdf_buffer = generate_sow_pdf(
-        project, project.customer, project.business, signature
-    )
-    return send_file(
-        pdf_buffer,
-        as_attachment=True,
-        download_name=f"AgencyOS_SOW_Project_{project.id}.pdf",
-        mimetype="application/pdf",
-    )
+    try:
+        pdf_buffer = generate_sow_pdf(
+            project, project.customer, project.business, signature
+        )
+        return send_file(
+            pdf_buffer,
+            as_attachment=True,
+            download_name=f"AgencyOS_SOW_Project_{project.id}.pdf",
+            mimetype="application/pdf",
+        )
+    except Exception as exc:
+        logger.error("Failed to generate SOW PDF: %s", str(exc), exc_info=True)
+        flash("Error generating PDF document. Please try again.", "danger")
+        return redirect(url_for("customer.project_details", project_id=project.id))
 
 
 # =========================================================
@@ -453,25 +473,32 @@ def project_contract(project_id: int) -> ResponseReturnValue:
             flash("Enter the signer's full name and title before signing.", "warning")
             return redirect(url_for("customer.project_contract", project_id=project.id))
 
-        signature_entry = f" [Signed by: {signer_name} ({signer_title}) from IP: {request.remote_addr} on {get_ist_now().strftime('%d %b %Y %H:%M IST')}]"
-        if not getattr(project, "requirements", ""):
-            project.requirements = signature_entry
-        else:
-            project.requirements = project.requirements + signature_entry
+        try:
+            signature_entry = f" [Signed by: {signer_name} ({signer_title}) from IP: {request.remote_addr} on {get_ist_now().strftime('%d %b %Y %H:%M IST')}]"
+            if not getattr(project, "requirements", ""):
+                project.requirements = signature_entry
+            else:
+                project.requirements = project.requirements + signature_entry
 
-        # Project enters Gate 1 advance payment pending
-        project.status = "Payment Pending"
+            # Project enters Gate 1 advance payment pending
+            project.status = "Payment Pending"
 
-        ActivityLog.log_event(
-            project_id=project.id,
-            action="SOW_SIGNED",
-            description=f"Statement of Work digitally signed by {signer_name} ({signer_title}).",
-            user_id=current_user.id,
-            category="success",
-        )
-        db.session.commit()
-        flash("SOW Agreement digitally signed. Please authorize Milestone 1 Advance (50%) to begin.", "success")
-        return redirect(url_for("customer.project_details", project_id=project.id))
+            ActivityLog.log_event(
+                project_id=project.id,
+                action="SOW_SIGNED",
+                description=f"Statement of Work digitally signed by {signer_name} ({signer_title}).",
+                user_id=current_user.id,
+                category="success",
+            )
+            db.session.commit()
+            flash("SOW Agreement digitally signed. Please authorize Milestone 1 Advance (50%) to begin.", "success")
+            return redirect(url_for("customer.project_details", project_id=project.id))
+
+        except Exception as e:
+            db.session.rollback()
+            logger.error("Error signing SOW: %s", str(e), exc_info=True)
+            flash("Failed to record digital signature. Please try again.", "danger")
+            return redirect(url_for("customer.project_contract", project_id=project.id))
 
     return render_template(
         "contract.html",
@@ -490,7 +517,12 @@ def project_contract(project_id: int) -> ResponseReturnValue:
 @login_required
 def customer_approve_project(project_id: int | str) -> ResponseReturnValue:
     clean_id = str(project_id).strip().rstrip("-/")
-    pid = int(clean_id)
+    try:
+        pid = int(clean_id)
+    except ValueError:
+        flash("Invalid project reference.", "danger")
+        return redirect(url_for("customer.dashboard"))
+
     project = Project.query.get_or_404(pid)
 
     user_role = getattr(current_user, "role", "").lower()
@@ -498,148 +530,160 @@ def customer_approve_project(project_id: int | str) -> ResponseReturnValue:
         flash("Unauthorized action.", "danger")
         return redirect(url_for("customer.dashboard"))
 
-    latest_delivery = get_latest_project_delivery(project.id)
-    if latest_delivery:
-        latest_delivery.status = "Approved"
-        latest_delivery.reviewed_at = get_ist_now()
+    try:
+        latest_delivery = get_latest_project_delivery(project.id)
+        if latest_delivery:
+            latest_delivery.status = "Approved"
+            latest_delivery.reviewed_at = get_ist_now()
 
-    project.revision_comment = None
+        project.revision_comment = None
 
-    # Count how many milestone payments have been funded on this project
-    paid_payments_count = Payment.query.filter_by(project_id=project.id, status="Paid").count()
+        # Count how many milestone payments have been completed
+        paid_payments_count = Payment.query.filter_by(project_id=project.id, status="Paid", addon_id=None).count()
 
-    assigned_app = ProfessionalProjectApplication.query.filter_by(
-        project_id=project.id, status="Assigned"
-    ).first()
+        assigned_app = ProfessionalProjectApplication.query.filter_by(
+            project_id=project.id, status="Assigned"
+        ).first()
 
-    specialist_id = assigned_app.professional_id if assigned_app else None
-    specialist_profile = ProfessionalProfile.query.filter_by(user_id=specialist_id).first() if specialist_id else None
+        specialist_id = project.assigned_professional_id or (assigned_app.professional_id if assigned_app else None)
+        specialist_profile = ProfessionalProfile.query.filter_by(user_id=specialist_id).first() if specialist_id else None
 
-    currency = sanitize_currency(project.currency)
-    gross = get_package_price(project.package, currency, PACKAGE_PRICES)
-    talent_share, _, _ = compute_financial_split(gross, currency)
-    total_talent_payout = assigned_app.proposed_rate or talent_share if assigned_app else talent_share
+        currency = sanitize_currency(project.currency)
+        gross = get_package_price(project.package, currency, PACKAGE_PRICES)
+        talent_share, _, _ = compute_financial_split(gross, currency)
+        total_talent_payout = assigned_app.proposed_rate or talent_share if (assigned_app and assigned_app.proposed_rate) else talent_share
 
-    # Sequential 3-Step Lifecycle Gate Handling
-    if paid_payments_count <= 1:
-        # STEP 1 SIGN-OFF (UI/UX Prototype & Specs)
-        project.status = "In Progress"
-        milestone_ratio = Decimal("0.50")
-        earned_amount = (total_talent_payout * milestone_ratio).quantize(Decimal("0.01"))
+        # Target milestone record for this stage
+        milestones = Milestone.query.filter_by(project_id=project.id).order_by(Milestone.id.asc()).all()
 
-        if specialist_profile:
-            curr_pend = Decimal(str(specialist_profile.pending_balance or 0))
-            curr_avail = Decimal(str(specialist_profile.available_balance or 0))
-            specialist_profile.pending_balance = max(Decimal("0.00"), curr_pend - earned_amount)
-            specialist_profile.available_balance = curr_avail + earned_amount
+        if paid_payments_count <= 1:
+            # STEP 1 SIGN-OFF (UI/UX Prototype & Specs)
+            project.status = "In Progress"
+            milestone_ratio = Decimal("0.50")
+            earned_amount = (Decimal(str(total_talent_payout)) * milestone_ratio).quantize(Decimal("0.01"))
 
-            # Log Escrow Release
-            tx = WalletTransaction()
-            tx.user_id = specialist_id
-            tx.amount = earned_amount
-            tx.currency = currency
-            tx.transaction_type = "ESCROW_RELEASED"
-            tx.reference_type = "PROJECT"
-            tx.reference_id = project.id
-            tx.description = f"Project #{project.id} Step 1 (UI/UX) approved. ₹{earned_amount} released to available balance."
-            tx.created_at = get_ist_now()
-            db.session.add(tx)
-
-            # Alert Specialist
-            notif = Notification()
-            notif.user_id = specialist_id
-            notif.title = f"Step 1 (UI/UX) Approved! ₹{earned_amount} Unlocked 💰"
-            notif.message = f"Client approved the UI/UX prototype for Project #{project.id}. ₹{earned_amount} is now in your available balance. Client is ready for Gate 2 (25% Staging)."
-            notif.link = "/professional/dashboard"
-            notif.created_at = get_ist_now()
-            db.session.add(notif)
-
-        flash_msg = "Step 1 (UI/UX Prototype) approved! Gate 2 (25% Staging Escrow) is now unlocked for payment."
-
-    elif paid_payments_count == 2:
-        # STEP 2 SIGN-OFF (Functional Staging Build)
-        project.status = "In Progress"
-        milestone_ratio = Decimal("0.25")
-        earned_amount = (total_talent_payout * milestone_ratio).quantize(Decimal("0.01"))
-
-        if specialist_profile:
-            curr_pend = Decimal(str(specialist_profile.pending_balance or 0))
-            curr_avail = Decimal(str(specialist_profile.available_balance or 0))
-            specialist_profile.pending_balance = max(Decimal("0.00"), curr_pend - earned_amount)
-            specialist_profile.available_balance = curr_avail + earned_amount
-
-            # Log Escrow Release
-            tx = WalletTransaction()
-            tx.user_id = specialist_id
-            tx.amount = earned_amount
-            tx.currency = currency
-            tx.transaction_type = "ESCROW_RELEASED"
-            tx.reference_type = "PROJECT"
-            tx.reference_id = project.id
-            tx.description = f"Project #{project.id} Step 2 (Staging) approved. ₹{earned_amount} released to available balance."
-            tx.created_at = get_ist_now()
-            db.session.add(tx)
-
-            # Alert Specialist
-            notif = Notification()
-            notif.user_id = specialist_id
-            notif.title = f"Step 2 (Staging) Approved! ₹{earned_amount} Unlocked 💰"
-            notif.message = f"Client approved the staging build for Project #{project.id}. ₹{earned_amount} is now in your available balance. Ready for Gate 3 (25% Final Production)."
-            notif.link = "/professional/dashboard"
-            notif.created_at = get_ist_now()
-            db.session.add(notif)
-
-        flash_msg = "Step 2 (Staging Build) approved! Gate 3 (25% Final Production & Handover) is now unlocked for payment."
-
-    else:
-        # STEP 3 SIGN-OFF (Final Production & Full IP Handover - 100% COMPLETE)
-        project.status = "Completed"
-
-        if specialist_profile:
-            remaining = Decimal(str(specialist_profile.pending_balance or 0))
-            if remaining > Decimal("0.00"):
-                specialist_profile.available_balance = Decimal(str(specialist_profile.available_balance or 0)) + remaining
-                specialist_profile.pending_balance = Decimal("0.00")
+            if specialist_profile:
+                curr_pend = Decimal(str(specialist_profile.pending_balance or 0))
+                curr_avail = Decimal(str(specialist_profile.available_balance or 0))
+                specialist_profile.pending_balance = max(Decimal("0.00"), curr_pend - earned_amount)
+                specialist_profile.available_balance = curr_avail + earned_amount
 
                 tx = WalletTransaction()
                 tx.user_id = specialist_id
-                tx.amount = remaining
+                tx.amount = earned_amount
                 tx.currency = currency
                 tx.transaction_type = "ESCROW_RELEASED"
                 tx.reference_type = "PROJECT"
                 tx.reference_id = project.id
-                tx.description = f"Project #{project.id} final handover approved. Final ₹{remaining} released to available balance."
+                tx.description = f"Project #{project.id} Step 1 (UI/UX) approved. {format_currency(earned_amount, currency)} released to available balance."
                 tx.created_at = get_ist_now()
                 db.session.add(tx)
 
                 notif = Notification()
                 notif.user_id = specialist_id
-                notif.title = f"🎉 Project Completed! ₹{remaining} Final Release"
+                notif.title = f"Step 1 (UI/UX) Approved! {format_currency(earned_amount, currency)} Unlocked 💰"
+                notif.message = f"Client approved UI/UX prototype for Project #{project.id}. {format_currency(earned_amount, currency)} is now available for withdrawal. Client ready for Gate 2."
+                notif.link = "/professional/dashboard"
+                notif.created_at = get_ist_now()
+                db.session.add(notif)
+
+            if milestones and len(milestones) >= 1:
+                milestones[0].status = "released"
+                milestones[0].released_at = get_ist_now()
+
+            flash_msg = "Step 1 (UI/UX Prototype) approved! Gate 2 (25% Staging Escrow) is now unlocked for payment."
+
+        elif paid_payments_count == 2:
+            # STEP 2 SIGN-OFF (Functional Staging Build)
+            project.status = "In Progress"
+            milestone_ratio = Decimal("0.25")
+            earned_amount = (Decimal(str(total_talent_payout)) * milestone_ratio).quantize(Decimal("0.01"))
+
+            if specialist_profile:
+                curr_pend = Decimal(str(specialist_profile.pending_balance or 0))
+                curr_avail = Decimal(str(specialist_profile.available_balance or 0))
+                specialist_profile.pending_balance = max(Decimal("0.00"), curr_pend - earned_amount)
+                specialist_profile.available_balance = curr_avail + earned_amount
+
+                tx = WalletTransaction()
+                tx.user_id = specialist_id
+                tx.amount = earned_amount
+                tx.currency = currency
+                tx.transaction_type = "ESCROW_RELEASED"
+                tx.reference_type = "PROJECT"
+                tx.reference_id = project.id
+                tx.description = f"Project #{project.id} Step 2 (Staging) approved. {format_currency(earned_amount, currency)} released to available balance."
+                tx.created_at = get_ist_now()
+                db.session.add(tx)
+
+                notif = Notification()
+                notif.user_id = specialist_id
+                notif.title = f"Step 2 (Staging) Approved! {format_currency(earned_amount, currency)} Unlocked 💰"
+                notif.message = f"Client approved the staging build for Project #{project.id}. {format_currency(earned_amount, currency)} is now available. Ready for Gate 3."
+                notif.link = "/professional/dashboard"
+                notif.created_at = get_ist_now()
+                db.session.add(notif)
+
+            if milestones and len(milestones) >= 2:
+                milestones[1].status = "released"
+                milestones[1].released_at = get_ist_now()
+
+            flash_msg = "Step 2 (Staging Build) approved! Gate 3 (25% Final Production & Handover) is now unlocked for payment."
+
+        else:
+            # STEP 3 SIGN-OFF (Final Production & Full IP Handover - 100% COMPLETE)
+            project.status = "Completed"
+
+            if specialist_profile:
+                curr_pend = Decimal(str(specialist_profile.pending_balance or 0))
+                curr_avail = Decimal(str(specialist_profile.available_balance or 0))
+                remaining_to_release = curr_pend if curr_pend > Decimal("0.00") else (Decimal(str(total_talent_payout)) * Decimal("0.25")).quantize(Decimal("0.01"))
+                
+                specialist_profile.available_balance = curr_avail + remaining_to_release
+                specialist_profile.pending_balance = Decimal("0.00")
+
+                tx = WalletTransaction()
+                tx.user_id = specialist_id
+                tx.amount = remaining_to_release
+                tx.currency = currency
+                tx.transaction_type = "ESCROW_RELEASED"
+                tx.reference_type = "PROJECT"
+                tx.reference_id = project.id
+                tx.description = f"Project #{project.id} final handover approved. Final {format_currency(remaining_to_release, currency)} released to available balance."
+                tx.created_at = get_ist_now()
+                db.session.add(tx)
+
+                notif = Notification()
+                notif.user_id = specialist_id
+                notif.title = f"🎉 Project Completed! {format_currency(remaining_to_release, currency)} Final Release"
                 notif.message = f"Client approved final handover for Project #{project.id}. All remaining funds are ready for UPI/Bank withdrawal."
                 notif.link = "/professional/dashboard"
                 notif.created_at = get_ist_now()
                 db.session.add(notif)
 
-        flash_msg = "Final milestone approved! Project marked Completed and all remaining escrow funds released."
+            for m in milestones:
+                if m.status != "released":
+                    m.status = "released"
+                    m.released_at = get_ist_now()
 
-    ActivityLog.log_event(
-        project_id=project.id,
-        action="MILESTONE_APPROVED",
-        description=f"Client approved milestone deliverable. Project status: {project.status}.",
-        user_id=current_user.id,
-        category="success",
-    )
+            flash_msg = "Final milestone approved! Project marked Completed and all remaining escrow funds released."
 
-    try:
-        Milestone.query.filter_by(project_id=project.id).update(
-            {"status": "released", "released_at": get_ist_now()},
-            synchronize_session=False,
+        ActivityLog.log_event(
+            project_id=project.id,
+            action="MILESTONE_APPROVED",
+            description=f"Client approved milestone deliverable. Project status: {project.status}.",
+            user_id=current_user.id,
+            category="success",
         )
-    except Exception:
-        pass
 
-    db.session.commit()
-    flash(flash_msg, "success")
+        db.session.commit()
+        flash(flash_msg, "success")
+
+    except Exception as e:
+        db.session.rollback()
+        logger.error("Error approving project milestone: %s", str(e), exc_info=True)
+        flash("An error occurred during milestone clearance. Please try again.", "danger")
+
     return redirect(url_for("customer.project_details", project_id=pid))
 
 
@@ -652,7 +696,12 @@ def customer_approve_project(project_id: int | str) -> ResponseReturnValue:
 @login_required
 def customer_request_revision(project_id: int | str) -> ResponseReturnValue:
     clean_id = str(project_id).strip().rstrip("-/")
-    pid = int(clean_id)
+    try:
+        pid = int(clean_id)
+    except ValueError:
+        flash("Invalid project reference.", "danger")
+        return redirect(url_for("customer.dashboard"))
+
     project = Project.query.get_or_404(pid)
 
     user_role = getattr(current_user, "role", "").lower()
@@ -668,24 +717,33 @@ def customer_request_revision(project_id: int | str) -> ResponseReturnValue:
         return redirect(url_for("customer.project_details", project_id=pid))
 
     comment = request.form.get("revision_comment", "").strip()
-    latest_delivery = get_latest_project_delivery(project.id)
-    if latest_delivery:
-        latest_delivery.status = "Revision"
-        latest_delivery.review_comment = comment
-        latest_delivery.reviewed_at = get_ist_now()
+    if not comment:
+        flash("Please provide details for the revision request.", "warning")
+        return redirect(url_for("customer.project_details", project_id=pid))
 
-    project.status = "Revision"
-    project.revision_comment = comment
-    ActivityLog.log_event(
-        project_id=project.id,
-        action="REVISION_REQUESTED",
-        description=f"Client requested a revision: {comment}",
-        user_id=current_user.id,
-        category="warning",
-    )
-    db.session.commit()
+    try:
+        latest_delivery = get_latest_project_delivery(project.id)
+        if latest_delivery:
+            latest_delivery.status = "Revision"
+            latest_delivery.review_comment = comment
+            latest_delivery.reviewed_at = get_ist_now()
 
-    flash("Revision feedback logged. Your specialist has been notified.", "success")
+        project.status = "Revision"
+        project.revision_comment = comment
+        ActivityLog.log_event(
+            project_id=project.id,
+            action="REVISION_REQUESTED",
+            description=f"Client requested a revision: {comment}",
+            user_id=current_user.id,
+            category="warning",
+        )
+        db.session.commit()
+        flash("Revision feedback logged. Your specialist has been notified.", "success")
+    except Exception as e:
+        db.session.rollback()
+        logger.error("Error requesting revision: %s", str(e), exc_info=True)
+        flash("Could not log revision feedback. Please try again.", "danger")
+
     return redirect(url_for("customer.project_details", project_id=pid))
 
 
@@ -732,6 +790,7 @@ def submit_project_review(project_id: int) -> ResponseReturnValue:
         flash("Review logged successfully. Thank you for your feedback.", "success")
     except Exception as e:
         db.session.rollback()
+        logger.error("Error submitting review: %s", str(e), exc_info=True)
         flash(f"Could not record review: {str(e)}", "danger")
 
     return redirect(url_for("customer.project_details", project_id=project.id))
@@ -757,7 +816,11 @@ def add_business() -> ResponseReturnValue:
         location = request.form.get("location", "").strip()
         website = request.form.get("website", "").strip()
 
-        if name:
+        if not name:
+            flash("Business name is required.", "danger")
+            return render_template("add_business.html")
+
+        try:
             b = Business()
             b.customer_id = current_user.id
             b.name = name
@@ -768,6 +831,10 @@ def add_business() -> ResponseReturnValue:
             db.session.commit()
             flash("Business entity created successfully.", "success")
             return redirect(url_for("customer.businesses"))
+        except Exception as e:
+            db.session.rollback()
+            logger.error("Error creating business: %s", str(e), exc_info=True)
+            flash("Failed to save business entity. Please try again.", "danger")
 
     return render_template("add_business.html")
 
@@ -778,13 +845,23 @@ def edit_business(business_id: int) -> ResponseReturnValue:
     business = Business.query.filter_by(id=business_id, customer_id=current_user.id).first_or_404()
 
     if request.method == "POST":
-        business.name = request.form.get("name", business.name).strip()
-        business.business_type = request.form.get("business_type", business.business_type).strip()
-        business.location = request.form.get("location", business.location).strip()
-        business.website = request.form.get("website", business.website).strip()
-        db.session.commit()
-        flash("Business entity updated successfully.", "success")
-        return redirect(url_for("customer.businesses"))
+        name = request.form.get("name", business.name).strip()
+        if not name:
+            flash("Business name cannot be empty.", "danger")
+            return render_template("edit_business.html", business=business)
+
+        try:
+            business.name = name
+            business.business_type = request.form.get("business_type", business.business_type).strip()
+            business.location = request.form.get("location", business.location).strip()
+            business.website = request.form.get("website", business.website).strip()
+            db.session.commit()
+            flash("Business entity updated successfully.", "success")
+            return redirect(url_for("customer.businesses"))
+        except Exception as e:
+            db.session.rollback()
+            logger.error("Error updating business: %s", str(e), exc_info=True)
+            flash("Failed to update business entity.", "danger")
 
     return render_template("edit_business.html", business=business)
 
@@ -793,9 +870,16 @@ def edit_business(business_id: int) -> ResponseReturnValue:
 @login_required
 def delete_business(business_id: int) -> ResponseReturnValue:
     business = Business.query.filter_by(id=business_id, customer_id=current_user.id).first_or_404()
-    db.session.delete(business)
-    db.session.commit()
-    flash(f"Business entity '{business.name}' deleted.", "success")
+    try:
+        Project.query.filter_by(business_id=business.id).update({"business_id": None})
+        db.session.delete(business)
+        db.session.commit()
+        flash(f"Business entity '{business.name}' deleted.", "success")
+    except Exception as e:
+        db.session.rollback()
+        logger.error("Error deleting business: %s", str(e), exc_info=True)
+        flash("Could not delete business entity.", "danger")
+
     return redirect(url_for("customer.businesses"))
 
 
@@ -816,27 +900,32 @@ def customer_profile() -> ResponseReturnValue:
         db.session.commit()
 
     if request.method == "POST":
-        profile.phone = request.form.get("phone", "").strip()
-        profile.secondary_phone = request.form.get("secondary_phone", "").strip()
-        profile.preferred_channel = request.form.get("preferred_channel", "WhatsApp").strip()
-        profile.available_hours = request.form.get("available_hours", "").strip()
-        profile.billing_email = request.form.get("billing_email", "").strip().lower()
+        try:
+            profile.phone = request.form.get("phone", "").strip()
+            profile.secondary_phone = request.form.get("secondary_phone", "").strip()
+            profile.preferred_channel = request.form.get("preferred_channel", "WhatsApp").strip()
+            profile.available_hours = request.form.get("available_hours", "").strip()
+            profile.billing_email = request.form.get("billing_email", "").strip().lower()
 
-        profile.business_name = request.form.get("business_name", "").strip()
-        profile.business_type = request.form.get("business_type", "").strip()
-        profile.website = request.form.get("website", "").strip()
-        profile.gstin = request.form.get("gstin", "").strip().upper()
-        profile.billing_address = request.form.get("billing_address", "").strip()
-        profile.pincode = request.form.get("pincode", "").strip()
-        profile.location = request.form.get("location", "").strip()
+            profile.business_name = request.form.get("business_name", "").strip()
+            profile.business_type = request.form.get("business_type", "").strip()
+            profile.website = request.form.get("website", "").strip()
+            profile.gstin = request.form.get("gstin", "").strip().upper()
+            profile.billing_address = request.form.get("billing_address", "").strip()
+            profile.pincode = request.form.get("pincode", "").strip()
+            profile.location = request.form.get("location", "").strip()
 
-        profile.signatory_name = request.form.get("signatory_name", "").strip()
-        profile.signatory_title = request.form.get("signatory_title", "").strip()
+            profile.signatory_name = request.form.get("signatory_name", "").strip()
+            profile.signatory_title = request.form.get("signatory_title", "").strip()
 
-        profile.profile_completed = True
-        db.session.commit()
-        flash("Organization profile and direct communication coordinates saved.", "success")
-        return redirect(url_for("customer.customer_profile"))
+            profile.profile_completed = True
+            db.session.commit()
+            flash("Organization profile and direct communication coordinates saved.", "success")
+            return redirect(url_for("customer.customer_profile"))
+        except Exception as e:
+            db.session.rollback()
+            logger.error("Error updating customer profile: %s", str(e), exc_info=True)
+            flash("Failed to update profile coordinates.", "danger")
 
     return render_template("customer_profile.html", profile=profile)
 
@@ -882,7 +971,6 @@ def start_project(service_slug: str = "website-development") -> ResponseReturnVa
             or "Standard project kickoff and milestone deliverables."
         ).strip()
 
-        # Skill Matching Tags extraction (or intelligent auto-inference)
         raw_skills = request.form.get("required_skills", "").strip() or request.form.get("skills", "").strip()
         if not raw_skills:
             lower_service = service.lower()
@@ -938,68 +1026,101 @@ def start_project(service_slug: str = "website-development") -> ResponseReturnVa
         if attachment_url:
             reqs += f"\n\nAttached Scope Document: {attachment_url}"
 
-        existing_draft = (
-            Project.query.filter_by(
-                customer_id=current_user.id, status="Payment Pending"
-            )
-            .order_by(Project.created_at.desc())
-            .first()
-        )
-
-        if existing_draft and not extract_sow_signature(existing_draft.requirements):
-            existing_draft.service = service
-            existing_draft.package = package
-            existing_draft.currency = currency
-            existing_draft.requirements = reqs
-            existing_draft.required_skills = raw_skills
-            existing_draft.business_id = target_business_id
-
-            if attachment_url:
-                ActivityLog.log_event(
-                    project_id=existing_draft.id,
-                    action="DOCUMENT_UPLOADED",
-                    description="Client uploaded an updated project scope document.",
-                    user_id=current_user.id,
-                    category="info",
+        try:
+            existing_draft = (
+                Project.query.filter_by(
+                    customer_id=current_user.id, status="Payment Pending"
                 )
-            db.session.commit()
-            flash(f"Updated Project #{existing_draft.id}. Review and sign the SOW Agreement.", "info")
-            return redirect(url_for("customer.project_contract", project_id=existing_draft.id))
+                .order_by(Project.created_at.desc())
+                .first()
+            )
 
-        project = Project()
-        project.customer_id = current_user.id
-        project.business_id = target_business_id
-        project.service = service
-        project.package = package
-        project.currency = currency
-        project.requirements = reqs
-        project.required_skills = raw_skills
-        project.status = "Payment Pending"
+            if existing_draft and not extract_sow_signature(existing_draft.requirements):
+                existing_draft.service = service
+                existing_draft.package = package
+                existing_draft.currency = currency
+                existing_draft.requirements = reqs
+                existing_draft.required_skills = raw_skills
+                existing_draft.business_id = target_business_id
 
-        db.session.add(project)
-        db.session.flush()
+                if attachment_url:
+                    ActivityLog.log_event(
+                        project_id=existing_draft.id,
+                        action="DOCUMENT_UPLOADED",
+                        description="Client uploaded an updated project scope document.",
+                        user_id=current_user.id,
+                        category="info",
+                    )
+                db.session.commit()
+                flash(f"Updated Project #{existing_draft.id}. Review and sign the SOW Agreement.", "info")
+                return redirect(url_for("customer.project_contract", project_id=existing_draft.id))
 
-        ActivityLog.log_event(
-            project_id=project.id,
-            action="PROJECT_CREATED",
-            description=f"Project #{project.id} created with required skills: {raw_skills}. Awaiting SOW signature.",
-            user_id=current_user.id,
-            category="info",
-        )
-        
-        if attachment_url:
+            project = Project()
+            project.customer_id = current_user.id
+            project.business_id = target_business_id
+            project.service = service
+            project.package = package
+            project.currency = currency
+            project.requirements = reqs
+            project.required_skills = raw_skills
+            project.status = "Payment Pending"
+
+            db.session.add(project)
+            db.session.flush()
+
+            # Seed the 3 standard sequential escrow milestones via direct attribute assignment
+            pkg_gross = get_package_price(package, currency, PACKAGE_PRICES)
+            m1_val = int(round(pkg_gross * Decimal("0.50")))
+            m2_val = int(round(pkg_gross * Decimal("0.25")))
+            m3_val = int(round(pkg_gross * Decimal("0.25")))
+
+            m1 = Milestone()
+            m1.project_id = project.id
+            m1.title = "Gate 1: UI/UX Prototype & Specifications (50%)"
+            m1.amount = m1_val
+            m1.status = "pending"
+
+            m2 = Milestone()
+            m2.project_id = project.id
+            m2.title = "Gate 2: Functional Staging Build (25%)"
+            m2.amount = m2_val
+            m2.status = "pending"
+
+            m3 = Milestone()
+            m3.project_id = project.id
+            m3.title = "Gate 3: Production Deployment & IP Handover (25%)"
+            m3.amount = m3_val
+            m3.status = "pending"
+
+            db.session.add_all([m1, m2, m3])
+
             ActivityLog.log_event(
                 project_id=project.id,
-                action="DOCUMENT_UPLOADED",
-                description="Client uploaded a project scope document.",
+                action="PROJECT_CREATED",
+                description=f"Project #{project.id} created with required skills: {raw_skills}. Awaiting SOW signature.",
                 user_id=current_user.id,
                 category="info",
             )
             
-        db.session.commit()
+            if attachment_url:
+                ActivityLog.log_event(
+                    project_id=project.id,
+                    action="DOCUMENT_UPLOADED",
+                    description="Client uploaded a project scope document.",
+                    user_id=current_user.id,
+                    category="info",
+                )
+                
+            db.session.commit()
 
-        flash("Milestone project created! Please review and sign the SOW Agreement.", "info")
-        return redirect(url_for("customer.project_contract", project_id=project.id))
+            flash("Milestone project created! Please review and sign the SOW Agreement.", "info")
+            return redirect(url_for("customer.project_contract", project_id=project.id))
+
+        except Exception as e:
+            db.session.rollback()
+            logger.error("Error creating project in start_project: %s", str(e), exc_info=True)
+            flash("Could not initialize your project workspace. Please try again.", "danger")
+            return redirect(url_for("customer.start_project", service_slug=service_slug))
 
     return render_template("start_project.html", service_slug=service_slug, businesses=businesses)
 
@@ -1017,12 +1138,19 @@ def cancel_project(project_id: int) -> ResponseReturnValue:
         flash("Cannot cancel an active or paid project.", "warning")
         return redirect(url_for("customer.dashboard"))
 
-    Payment.query.filter_by(project_id=project.id).delete()
-    db.session.delete(project)
-    db.session.commit()
+    try:
+        Payment.query.filter_by(project_id=project.id).delete()
+        Milestone.query.filter_by(project_id=project.id).delete()
+        db.session.delete(project)
+        db.session.commit()
+        flash(f"Draft Project #{project_id} cancelled.", "info")
+    except Exception as e:
+        db.session.rollback()
+        logger.error("Error cancelling project: %s", str(e), exc_info=True)
+        flash("Could not cancel draft project.", "danger")
 
-    flash(f"Draft Project #{project_id} cancelled.", "info")
     return redirect(url_for("customer.dashboard"))
+
 
 @customer_bp.route("/project/<int:project_id>/raise-dispute", methods=["POST"])
 @login_required
@@ -1037,34 +1165,40 @@ def raise_dispute(project_id: int):
         flash("Please provide a reason for raising this dispute.", "warning")
         return redirect(url_for("customer.project_details", project_id=project.id))
 
-    project.status = "Disputed"
-    dispute = Dispute(
-        project_id=project.id,
-        raised_by_user_id=current_user.id,
-        reason=reason,
-        status="OPEN"
-    )
-    db.session.add(dispute)
-
-    ActivityLog.log_event(
-        project_id=project.id,
-        action="DISPUTE_RAISED",
-        description=f"Escrow dispute raised by client: {reason}",
-        user_id=current_user.id,
-        category="danger",
-    )
-
-    for admin in User.query.filter_by(role="admin").all():
-        notif = Notification(
-            user_id=admin.id,
-            title=f"⚠️ Escrow Dispute Raised: Project #{project.id}",
-            message=f"{current_user.name} raised a dispute on Project #{project.id}. Admin arbitration required.",
-            link=url_for("admin.admin_disputes")
+    try:
+        project.status = "Disputed"
+        dispute = Dispute(
+            project_id=project.id,
+            raised_by_user_id=current_user.id,
+            reason=reason,
+            status="OPEN"
         )
-        db.session.add(notif)
+        db.session.add(dispute)
 
-    db.session.commit()
-    flash("Escrow dispute logged. Agency administration has frozen funds and stepped in for arbitration.", "warning")
+        ActivityLog.log_event(
+            project_id=project.id,
+            action="DISPUTE_RAISED",
+            description=f"Escrow dispute raised by client: {reason}",
+            user_id=current_user.id,
+            category="danger",
+        )
+
+        for admin in User.query.filter_by(role="admin").all():
+            notif = Notification(
+                user_id=admin.id,
+                title=f"⚠️ Escrow Dispute Raised: Project #{project.id}",
+                message=f"{current_user.name} raised a dispute on Project #{project.id}. Admin arbitration required.",
+                link=url_for("admin.admin_disputes")
+            )
+            db.session.add(notif)
+
+        db.session.commit()
+        flash("Escrow dispute logged. Agency administration has frozen funds and stepped in for arbitration.", "warning")
+    except Exception as e:
+        db.session.rollback()
+        logger.error("Error raising dispute: %s", str(e), exc_info=True)
+        flash("Error submitting dispute. Please try again.", "danger")
+
     return redirect(url_for("customer.project_details", project_id=project.id))
 
 

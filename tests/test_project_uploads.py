@@ -98,7 +98,11 @@ def test_upload_rejects_files_over_10_mb(
 
     assert response.status_code == 302
     assert Project.query.filter_by(customer_id=customer_id).count() == 0
-    assert os.listdir(os.path.join(tmp_path, "uploads")) == []
+    
+    # FIX: Safely check for the directory instead of blind os.listdir
+    upload_dir = os.path.join(tmp_path, "uploads")
+    if os.path.exists(upload_dir):
+        assert os.listdir(upload_dir) == []
 
 
 def test_landing_page_renders_business_faqs(client):

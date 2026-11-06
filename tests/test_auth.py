@@ -321,7 +321,9 @@ class TestAccountRecovery:
             token = re.search(
                 r"/reset-password/([A-Za-z0-9_-]+)",
                 emails[-1]["body"],
-            ).group(1)
+            )
+            assert token is not None
+            token = token.group(1)
 
         login_response = client.post(
             "/login",
@@ -436,7 +438,9 @@ class TestAccountRecovery:
             token = re.search(
                 r"/verify-email/([A-Za-z0-9_-]+)",
                 emails[-1]["body"],
-            ).group(1)
+            )
+            assert token is not None
+            token = token.group(1)
 
         response = client.get(
             f"/verify-email/{token}", follow_redirects=False

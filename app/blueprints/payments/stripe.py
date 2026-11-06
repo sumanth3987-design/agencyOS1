@@ -26,6 +26,7 @@ from app.utils.stripe_config import (
 )
 
 import stripe
+from stripe import SignatureVerificationError
 
 logger = logging.getLogger(__name__)
 
@@ -195,7 +196,7 @@ def stripe_webhook():
     except ValueError as exc:
         logger.warning("Stripe webhook: invalid payload: %s", str(exc))
         return jsonify({"error": "Invalid payload"}), 400
-    except stripe.error.SignatureVerificationError as exc:
+    except SignatureVerificationError as exc:
         logger.warning("Stripe webhook: invalid signature: %s", str(exc))
         return jsonify({"error": "Invalid signature"}), 400
 
@@ -269,7 +270,7 @@ def stripe_webhook():
                     ActivityLog.log_event(
                         project.id,
                         "STRIPE_PAYMENT_RECEIVED",
-                        f"Stripe payment of {format_currency(payment.amount, currency)} received via Checkout session {session.id}.",
+                        f"Stripe payment of {format_currency(payment.amount, currency)} received via Checkout session {session.get('id')}.",
                         project.customer_id,
                         "success",
                     )
@@ -289,7 +290,7 @@ def stripe_webhook():
                     logger.info(
                         "Stripe webhook: project #%s marked Paid via session %s",
                         project.id,
-                        session.id,
+                        session.get("id"),
                     )
                 else:
                     # Project not in a payable state; mark event processed

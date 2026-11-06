@@ -53,6 +53,11 @@ def _build_bare_endpoint_map(view_functions) -> dict[str, str]:
 
 
 def configure_logging(app: Flask) -> None:
+    # Skip file logging in testing mode to prevent Windows [WinError 32] file lock crashes
+    if app.config.get("TESTING"):
+        app.logger.setLevel(logging.INFO)
+        return
+
     if not os.path.exists("logs"):
         os.mkdir("logs")
     file_handler = RotatingFileHandler("logs/agencyos.log", maxBytes=1024000, backupCount=10)

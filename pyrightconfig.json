@@ -1,0 +1,13 @@
+{
+  "extraPaths": ["."],
+  "executionEnvironments": [
+    {
+      "root": "tests",
+      "reportMissingImports": "none",
+      "reportAttributeAccessIssue": "none",
+      "reportOptionalMemberAccess": "none",
+      "reportArgumentType": "none",
+      "reportCallIssue": "none"
+    }
+  ]
+}

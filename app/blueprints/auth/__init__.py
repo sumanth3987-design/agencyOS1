@@ -191,12 +191,10 @@ def login() -> ResponseReturnValue:
             flash("Invalid email or password.", "login_error")
             return redirect(url_for("auth.login"))
 
-        # Role enforcement: Ensure the user matches the portal role
         user_db_role = user.role.lower()
         if user_db_role == "client":
             user_db_role = "customer"
 
-        # Admins can bypass role tabs
         if user_db_role != login_role and user_db_role != "admin":
             flash(f"Account registered as {user_db_role.title()}. Please select the matching tab.", "login_error")
             return redirect(url_for("auth.login"))
@@ -232,7 +230,6 @@ def logout() -> ResponseReturnValue:
     session.clear()
     return redirect(url_for("public.index"))
 
-# Add this to app/blueprints/auth/__init__.py
 
 @auth_bp.route("/verify-email/<token>")
 def verify_email(token: str) -> ResponseReturnValue:
@@ -246,12 +243,10 @@ def verify_email(token: str) -> ResponseReturnValue:
         flash("This verification link is invalid or expired.", "error")
         return redirect(url_for("auth.login"))
 
-    # Mark token as used
     UserToken.query.filter_by(id=user_token.id, used_at=None).update(
         {"used_at": get_ist_now()}, synchronize_session=False
     )
     
-    # Mark user as verified
     user.email_verified_at = get_ist_now()
     db.session.commit()
 
