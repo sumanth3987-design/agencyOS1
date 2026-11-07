@@ -52,7 +52,7 @@
             <form action="{{ url_for('admin.send_admin_reminder', project_id=project.id) }}" method="POST">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <button type="submit" class="btn btn-subtle text-[10px] h-6 w-full text-zinc-300 hover:text-white cursor-pointer">
-                ✉ Send Payment Reminder
+                ✉ Remind Client
               </button>
             </form>
             {% endif %}

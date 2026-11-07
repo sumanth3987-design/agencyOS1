@@ -1,9 +1,3 @@
-"""AgencyOS Specialist (Professional) Talent Blueprint.
-
-Governs specialist delivery workspaces, milestone submissions, 45% earnings
-ledger tracking, skill-matched sprint applications, and out-of-band UPI / wire payout redemption requests.
-"""
-
 from datetime import datetime
 from decimal import Decimal
 import json
@@ -33,6 +27,7 @@ from app.models import (
     calculate_professional_profile_completion,
     get_ist_now,
     get_latest_project_delivery,
+    is_valid_http_url,
 )
 from app.utils.currency import (
     INTERNATIONAL_PACKAGE_PRICES,
@@ -468,10 +463,20 @@ def submit_deliverable(project_id: int) -> Any:
         flash("You are not assigned to this project.", "danger")
         return redirect(url_for("professional.professional_dashboard"))
 
+    # Status validation: Only in progress or revision projects can be submitted
+    if project.status not in ("In Progress", "Revision"):
+        flash("Project must be in In Progress or Revision status to submit deliverables.", "warning")
+        return redirect(url_for("professional.professional_project_workspace", project_id=project.id))
+
     live_url = request.form.get("live_url", "").strip()
     preview_url = request.form.get("preview_url", "").strip()
     source_url = request.form.get("source_url", "").strip()
     notes = request.form.get("completion_notes", "").strip()
+
+    # URL format validation
+    if live_url and not is_valid_http_url(live_url):
+        flash("Please provide a valid live URL starting with http:// or https://.", "warning")
+        return redirect(url_for("professional.professional_project_workspace", project_id=project.id))
 
     if not notes:
         flash("Please provide completion notes explaining what was built.", "warning")
@@ -691,6 +696,14 @@ def request_payout(invoice_id: int) -> Any:
         flash("Cannot request payout before client approval.", "warning")
         return redirect(url_for("professional.professional_dashboard"))
 
+    # Ownership check: Only assigned specialist can redeem
+    assigned_app = ProfessionalProjectApplication.query.filter_by(
+        project_id=project.id, status="Assigned"
+    ).first()
+    if not assigned_app or assigned_app.professional_id != current_user.id:
+        flash("Only the assigned specialist can request payout.", "danger")
+        return redirect(url_for("professional.professional_dashboard"))
+
     try:
         invoice.payout_status = "Requested"
         db.session.commit()
@@ -809,6 +822,7 @@ def professional_profile() -> Any:
             flash("Failed to save profile changes. Please try again.", "danger")
 
     return render_template("professional_profile.html", profile=profile)
+
 
 @professional_bp.route("/professional/api/project/<int:project_id>/messages")
 @login_required

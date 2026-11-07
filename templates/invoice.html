@@ -151,7 +151,7 @@
         <tr>
           <td class="py-4 font-sans">
             {% if is_retainer_invoice %}
-            <strong class="text-slate-950 block text-xs">Monthly SEO Retainer &amp; Uptime Mandate</strong>
+            <strong class="text-slate-950 block text-xs">Monthly SEO Retainer Renewal</strong>
             <span class="text-slate-500 text-[11px] font-mono">{{ project.package }} • Recurring Monthly Billing Cycle</span>
             {% else %}
             <strong class="text-slate-950 block text-xs">{{ project.service }} — Milestone Delivery</strong>
@@ -178,6 +178,11 @@
         <div class="flex justify-between text-slate-600">
           <span>Base Taxable Value:</span>
           <span class="font-bold text-slate-950">{{ base_amount|format_currency(invoice_currency) }}</span>
+        </div>
+
+        <div class="flex justify-between text-slate-600">
+          <span>Tax estimate (18%):</span>
+          <span>{{ tax_total|format_currency(invoice_currency) }}</span>
         </div>
 
         {% if invoice_currency == 'INR' %}

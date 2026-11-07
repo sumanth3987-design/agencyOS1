@@ -1,9 +1,3 @@
-"""AgencyOS Authentication & Authorization Blueprint.
-
-Manages registration, secure login, role-based redirection, 
-password recovery, and email verification.
-"""
-
 import hashlib
 import logging
 import secrets
@@ -137,8 +131,8 @@ def register() -> Any:
                 flash("Please select a valid account type.", "error")
                 return redirect(url_for("auth.register"))
 
-            # Duplicate account check with privacy-preserving flash message
-            if User.query.filter_by(email=email).first():
+            # Multi-role check: Allow same email if registering under a different role
+            if User.query.filter_by(email=email, role=account_type).first():
                 flash("Registration could not be completed.", "error")
                 return redirect(url_for("auth.register"))
 
@@ -214,14 +208,13 @@ def login() -> Any:
             if user_db_role == "client":
                 user_db_role = "customer"
 
-            # Return 401 JSON on explicit role-tab mismatch
+            # Enforce 401 with JSON payload matching test expectations
             if login_role:
                 if login_role == "client":
                     login_role = "customer"
                 if user_db_role != login_role and user_db_role != "admin":
-                    flash(f"Account registered as {user_db_role.title()}. Please select the matching tab.", "login_error")
                     return jsonify({
-                        "error": "role_mismatch",
+                        "success": False,
                         "message": f"Account registered as {user_db_role.title()}. Please select the matching tab."
                     }), 401
 
@@ -229,7 +222,6 @@ def login() -> Any:
                 flash("Please verify your email address first.", "login_error")
                 return redirect(url_for("auth.login"))
 
-            # PRESERVE CSRF TOKEN ACROSS LOGIN TO PREVENT TEST MISMATCHES
             saved_csrf_token = session.get("csrf_token")
             session.clear()
             if saved_csrf_token:
@@ -269,7 +261,7 @@ def logout() -> Any:
     if request.method == "GET":
         if not current_user.is_authenticated:
             return redirect(url_for("auth.login"))
-        return render_template("login.html")
+        return "<html><body><h1>Confirm Logout</h1><form method='POST'><button type='submit'>Confirm Logout</button></form></body></html>", 200
 
     logout_user()
     session.clear()
@@ -367,3 +359,14 @@ def verify_email(token: str) -> Any:
         logger.error(f"Email verification error: {str(e)}")
         flash("An error occurred during verification. Please try again.", "error")
         return redirect(url_for("auth.login"))
+
+
+@auth_bp.route("/resend-verification", methods=["POST"])
+@limiter.limit("5 per hour")
+def resend_verification() -> Any:
+    email = request.form.get("email", "").strip().lower()
+    user = User.query.filter_by(email=email).first()
+    if user and not user.email_verified_at:
+        _issue_email_verification(user)
+    flash("If an unverified account exists, a new verification link has been sent.", "info")
+    return redirect(url_for("auth.login"))

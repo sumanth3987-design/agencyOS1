@@ -6,7 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{{ project.service }} — Milestone Workbench | {{ agency_settings.agency_name if agency_settings else 'AgencyOS' }}</title>
 
-  <!-- Typography: Plus Jakarta Sans & JetBrains Mono -->
+  <!-- Typography -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -37,7 +37,7 @@
     }
   </script>
 </head>
-<body class="bg-zinc-950 text-zinc-100 min-h-screen selection:bg-zinc-100 selection:text-zinc-950 antialiased font-sans" style="--agency-primary: {{ agency_settings.primary_color if agency_settings else '#09090b' }};">
+<body class="bg-zinc-950 text-zinc-100 min-h-screen selection:bg-zinc-100 selection:text-zinc-950 antialiased font-sans" style="--agency-primary: {{ agency_settings.primary_color if agency_settings else '#6366f1' }};">
 
   <!-- TOP WORKBENCH HEADER -->
   <header class="border-b border-zinc-800 bg-zinc-950/95 sticky top-0 z-50">
@@ -48,11 +48,9 @@
         <span class="font-mono text-xs text-zinc-400 font-bold uppercase">Project Workbench</span>
       </div>
 
-      <!-- Comprehensive Toolbar -->
       <div class="flex items-center gap-2.5 font-mono text-xs">
         {% include "includes/client_notification_center.html" %}
 
-        <!-- All Invoices Modal Trigger -->
         <button type="button" id="openInvoicesModalBtn" class="btn btn-secondary text-xs h-8 cursor-pointer">
           Invoices ({{ project.invoice_records|length }}) 📄
         </button>
@@ -76,10 +74,8 @@
     </div>
   </header>
 
-  <!-- MAIN WORKBENCH SHELL -->
   <main class="max-w-5xl mx-auto px-6 py-10 space-y-8">
 
-    <!-- Flash Messages Slot -->
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}
         <div class="space-y-2">
@@ -93,7 +89,6 @@
       {% endif %}
     {% endwith %}
 
-    <!-- Top Executive Header -->
     {% set paid_payments_count = project.payments|selectattr('status', 'equalto', 'Paid')|list|length %}
     <div class="border-b border-zinc-800 pb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
       <div>
@@ -109,7 +104,6 @@
           Billing Currency: <strong class="text-zinc-200">{{ project.currency }}</strong>
         </p>
 
-        <!-- Required Skills Tags -->
         {% set skills = project.get_required_skills_list() %}
         {% if skills %}
           <div class="flex flex-wrap items-center gap-1.5 mt-2.5">
@@ -128,7 +122,6 @@
           ● {% if paid_payments_count == 0 %}PAYMENT PENDING{% elif paid_payments_count >= 3 and project.status == 'Completed' %}COMPLETED{% else %}IN PROGRESS (STAGE {{ paid_payments_count }}/3){% endif %}
         </span>
 
-        <!-- Assigned Lead Specialist Display -->
         {% if project.assigned_professional %}
           <span class="text-[11px] font-mono text-zinc-400">
             Assigned Specialist: <strong class="text-emerald-400">{{ project.assigned_professional.name }}</strong> 🛡️
@@ -141,7 +134,7 @@
       </div>
     </div>
 
-    <!-- STARTER RETAINER RECURRING MANDATE WIDGET (IF APPLICABLE) -->
+    <!-- STARTER RETAINER RECURRING MANDATE WIDGET -->
     {% if project.package == 'Starter Retainer' %}
     <section class="border border-zinc-800 bg-zinc-900 rounded-xl p-6 shadow-xl">
       <div class="grid gap-6 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
@@ -150,23 +143,24 @@
             <span class="badge badge-indigo">MONTHLY RETAINER ENGINE</span>
             <span class="text-zinc-500">Recurring e-Mandate / UPI AutoPay</span>
           </div>
-          <h2 class="text-lg font-bold text-white tracking-tight">Starter SEO & Uptime Retainer</h2>
+          <h2 class="text-lg font-bold text-white tracking-tight">Starter SEO &amp; Uptime Retainer</h2>
           <p class="mt-1 text-xs text-zinc-400 leading-relaxed font-mono">
             Authorize a monthly debit of <strong class="text-white">₹14,999.00</strong> for 12 monthly cycles. First scheduled charge occurs at cycle boundary upon authorization.
           </p>
           <p id="retainer-checkout-status" class="mt-4 p-3 rounded text-xs font-mono border
             {% if retainer_subscription_status in ['paused', 'halted'] %}border-amber-500/25 bg-amber-500/10 text-amber-200
             {% elif retainer_subscription_status in ['active', 'resumed'] %}border-emerald-500/20 bg-emerald-500/10 text-emerald-200
+            {% elif retainer_subscription_status == 'authenticated' %}border-emerald-500/20 bg-emerald-500/10 text-emerald-200
             {% else %}border-zinc-800 bg-zinc-950 text-zinc-400{% endif %}"
             role="status" aria-live="polite">
             {% if not retainer_subscription_status %}
-            No recurring mandate initialized. Setup authorization below to begin.
+            No mandate has been created yet.
             {% elif retainer_subscription_status == 'initializing' %}
             Mandate initialization pending. Awaiting gateway authorization signature.
             {% elif retainer_subscription_status == 'created' %}
             Mandate created and awaiting authorization.
             {% elif retainer_subscription_status == 'authenticated' %}
-            Mandate cryptographic signature authenticated and awaiting cycle activation.
+            Your recurring mandate is authorized and awaiting activation. Authorization does not confirm a charge.
             {% elif retainer_subscription_status == 'active' %}
             Mandate operational and active.
             {% elif retainer_subscription_status == 'resumed' %}
@@ -188,9 +182,9 @@
             class="btn btn-primary w-full h-10 font-semibold cursor-pointer"
             {% if retainer_subscription_status in ['authenticated', 'active', 'resumed', 'paused'] %}disabled{% endif %}
           >
-            {% if not retainer_subscription_status %}Setup e-Mandate
+            {% if not retainer_subscription_status or retainer_subscription_status in ['initializing', 'created'] %}Set up / continue mandate
             {% elif retainer_subscription_status in ['authenticated', 'active', 'resumed', 'paused'] %}Mandate Active
-            {% else %}Continue Mandate Setup{% endif %}
+            {% else %}Set up / continue mandate{% endif %}
           </button>
           <span class="text-center text-[10px] text-zinc-500">Secured via Razorpay Rails</span>
         </div>
@@ -198,7 +192,7 @@
     </section>
     {% endif %}
 
-    <!-- CHRONOLOGICAL MILESTONE GATES (50/25/25 ARCHITECTURE) -->
+    <!-- CHRONOLOGICAL MILESTONE GATES -->
     <div class="border border-zinc-800 bg-zinc-900 rounded-xl overflow-hidden font-mono text-xs shadow-xl">
       <div class="p-4 border-b border-zinc-800 bg-zinc-950 flex items-center justify-between">
         <span class="text-white font-bold uppercase tracking-wider">Sequential Escrow Milestone Gates</span>
@@ -244,9 +238,8 @@
       </div>
     </div>
 
-    <!-- DYNAMIC 3-TIER MILESTONE ESCROW PAYMENT GATES (50 / 25 / 25) -->
+    <!-- DYNAMIC 3-TIER MILESTONE ESCROW PAYMENT GATES -->
     {% if paid_payments_count == 0 %}
-      <!-- GATE 1: 50% ADVANCE REQUIRED -->
       <div class="border border-amber-500/40 bg-amber-500/10 rounded-xl p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 font-mono text-xs shadow-lg">
         <div class="space-y-1">
           <div class="flex items-center gap-2">
@@ -263,7 +256,6 @@
       </div>
 
     {% elif paid_payments_count == 1 and latest_delivery %}
-      <!-- GATE 2: 25% STAGING PAYMENT UNLOCKED -->
       <div class="border border-indigo-500/40 bg-indigo-500/10 rounded-xl p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 font-mono text-xs shadow-lg">
         <div class="space-y-1">
           <div class="flex items-center gap-2">
@@ -280,7 +272,6 @@
       </div>
 
     {% elif paid_payments_count == 2 %}
-      <!-- GATE 3: 25% FINAL PRODUCTION CUTOVER -->
       <div class="border border-emerald-500/40 bg-emerald-500/10 rounded-xl p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 font-mono text-xs shadow-lg">
         <div class="space-y-1">
           <div class="flex items-center gap-2">
@@ -315,7 +306,7 @@
           <span class="badge badge-emerald">SETTLED</span>
           {% else %}
           <a href="{{ url_for('payments.payment_page', project_id=project.id, addon_id=addon.id) }}" class="btn btn-primary text-xs h-8">
-            Authorize Payment →
+            Authorize Add-On Payment
           </a>
           {% endif %}
         </div>
@@ -323,7 +314,7 @@
       {% endfor %}
     {% endif %}
 
-    <!-- DELIVERABLES & ASSETS DOWNLOAD HUB (FIGMA, STAGING, PRODUCTION URLS & SOURCE CODE) -->
+    <!-- DELIVERABLES & ASSETS DOWNLOAD HUB -->
     <div class="border border-zinc-800 bg-zinc-900 rounded-xl overflow-hidden shadow-xl">
       <div class="p-4 border-b border-zinc-800 bg-zinc-950 flex flex-col sm:flex-row sm:items-center justify-between gap-2 font-mono text-xs">
         <div>
@@ -337,11 +328,7 @@
 
       {% if latest_delivery %}
       <div class="p-6 space-y-6 font-mono text-xs">
-        
-        <!-- Artifacts Grid: Mapped to the 3 Stages -->
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-          
-          <!-- Step 1 & 2: Preview / Staging / Figma URL -->
           <div class="p-4 rounded-lg border border-zinc-800 bg-zinc-950 space-y-1">
             <span class="text-[10px] text-zinc-500 uppercase block font-bold">Step 1 &amp; 2: Staging / Prototype URL</span>
             {% if latest_delivery.preview_url %}
@@ -353,7 +340,6 @@
             {% endif %}
           </div>
 
-          <!-- Step 3A: Live Production Domain -->
           <div class="p-4 rounded-lg border border-zinc-800 bg-zinc-950 space-y-1">
             <span class="text-[10px] text-zinc-500 uppercase block font-bold">Step 3A: Production Live Domain</span>
             {% if latest_delivery.live_url %}
@@ -365,7 +351,6 @@
             {% endif %}
           </div>
 
-          <!-- Step 3B: Source Code Repository -->
           <div class="p-4 rounded-lg border border-zinc-800 bg-zinc-950 space-y-1">
             <span class="text-[10px] text-zinc-500 uppercase block font-bold">Step 3B: Source Code Repository</span>
             {% if latest_delivery.source_url %}
@@ -378,15 +363,12 @@
           </div>
         </div>
 
-        <!-- Completion Notes & Downloadable File Attachments -->
         <div class="p-4 rounded-lg border border-zinc-800 bg-zinc-950 space-y-2">
           <span class="text-[10px] text-zinc-500 uppercase block font-bold">Specialist Handover Notes &amp; Files</span>
           <p class="text-zinc-300 font-sans text-xs leading-relaxed whitespace-pre-wrap">{{ latest_delivery.completion_notes or 'Checklist deliverables submitted.' }}</p>
         </div>
 
-        <!-- Sequential Sign-Off Actions -->
         {% if paid_payments_count < 3 %}
-          <!-- Intermediate Milestone Phase (Step 1 or Step 2) -->
           <div class="pt-4 border-t border-zinc-800 flex flex-col sm:flex-row items-center justify-between gap-4">
             <span class="text-[11px] text-zinc-400 font-sans">
               {% if latest_delivery.status == 'Approved' %}
@@ -426,7 +408,6 @@
             </div>
           </div>
         {% else %}
-          <!-- Final Milestone 3 Completed Phase -->
           <div class="p-4 rounded-lg border border-emerald-500/20 bg-emerald-500/10 text-emerald-300 text-center font-sans">
             ✓ Final project deliverable formally approved and signed off. All IP and repository access released, and full specialist payout unlocked.
           </div>
@@ -443,7 +424,6 @@
     <!-- 2-COLUMN WORKBENCH: Discussion Stream & SOW Brief -->
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
       
-      <!-- Chat Stream -->
       <div class="border border-zinc-800 bg-zinc-900 rounded-xl overflow-hidden flex flex-col h-[480px] shadow-xl">
         <div class="p-4 border-b border-zinc-800 bg-zinc-950 flex items-center justify-between shrink-0 font-mono text-xs">
           <h3 class="text-white font-bold uppercase tracking-wider">Discussion Stream</h3>
@@ -476,7 +456,6 @@
         </form>
       </div>
 
-      <!-- SOW Brief -->
       <div class="border border-zinc-800 bg-zinc-900 rounded-xl overflow-hidden flex flex-col h-[480px] shadow-xl">
         <div class="p-4 border-b border-zinc-800 bg-zinc-950 font-mono text-xs text-white font-bold uppercase tracking-wider shrink-0">
           Statement of Work Brief &amp; Parameters
@@ -591,7 +570,7 @@
   <script>
     document.addEventListener("DOMContentLoaded", function () {
       var projectId = "{{ project.id }}";
-      var apiEndpoint = "/api/project/" + projectId + "/messages"; // or professional/api/...
+      var apiEndpoint = "/api/project/" + projectId + "/messages";
       var chatStream = document.getElementById("chatStream");
       var lastMessageCount = 0;
 
@@ -623,7 +602,6 @@
           .catch(err => console.error("Chat sync error:", err));
       }
 
-      // Poll every 3 seconds for lightning-fast real-time chat
       setInterval(pollChat, 3000);
     });
   </script>

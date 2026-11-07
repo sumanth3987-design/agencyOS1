@@ -121,7 +121,7 @@
           </div>
 
           <div class="border-t border-zinc-800 pt-3 flex justify-between items-baseline">
-            <span class="font-sans font-bold text-white text-sm uppercase tracking-wide">Total Authorized ({{ currency }}):</span>
+            <span class="font-sans font-bold text-white text-sm uppercase tracking-wide">Total Payable ({{ currency }}):</span>
             <span class="text-2xl font-bold text-white">{{ gross_val|format_currency(currency) }}</span>
           </div>
         </div>
@@ -131,9 +131,9 @@
           <span class="text-zinc-300">RAILS:</span>
           <span>
             {% if currency == 'INR' %}
-              Instant UPI (GPay, PhonePe, Paytm), RuPay, Netbanking & Cards
+              Instant UPI (GPay, PhonePe, Paytm), RuPay, Netbanking &amp; Cards
             {% else %}
-              International Credit/Debit Cards & Multi-Currency Clearing
+              International Credit/Debit Cards &amp; Multi-Currency Clearing
             {% endif %}
           </span>
         </div>
@@ -160,7 +160,7 @@
           </span>
         </button>
 
-        <!-- Direct Development Sandbox Clearance Form (Guarantees Instant Redirect in Development) -->
+        <!-- Direct Development Sandbox Clearance Form -->
         {% if is_test_mode %}
         <div class="p-4 rounded border border-indigo-500/30 bg-indigo-950/20 text-xs font-mono space-y-2 text-center">
           <span class="badge badge-indigo">DEVELOPMENT MODE CLEARANCE</span>
@@ -170,7 +170,7 @@
           <form method="POST" action="/payment/simulate-test-payment/{{ project.id }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button type="submit" class="btn btn-secondary w-full h-10 text-xs font-bold text-emerald-400 hover:text-white cursor-pointer">
-              ⚡ Instant Escrow Clearance & Redirect →
+              ⚡ Instant Escrow Clearance &amp; Redirect →
             </button>
           </form>
         </div>

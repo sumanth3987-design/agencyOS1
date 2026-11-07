@@ -1,7 +1,7 @@
 <!-- Save this directly into: templates/admin_settings.html -->
 {% extends "admin_base.html" %}
 
-{% block title %}Agency Settings & Branding — AgencyOS{% endblock %}
+{% block title %}Agency Settings &amp; Branding — AgencyOS{% endblock %}
 
 {% block content %}
 <main class="max-w-5xl mx-auto px-6 py-8 sm:py-10 space-y-8 font-sans">
@@ -14,7 +14,7 @@
         <span class="text-zinc-600">•</span>
         <span class="text-zinc-400">Multi-Tenant Brand Shell</span>
       </div>
-      <h1 class="text-2xl font-extrabold text-white tracking-tight">Agency Branding & Parameters</h1>
+      <h1 class="text-2xl font-extrabold text-white tracking-tight">Agency Branding &amp; Parameters</h1>
       <p class="text-xs font-mono text-zinc-400 mt-1">Configure the global agency identity, primary contrast accents, and support endpoints across client and specialist portals.</p>
     </div>
 
@@ -26,7 +26,7 @@
   {% if errors %}
   <div class="system-alert system-alert-error" role="alert">
     <div>
-      <h2 class="font-bold text-xs uppercase font-mono">Settings validation error</h2>
+      <h2 class="font-bold text-xs uppercase font-mono">Settings were not saved</h2>
       <p class="text-[11px] font-mono mt-0.5">Please correct the highlighted form fields. No changes were applied.</p>
     </div>
   </div>
@@ -173,7 +173,6 @@
     var previewLogo = document.getElementById("preview_logo");
     var previewHex = document.getElementById("preview_hex");
 
-    // Initialize colors safely from data attributes
     if (previewMark) {
       var initialBg = previewMark.dataset.bgColor || "#09090b";
       var initialText = previewMark.dataset.textColor || "#ffffff";
@@ -228,4 +227,4 @@
     updateLogo();
   });
 </script>
-{% endblock %}
+{% endblock %}  

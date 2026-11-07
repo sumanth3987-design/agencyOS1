@@ -244,7 +244,6 @@ def agency_settings() -> Any:
             )
         )
         if errors:
-            flash("Settings were not saved. Please fix the validation errors below.", "danger")
             return render_template(
                 "admin_settings.html",
                 form_values=form_values,

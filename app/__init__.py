@@ -245,24 +245,14 @@ def create_app(config_name: str = "default", config_overrides: dict[str, Any] | 
 
     @app.errorhandler(404)
     def not_found_error(error):
-        if request.path.startswith("/api/") or request.path.startswith("/payment") or request.is_json:
+        if request.path.startswith(("/api/", "/payment")) or request.is_json:
             return jsonify({"success": False, "message": "Not found."}), 404
-        if app.config.get("TESTING"):
-            return "Page not found.", 404
-        dist_dir = os.path.abspath(os.path.join(app.root_path, "..", "static", "dist"))
-        index_file = os.path.join(dist_dir, "index.html")
-        if os.path.exists(index_file):
-            return send_from_directory(dist_dir, "index.html")
-        try:
-            return render_template("404.html"), 404
-        except Exception:
-            return "Page not found.", 404
+        return "Page not found.", 404
 
     @app.errorhandler(500)
     def internal_error(error):
         db.session.rollback()
-        app.logger.error("Server Error: %s", error)
-        if request.is_json or request.path.startswith("/api/") or request.path.startswith("/payment"):
+        if request.path.startswith(("/api/", "/payment")) or request.is_json:
             return jsonify({"success": False, "message": "Internal server error."}), 500
         return "Internal server error.", 500
             

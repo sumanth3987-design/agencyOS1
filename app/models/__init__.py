@@ -88,11 +88,14 @@ services = [
 
 class User(db.Model, UserMixin):
     __tablename__ = "user"
+    __table_args__ = (
+        db.UniqueConstraint("email", "role", name="uq_user_email_role"),
+    )
 
     id: Any = db.Column(db.Integer, primary_key=True)
     name: Any = db.Column(db.String(100), nullable=False)
     full_name: Any = db.Column(db.String(120), nullable=True)
-    email: Any = db.Column(db.String(120), nullable=False, unique=True, index=True)
+    email: Any = db.Column(db.String(120), nullable=False, index=True)
     password: Any = db.Column(db.String(255), nullable=False)
     role: Any = db.Column(db.String(30), default="customer", nullable=False)
     is_active: Any = db.Column(db.Boolean, default=True, nullable=False)
@@ -114,7 +117,6 @@ class User(db.Model, UserMixin):
         if email:
             self.email = email
         if password:
-            # Prevent double-hashing if password is already a Werkzeug hash
             if password.startswith(("scrypt:", "pbkdf2:", "argon2:")):
                 self.password = password
             else:
@@ -354,7 +356,7 @@ class ProfessionalProfile(db.Model):
         badges = []
         rating = metrics["average_rating"]
         if rating is not None and rating >= 4.8 and metrics["revision_count"] == 0:
-            badges.append({"name": "Top Rated ⭐", "color": "badge-emerald"})
+            badges.append({"name": "Top Rated 🌟", "color": "badge-emerald"})
         if metrics["early_sprints"] > 0:
             badges.append({"name": "Speed Demon ⚡", "color": "badge-indigo"})
         if metrics["completion_rate"] is not None and metrics["completion_rate"] == 100:
@@ -414,6 +416,14 @@ class Payment(db.Model):
     __tablename__ = "payment"
     __table_args__ = (
         db.UniqueConstraint("razorpay_order_id", name="uq_payment_razorpay_order_id"),
+        db.Index(
+            "uq_payment_project_customer_created",
+            "project_id",
+            "customer_id",
+            unique=True,
+            postgresql_where=db.text("status = 'Created'"),
+            sqlite_where=db.text("status = 'Created'"),
+        ),
         db.Index(
             "uq_payment_razorpay_payment_id_partial",
             "razorpay_payment_id",
@@ -665,12 +675,12 @@ class AgencySetting(db.Model):
 
     id: Any = db.Column(db.Integer, primary_key=True, default=1)
     agency_name: Any = db.Column(db.String(120), nullable=False, default="AgencyOS")
-    primary_color: Any = db.Column(db.String(7), nullable=False, default="#09090b")
+    primary_color: Any = db.Column(db.String(7), nullable=False, default="#6366f1")
     logo_url: Any = db.Column(db.String(500), nullable=True)
     whatsapp_support_number: Any = db.Column(db.String(16), nullable=False, default="+919876543210")
     updated_at: Any = db.Column(db.DateTime, nullable=False, default=get_ist_now, onupdate=get_ist_now)
 
-    def __init__(self, id: int = 1, agency_name: str = "AgencyOS", primary_color: str = "#09090b", logo_url: str | None = None, whatsapp_support_number: str = "+919876543210", **kwargs: Any) -> None:
+    def __init__(self, id: int = 1, agency_name: str = "AgencyOS", primary_color: str = "#6366f1", logo_url: str | None = None, whatsapp_support_number: str = "+919876543210", **kwargs: Any) -> None:
         super().__init__(**kwargs)
         self.id = id
         if agency_name:

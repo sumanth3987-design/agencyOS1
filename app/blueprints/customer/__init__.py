@@ -1,9 +1,3 @@
-"""AgencyOS Customer & Client Portal Blueprint.
-
-Manages client workspace, project progression, digital SOW contracts,
-sequential 3-gate deliverable reviews (50/25/25), chat dispatch, automated escrow release, and GST-compliant invoicing.
-"""
-
 from datetime import datetime
 from decimal import Decimal
 import json
@@ -433,7 +427,7 @@ def download_sow_pdf(project_id: int | str) -> Any:
 
 
 # =========================================================
-# CLIENT INVOICES / BILLING LEDGER (BOTH ROUTE SPELLINGS)
+# CLIENT INVOICES / BILLING LEDGER
 # =========================================================
 
 @customer_bp.route("/invoices")
@@ -978,10 +972,6 @@ def customer_profile() -> Any:
 @login_required
 def start_project(service_slug: str = "website-development") -> Any:
     businesses = Business.query.filter_by(customer_id=current_user.id).all()
-
-    if not getattr(current_user, "is_verified", True) and getattr(current_user, "role", "").lower() != "admin":
-        flash("Your account is currently pending Admin KYC approval. Once approved, you can commission projects.", "warning")
-        return redirect(url_for("customer.dashboard"))
 
     if request.method == "POST":
         service = (

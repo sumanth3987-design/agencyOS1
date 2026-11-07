@@ -1,6 +1,6 @@
 <!-- Save this directly into: templates/admin_transactions.html -->
 {% extends "admin_base.html" %}
-{% block title %}Payments & Transactions Ledger — AgencyOS{% endblock %}
+{% block title %}Payments &amp; Transactions Ledger — AgencyOS{% endblock %}
 {% block content %}
 <main class="max-w-7xl mx-auto px-6 py-8 space-y-8 font-sans">
 
@@ -10,9 +10,9 @@
       <div class="flex items-center gap-2 mb-1 font-mono text-xs">
         <span class="badge badge-emerald">FINANCIAL RECONCILIATION</span>
         <span class="text-zinc-600">•</span>
-        <span class="text-zinc-400">Escrow & RazorpayX Payout Rails</span>
+        <span class="text-zinc-400">Escrow &amp; RazorpayX Payout Rails</span>
       </div>
-      <h1 class="text-2xl font-extrabold text-white tracking-tight">Payments & Escrow Ledger</h1>
+      <h1 class="text-2xl font-extrabold text-white tracking-tight">Payments &amp; Escrow Ledger</h1>
       <p class="text-xs font-mono text-zinc-400 mt-1">Live reconciliation of gateway deposits, statutory GST/LUT allocations, and automated RazorpayX payouts.</p>
     </div>
 
@@ -34,7 +34,7 @@
         <div>{{ 0|format_currency('INR') }}</div>
         {% endfor %}
       </div>
-      <span class="mt-2 block text-[11px] text-zinc-500">Gross funds cleared via payment rails</span>
+      <span class="mt-2 block text-[11px] text-zinc-500">Verified totals grouped by currency</span>
     </div>
 
     <div class="p-6 border-b border-r border-zinc-800">
@@ -136,7 +136,7 @@
                     <span class="text-[10px] text-rose-400 block mt-1">{{ req.admin_notes }}</span>
                   {% endif %}
                 {% else %}
-                  <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-950 text-amber-400 border border-amber-800 animate-pulse">
+                  <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-amber-950 text-amber-400 border border-amber-800 animate-pulse">
                     PENDING APPROVAL
                   </span>
                 {% endif %}
@@ -145,7 +145,6 @@
               <td class="p-4 text-right">
                 {% if req.status == 'Pending' %}
                   <div class="flex items-center justify-end gap-2">
-                    <!-- 1-Click RazorpayX Disburse Button -->
                     <form method="POST" action="{{ url_for('admin.approve_withdrawal', request_id=req.id) }}" class="inline" onsubmit="return confirm('Disburse ₹{{ req.amount }} instantly via RazorpayX?');">
                       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                       <button type="submit" class="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-xs font-semibold cursor-pointer shadow-md transition-colors">
@@ -153,7 +152,6 @@
                       </button>
                     </form>
 
-                    <!-- Reject Button -->
                     <button
                       type="button"
                       class="reject-wth-btn px-2.5 py-1.5 bg-zinc-800 hover:bg-rose-900/60 text-zinc-400 hover:text-rose-300 rounded text-xs cursor-pointer transition-colors"
@@ -206,7 +204,7 @@
           <th>Customer Account</th>
           <th>Gross Amount</th>
           <th>Gateway Status</th>
-          <th>Specialist Allocation</th>
+          <th>Specialist Allocation / Talent Payout (45%)</th>
         </tr>
       </thead>
       <tbody class="font-mono text-xs">
@@ -371,7 +369,6 @@
 
 <script>
   document.addEventListener("DOMContentLoaded", function () {
-    // 1. Reject Withdrawal Modal
     var rejectModal = document.getElementById("rejectWthModal");
     var rejectForm = document.getElementById("rejectWthForm");
 
@@ -388,7 +385,6 @@
     if (closeReject) closeReject.addEventListener("click", function() { rejectModal.classList.add("hidden"); });
     if (cancelReject) cancelReject.addEventListener("click", function() { rejectModal.classList.add("hidden"); });
 
-    // 2. Legacy Invoice Payout Modal
     var payoutModal = document.getElementById("payoutModal");
     var payoutForm = document.getElementById("payoutForm");
     var amountDisplay = document.getElementById("modalAmountDisplay");

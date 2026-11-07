@@ -323,7 +323,7 @@ def payment_page(project_id: int) -> Any:
         else:
             amount = (total_pkg_amount * Decimal("0.50")).quantize(Decimal("0.01"))
 
-    amount_minor_units = to_minor_units(amount)
+    amount_minor_units = to_minor_units(amount, project_currency)
     is_test_mode = "placeholder" in RAZORPAY_KEY_ID.lower() or not RAZORPAY_KEY_ID
 
     return render_template(
@@ -344,7 +344,7 @@ def payment_page(project_id: int) -> Any:
 # =========================================================
 
 @payments_bp.route("/payment/create-order/<int:project_id>", methods=["POST"])
-@limiter.limit("20 per minute")
+@limiter.limit("10 per minute")
 @login_required
 def create_payment_order(project_id: int) -> Any:
     user_role = getattr(current_user, "role", "").lower()
@@ -359,7 +359,7 @@ def create_payment_order(project_id: int) -> Any:
     if not project:
         return jsonify({"success": False, "message": "Project not found."}), 404
 
-    data = request.get_json(silent=True) or {}
+    data = request.get_json(silent=True) or request.form or {}
     addon_id = data.get("addon_id")
 
     # Scope Add-On Flow
@@ -376,7 +376,7 @@ def create_payment_order(project_id: int) -> Any:
             return jsonify({"success": False, "message": "Add-on is not payable."}), 400
 
         currency = sanitize_currency(addon.invoice.currency if addon.invoice else project.currency)
-        amount_minor = to_minor_units(addon.amount)
+        amount_minor = to_minor_units(addon.amount, currency)
 
         existing_payment = Payment.query.filter_by(addon_id=addon.id, status="Created").first()
         if existing_payment:
@@ -385,11 +385,11 @@ def create_payment_order(project_id: int) -> Any:
                 "order_id": existing_payment.razorpay_order_id,
                 "amount": amount_minor,
                 "currency": currency,
-                "key_id": RAZORPAY_KEY_ID,
+                "key_id": RAZORPAY_KEY_ID or "rzp_test_placeholder",
             })
 
         order_id = None
-        if razorpay_client and "placeholder" not in RAZORPAY_KEY_ID.lower() and RAZORPAY_KEY_ID:
+        if razorpay_client:
             try:
                 order = razorpay_client.order.create(
                     {
@@ -405,7 +405,7 @@ def create_payment_order(project_id: int) -> Any:
                 )
                 order_id = _get_order_id(order)
             except Exception as exc:
-                logger.warning("Remote Razorpay order failed; activating sandbox fallback: %s", str(exc))
+                logger.warning("Remote Razorpay order failed: %s", str(exc))
 
         if not order_id:
             order_id = f"order_sim_addon_{addon.id}_{secrets.token_hex(4)}"
@@ -447,21 +447,25 @@ def create_payment_order(project_id: int) -> Any:
             "message": "Starter Retainer must be billed through recurring mandate checkout."
         }), 400
 
-    # Project Payable State Guard: Reject if Paid or already assigned/in-progress (unless paying pending milestone)
+    # Project Payable State Guards
     has_paid = Payment.query.filter_by(project_id=project.id, status="Paid", addon_id=None).first()
-    if has_paid and project.status == "Paid":
+    if has_paid or project.status == "Paid":
         return jsonify({"success": False, "message": "Project has already been paid."}), 400
 
+    if project.status in ("Assigned", "In Progress", "Completed"):
+        return jsonify({"success": False, "message": "Project is not in a payable state."}), 400
+
     # Service Unavailable Check (503 if client is None)
-    if razorpay_client is None and not ("placeholder" in RAZORPAY_KEY_ID.lower() or not RAZORPAY_KEY_ID):
+    if razorpay_client is None:
         return jsonify({"success": False, "message": "Razorpay client is unavailable."}), 503
 
+    # Idempotency Check: Return open created payment immediately
     existing_created = Payment.query.filter_by(project_id=project.id, status="Created", addon_id=None).first()
     if existing_created is not None and existing_created.razorpay_order_id:
         return jsonify({
             "success": True,
             "order_id": existing_created.razorpay_order_id,
-            "amount": to_minor_units(existing_created.amount),
+            "amount": to_minor_units(existing_created.amount, existing_created.currency),
             "currency": existing_created.currency,
             "key_id": RAZORPAY_KEY_ID or "rzp_test_placeholder",
         })
@@ -483,31 +487,24 @@ def create_payment_order(project_id: int) -> Any:
 
     currency = sanitize_currency(project.currency)
     
-    # Honor explicit test amount if provided in request JSON/form, else compute standard milestone
-    custom_amount = data.get("amount")
-    if custom_amount is not None:
-        try:
-            amount = Decimal(str(custom_amount))
-        except Exception:
-            amount = Decimal("4999")
+    try:
+        total_pkg = get_package_price(project.package, currency, PACKAGE_PRICES)
+    except ValueError as exc:
+        logger.warning("Cannot price project #%s for checkout: %s", project.id, exc)
+        return jsonify({"success": False, "message": "Package price is unconfigured."}), 400
+
+    if milestone_num in (2, 3):
+        default_amount = (total_pkg * Decimal("0.25")).quantize(Decimal("0.01"))
+    elif milestone_num == 1:
+        default_amount = (total_pkg * Decimal("0.50")).quantize(Decimal("0.01"))
     else:
-        try:
-            total_pkg = get_package_price(project.package, currency, PACKAGE_PRICES)
-        except ValueError as exc:
-            logger.warning("Cannot price project #%s for checkout: %s", project.id, exc)
-            return jsonify({"success": False, "message": "Package price is unconfigured."}), 400
+        default_amount = total_pkg
 
-        if milestone_num in (2, 3):
-            amount = (total_pkg * Decimal("0.25")).quantize(Decimal("0.01"))
-        elif milestone_num == 1:
-            amount = (total_pkg * Decimal("0.50")).quantize(Decimal("0.01"))
-        else:
-            amount = total_pkg
-
-    amount_minor = to_minor_units(amount)
+    amount = default_amount
+    amount_minor = to_minor_units(amount, currency)
 
     order_id = None
-    if razorpay_client and "placeholder" not in RAZORPAY_KEY_ID.lower() and RAZORPAY_KEY_ID:
+    if razorpay_client:
         try:
             order = razorpay_client.order.create(
                 {
@@ -522,8 +519,12 @@ def create_payment_order(project_id: int) -> Any:
                 }
             )
             order_id = _get_order_id(order)
+            remote_minor = order.get("amount")
+            if isinstance(remote_minor, (int, str)) and int(remote_minor) > 0:
+                amount = (Decimal(str(remote_minor)) / Decimal("100")).quantize(Decimal("0.01"))
+                amount_minor = int(remote_minor)
         except Exception as exc:
-            logger.warning("Remote Razorpay order failed; activating sandbox order: %s", str(exc))
+            logger.warning("Remote Razorpay order failed: %s", str(exc))
 
     if not order_id:
         order_id = f"order_sim_{project.id}_m{milestone_num}_{secrets.token_hex(4)}"
@@ -545,7 +546,20 @@ def create_payment_order(project_id: int) -> Any:
         db.session.commit()
     except IntegrityError as exc:
         db.session.rollback()
-        logger.error(f"Razorpay order could not be reconciled due to persistence failure: {order_id}")
+        logger.error(
+            "Razorpay order could not be reconciled: %s",
+            order_id,
+            extra={"razorpay_order_id": order_id, "project_id": project.id},
+        )
+        existing = Payment.query.filter_by(project_id=project.id, status="Created", addon_id=None).first()
+        if existing:
+            return jsonify({
+                "success": True,
+                "order_id": existing.razorpay_order_id,
+                "amount": to_minor_units(existing.amount, existing.currency),
+                "currency": existing.currency,
+                "key_id": RAZORPAY_KEY_ID or "rzp_test_placeholder",
+            }), 200
         return jsonify({"success": False, "message": "Unable to create payment order."}), 400
     except Exception as exc:
         db.session.rollback()
@@ -653,7 +667,7 @@ def create_subscription(project_id: int) -> Any:
 
 @payments_bp.route("/payment/verify", methods=["POST"])
 @payments_bp.route("/api/billing/verify-payment", methods=["POST"])
-@limiter.limit("30 per minute")
+@limiter.limit("20 per minute")
 @login_required
 def verify_payment() -> Any:
     data = request.get_json(silent=True) or {}
@@ -668,8 +682,7 @@ def verify_payment() -> Any:
     if not (razorpay_order_id and razorpay_payment_id):
         return jsonify({"success": False, "message": "Missing verification parameters."}), 400
 
-    is_simulated = razorpay_order_id.startswith("order_sim_") or "placeholder" in RAZORPAY_KEY_ID.lower()
-    if razorpay_client is None and not is_simulated:
+    if razorpay_client is None:
         return jsonify({"success": False, "message": "Razorpay client is unavailable."}), 503
 
     duplicate_check = Payment.query.filter_by(razorpay_payment_id=razorpay_payment_id).first()
@@ -692,6 +705,8 @@ def verify_payment() -> Any:
             "addon_id": payment.addon_id,
         })
 
+    is_simulated = razorpay_order_id.startswith("order_sim_")
+
     if not is_simulated and razorpay_client:
         try:
             razorpay_client.utility.verify_payment_signature(
@@ -712,12 +727,12 @@ def verify_payment() -> Any:
             return jsonify({"success": False, "message": "Gateway payment fetch failed."}), 500
 
         if gw_payment:
-            if gw_payment.get("status") not in ("captured", "authorized"):
+            if gw_payment.get("status") != "captured":
                 return jsonify({"success": False, "message": "Payment not captured."}), 400
             if gw_payment.get("order_id") and gw_payment.get("order_id") != razorpay_order_id:
                 return jsonify({"success": False, "message": "Order ID mismatch."}), 400
             gw_amt = _get_gateway_amount(gw_payment)
-            if gw_amt != -1 and gw_amt != to_minor_units(payment.amount):
+            if gw_amt != -1 and gw_amt != to_minor_units(payment.amount, payment.currency):
                 return jsonify({"success": False, "message": "Amount mismatch."}), 400
             gw_curr = gw_payment.get("currency")
             if gw_curr and sanitize_currency(str(gw_curr)) != payment.currency:
@@ -784,10 +799,11 @@ def verify_payment() -> Any:
                 target_milestone = milestones[milestone_index - 1]
                 target_milestone.status = "funded"
 
+            formatted_desc = f"Milestone payment of {format_currency(payment.amount, payment.currency)} recorded."
             ActivityLog.log_event(
                 project_id=payment.project_id,
                 action="PAYMENT_RECEIVED",
-                description=f"Milestone {milestone_index} payment of {format_currency(payment.amount, payment.currency)} verified and held in escrow.",
+                description=formatted_desc,
                 user_id=payment.customer_id,
                 category="success",
             )
@@ -915,7 +931,7 @@ def simulate_test_payment(project_id: int) -> Any:
         ActivityLog.log_event(
             project_id=project.id,
             action="PAYMENT_RECEIVED",
-            description=f"Milestone {next_milestone} deposit of {format_currency(amount, currency)} verified and escrow held.",
+            description=f"Milestone payment of {format_currency(amount, currency)} recorded.",
             user_id=current_user.id,
             category="success",
         )
@@ -971,7 +987,7 @@ def razorpay_webhook() -> Any:
 
             order_payment = Payment.query.filter_by(razorpay_order_id=oid).first()
             if order_payment:
-                if order_payment.addon_id is not None and raw_amount != to_minor_units(order_payment.amount):
+                if order_payment.addon_id is not None and raw_amount != to_minor_units(order_payment.amount, order_payment.currency):
                     return jsonify({"error": "Addon amount mismatch"}), 400
 
                 order_payment.razorpay_payment_id = pid
