@@ -5,7 +5,6 @@ from typing import Any
 
 SUPPORTED_CURRENCIES = {"INR", "USD", "EUR", "GBP"}
 
-# Package Price Constants aligned with test expectations
 PACKAGE_PRICES = {
     "Basic Website": 48000,
     "Business Website": 78000,
@@ -16,14 +15,41 @@ PACKAGE_PRICES = {
     "Starter Retainer": 14999,
 }
 
+# Top-level keys formatted as currency codes to match test_international_package_prices
 INTERNATIONAL_PACKAGE_PRICES = {
-    "Basic Website": {"USD": 699, "EUR": 649, "GBP": 549, "INR": 48000},
-    "Business Website": {"USD": 1199, "EUR": 1099, "GBP": 999, "INR": 78000},
-    "Advanced Website": {"USD": 2499, "EUR": 1749, "GBP": 1499, "INR": 125000},
-    "SEO Starter": {"USD": 399, "EUR": 369, "GBP": 319, "INR": 24000},
-    "SEO Growth": {"USD": 699, "EUR": 850, "GBP": 549, "INR": 48000},
-    "SEO Advanced": {"USD": 1399, "EUR": 1299, "GBP": 1099, "INR": 96000},
-    "Starter Retainer": {"INR": 14999},
+    "USD": {
+        "Basic Website": 699,
+        "Business Website": 1199,
+        "Advanced Website": 2499,
+        "SEO Starter": 399,
+        "SEO Growth": 699,
+        "SEO Advanced": 1399,
+    },
+    "EUR": {
+        "Basic Website": 649,
+        "Business Website": 1099,
+        "Advanced Website": 1749,
+        "SEO Starter": 369,
+        "SEO Growth": 850,
+        "SEO Advanced": 1299,
+    },
+    "GBP": {
+        "Basic Website": 549,
+        "Business Website": 999,
+        "Advanced Website": 1499,
+        "SEO Starter": 319,
+        "SEO Growth": 549,
+        "SEO Advanced": 1099,
+    },
+    "INR": {
+        "Basic Website": 48000,
+        "Business Website": 78000,
+        "Advanced Website": 125000,
+        "SEO Starter": 24000,
+        "SEO Growth": 48000,
+        "SEO Advanced": 96000,
+        "Starter Retainer": 14999,
+    },
 }
 
 
@@ -61,7 +87,12 @@ def to_minor_units(amount: Any, currency: str = "INR") -> int:
         raise ValueError(f"Invalid numeric amount for conversion: {amount}")
     if dec < 0:
         raise ValueError(f"Amount cannot be negative: {amount}")
-    return int((dec * Decimal("100")).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+    
+    multiplied = dec * Decimal("100")
+    if multiplied % Decimal("1") != 0:
+        raise ValueError("Amount cannot have fractional minor units.")
+
+    return int(multiplied.quantize(Decimal("1"), rounding=ROUND_HALF_UP))
 
 
 def format_currency(amount: Any, currency: str = "INR") -> str:
@@ -125,16 +156,13 @@ def get_package_price(package: str, currency: str = "INR", package_prices: dict[
     """Retrieve the price of a package in the selected currency."""
     clean_curr = sanitize_currency(currency)
     
-    if clean_curr != "INR" and package in INTERNATIONAL_PACKAGE_PRICES:
-        curr_map = INTERNATIONAL_PACKAGE_PRICES[package]
-        if clean_curr in curr_map:
-            return Decimal(str(curr_map[clean_curr])).quantize(Decimal("0.01"))
-        raise ValueError(f"Package '{package}' not available in currency {clean_curr}")
+    if clean_curr in INTERNATIONAL_PACKAGE_PRICES and package in INTERNATIONAL_PACKAGE_PRICES[clean_curr]:
+        return Decimal(str(INTERNATIONAL_PACKAGE_PRICES[clean_curr][package])).quantize(Decimal("0.01"))
         
     if package_prices and package in package_prices:
         return Decimal(str(package_prices[package])).quantize(Decimal("0.01"))
         
-    if package in INTERNATIONAL_PACKAGE_PRICES and "INR" in INTERNATIONAL_PACKAGE_PRICES[package]:
-        return Decimal(str(INTERNATIONAL_PACKAGE_PRICES[package]["INR"])).quantize(Decimal("0.01"))
+    if clean_curr == "INR" and package in PACKAGE_PRICES:
+        return Decimal(str(PACKAGE_PRICES[package])).quantize(Decimal("0.01"))
 
-    raise ValueError(f"Unrecognized package tier or price configuration: {package}")
+    raise ValueError(f"Unrecognized package tier or price configuration: {package} for currency {clean_curr}")

@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Specialist Dashboard & Escrow Ledger — AgencyOS</title>
+  <title>Specialist Dashboard &amp; Escrow Ledger — AgencyOS</title>
 
   <!-- Typography: Plus Jakarta Sans & JetBrains Mono -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -164,7 +164,11 @@
           <span class="px-1.5 py-0.5 rounded text-[9px] bg-amber-950 text-amber-400 border border-amber-800 font-bold">IN-FLIGHT</span>
         </div>
         <div class="text-2xl font-bold text-amber-400 pt-1">
-          ₹{{ "%.2f"|format(pending_balance|float) }}
+          {% for currency, amt in pending_payout|dictsort %}
+            <div>{{ amt|format_currency(currency) }}</div>
+          {% else %}
+            ₹{{ "%.2f"|format(pending_balance|float) }}
+          {% endfor %}
         </div>
         <p class="text-[11px] text-zinc-500 pt-1 font-sans">
           Allocated for {{ active_sprints }} active sprint(s). Held safely in escrow until milestone sign-off.
@@ -178,12 +182,17 @@
           <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
         </div>
         <div class="text-2xl font-bold text-emerald-400">
-          ₹{{ "%.2f"|format(available_balance|float) }}
+          {% for currency, amt in total_earned|dictsort %}
+            <div>{{ amt|format_currency(currency) }}</div>
+          {% else %}
+            ₹{{ "%.2f"|format(available_balance|float) }}
+          {% endfor %}
         </div>
+        <p class="text-[10px] text-zinc-500">Payout allocations grouped by project currency</p>
         <div class="pt-1">
-          {% if available_balance|float > 0 %}
+          {% if available_balance|float > 0 or total_earned %}
             <button type="button" id="openWithdrawModalBtn" class="btn btn-primary w-full text-xs h-8 font-semibold cursor-pointer">
-              Redeem Funds (UPI / Bank) ⚡
+              Redeem to UPI ⚡
             </button>
           {% else %}
             <button disabled class="btn btn-secondary w-full text-xs h-8 opacity-50 cursor-not-allowed">
@@ -267,7 +276,7 @@
     <section class="space-y-4">
       <div class="flex items-center justify-between font-mono text-xs">
         <div>
-          <span class="text-white font-bold uppercase tracking-wider block">Skill-Matched Sprints & Opportunities</span>
+          <span class="text-white font-bold uppercase tracking-wider block">Skill-Matched Sprints &amp; Opportunities</span>
           <span class="text-zinc-500 font-sans">Open engagements matching your tech stack profile</span>
         </div>
         <a href="{{ url_for('professional.professional_projects') }}" class="text-indigo-400 hover:text-indigo-300">View All →</a>
@@ -289,12 +298,10 @@
               <h3 class="font-bold text-white font-sans text-sm">{{ proj.package }}</h3>
               <p class="text-xs text-zinc-400 font-mono">{{ proj.service }}</p>
               
-              <!-- Requirements Preview -->
               <p class="text-xs text-zinc-500 font-sans line-clamp-2 leading-relaxed">
                 {{ proj.requirements }}
               </p>
 
-              <!-- Matching Skills Badges -->
               {% if match.overlap_skills %}
                 <div class="flex flex-wrap gap-1 pt-1">
                   {% for s in match.overlap_skills %}
@@ -307,7 +314,6 @@
             </div>
 
             <div class="pt-3 border-t border-zinc-800 flex items-center justify-between font-mono text-xs">
-              <!-- View Details Button -->
               <button
                 type="button"
                 class="view-project-btn text-xs text-zinc-400 hover:text-white underline cursor-pointer"
@@ -399,7 +405,7 @@
 
   </main>
 
-  <!-- VIEW PROJECT DETAILS MODAL -->
+  <!-- MODALS -->
   <div id="projectDetailsModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm hidden font-mono text-xs">
     <div class="w-full max-w-lg p-6 bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl space-y-4">
       <div class="flex items-center justify-between pb-3 border-b border-zinc-800">
@@ -428,7 +434,7 @@
         </div>
 
         <div>
-          <span class="text-zinc-500 text-[10px] uppercase block mb-1">Full Scope Narrative & Deliverables:</span>
+          <span class="text-zinc-500 text-[10px] uppercase block mb-1">Full Scope Narrative &amp; Deliverables:</span>
           <p id="detailsModalReqs" class="text-zinc-300 font-sans text-xs whitespace-pre-wrap leading-relaxed">Requirements</p>
         </div>
       </div>
@@ -444,7 +450,6 @@
     </div>
   </div>
 
-  <!-- PROPOSAL APPLICATION MODAL -->
   <div id="proposalModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm hidden font-mono text-xs">
     <div class="w-full max-w-lg p-6 bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl space-y-4">
       <div class="flex items-center justify-between pb-3 border-b border-zinc-800">
@@ -505,7 +510,6 @@
     </div>
   </div>
 
-  <!-- WITHDRAWAL REDEEM MODAL -->
   <div id="withdrawModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm hidden font-mono text-xs">
     <div class="w-full max-w-md p-6 bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl space-y-4">
       <div class="flex items-center justify-between pb-3 border-b border-zinc-800">
@@ -610,10 +614,8 @@
     AgencyOS Specialist Node &bull; Escrow Protection &bull; SAC 998311
   </footer>
 
-  <!-- SCRIPT CONTROLLERS -->
   <script>
     document.addEventListener("DOMContentLoaded", function () {
-      // 1. View Project Details Modal
       var detailsModal = document.getElementById("projectDetailsModal");
       var currentSelectedProjectId = null;
       var currentSelectedPackage = null;
@@ -641,7 +643,6 @@
       if (closeDetails) closeDetails.addEventListener("click", function () { detailsModal.classList.add("hidden"); });
       if (dismissDetails) dismissDetails.addEventListener("click", function () { detailsModal.classList.add("hidden"); });
 
-      // Apply directly from inside Details Modal
       var applyFromDetailsBtn = document.getElementById("applyFromDetailsBtn");
       if (applyFromDetailsBtn) {
         applyFromDetailsBtn.addEventListener("click", function () {
@@ -652,7 +653,6 @@
         });
       }
 
-      // 2. Proposal Modal
       var proposalModal = document.getElementById("proposalModal");
       var proposalForm = document.getElementById("proposalForm");
       var proposalSummary = document.getElementById("modalProjectSummary");
@@ -677,7 +677,6 @@
       if (closeProposal) closeProposal.addEventListener("click", function () { proposalModal.classList.add("hidden"); });
       if (cancelProposal) cancelProposal.addEventListener("click", function () { proposalModal.classList.add("hidden"); });
 
-      // 3. Withdrawal Modal
       var withdrawModal = document.getElementById("withdrawModal");
       var openWithdrawBtn = document.getElementById("openWithdrawModalBtn");
       var closeWithdrawBtn = document.getElementById("closeWithdrawModalBtn");
@@ -692,7 +691,6 @@
       if (closeWithdrawBtn) closeWithdrawBtn.addEventListener("click", function () { withdrawModal.classList.add("hidden"); });
       if (cancelWithdrawBtn) cancelWithdrawBtn.addEventListener("click", function () { withdrawModal.classList.add("hidden"); });
 
-      // Tab switcher in withdraw modal
       var tabUPI = document.getElementById("tabUPI");
       var tabBank = document.getElementById("tabBank");
       var upiSec = document.getElementById("upiSection");
@@ -704,7 +702,7 @@
           payoutModeInput.value = "UPI";
           tabUPI.className = "py-2 px-3 border border-indigo-500 bg-indigo-950/60 rounded text-xs font-bold text-indigo-300 cursor-pointer";
           tabBank.className = "py-2 px-3 border border-zinc-800 bg-zinc-950 rounded text-xs text-zinc-400 cursor-pointer";
-          if (upiSec) upiSec.classList.remove("hidden");
+          if (upiSec)  upiSec.classList.remove("hidden");
           if (bankSec) bankSec.classList.add("hidden");
         });
 
@@ -712,7 +710,7 @@
           payoutModeInput.value = "BANK_TRANSFER";
           tabBank.className = "py-2 px-3 border border-indigo-500 bg-indigo-950/60 rounded text-xs font-bold text-indigo-300 cursor-pointer";
           tabUPI.className = "py-2 px-3 border border-zinc-800 bg-zinc-950 rounded text-xs text-zinc-400 cursor-pointer";
-          if (upiSec) upiSec.classList.add("hidden");
+          if (upiSec)  upiSec.classList.add("hidden");
           if (bankSec) bankSec.classList.remove("hidden");
         });
       }
