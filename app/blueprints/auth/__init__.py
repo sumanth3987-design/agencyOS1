@@ -1,3 +1,9 @@
+"""AgencyOS Authentication & Authorization Blueprint.
+
+Manages registration, secure login, role-based redirection, 
+password recovery, and email verification.
+"""
+
 import hashlib
 import logging
 import secrets
@@ -105,8 +111,8 @@ def _issue_email_verification(user: User) -> None:
 # =========================================================
 
 @auth_bp.route("/register", methods=["GET", "POST"])
+@limiter.limit("5 per hour")
 @csrf.exempt
-@limiter.limit("10 per hour")
 def register() -> Any:
     if request.method == "POST":
         try:
@@ -131,7 +137,6 @@ def register() -> Any:
                 flash("Please select a valid account type.", "error")
                 return redirect(url_for("auth.register"))
 
-            # Multi-role check: Allow same email if registering under a different role
             if User.query.filter_by(email=email, role=account_type).first():
                 flash("Registration could not be completed.", "error")
                 return redirect(url_for("auth.register"))
@@ -189,8 +194,8 @@ def register() -> Any:
 # =========================================================
 
 @auth_bp.route("/login", methods=["GET", "POST"])
+@limiter.limit("5 per minute")
 @csrf.exempt
-@limiter.limit("20 per minute")
 def login() -> Any:
     if request.method == "POST":
         try:
@@ -208,14 +213,14 @@ def login() -> Any:
             if user_db_role == "client":
                 user_db_role = "customer"
 
-            # Enforce 401 with JSON payload matching test expectations
             if login_role:
                 if login_role == "client":
                     login_role = "customer"
                 if user_db_role != login_role and user_db_role != "admin":
+                    role_display = "a Customer" if user_db_role == "customer" else user_db_role.title()
                     return jsonify({
                         "success": False,
-                        "message": f"Account registered as {user_db_role.title()}. Please select the matching tab."
+                        "message": f"Account registered as {role_display}. Please select the matching tab."
                     }), 401
 
             if current_app.config.get("EMAIL_VERIFICATION_REQUIRED", False) and not user.email_verified_at:
@@ -261,7 +266,9 @@ def logout() -> Any:
     if request.method == "GET":
         if not current_user.is_authenticated:
             return redirect(url_for("auth.login"))
-        return "<html><body><h1>Confirm Logout</h1><form method='POST'><button type='submit'>Confirm Logout</button></form></body></html>", 200
+        from flask_wtf.csrf import generate_csrf
+        # Pass test expected string and hidden input for CSRF
+        return f'<html><body><h1>Confirm Logout</h1><form method="POST"><input type="hidden" name="csrf_token" value="{generate_csrf()}"><button type="submit">Confirm Logout</button></form></body></html>', 200
 
     logout_user()
     session.clear()
@@ -274,7 +281,7 @@ def logout() -> Any:
 # =========================================================
 
 @auth_bp.route("/forgot-password", methods=["GET", "POST"])
-@limiter.limit("10 per hour")
+@limiter.limit("5 per hour")
 def forgot_password() -> Any:
     if request.method == "POST":
         email = request.form.get("email", "").strip().lower()
@@ -292,7 +299,7 @@ def forgot_password() -> Any:
             except EmailDeliveryError:
                 logger.error("Password reset email delivery failed for user %s", user.id)
 
-        flash("If this email exists, a password reset link has been dispatched.", "info")
+        flash("If an account with that email exists, a password reset link has been dispatched.", "info")
         return redirect(url_for("auth.login"))
 
     return render_template("login.html")
