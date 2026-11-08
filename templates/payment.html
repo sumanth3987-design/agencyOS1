@@ -36,6 +36,26 @@
       }
     }
   </script>
+
+  <style>
+    :root {
+      --agency-primary: {{ agency_settings.primary_color }};
+      --agency-on-primary: {{ agency_settings.primary_contrast }};
+    }
+    #payBtn {
+      background-color: var(--agency-primary);
+      color: var(--agency-on-primary);
+    }
+    #payBtn:focus-visible {
+      outline: 2px solid #ffffff;
+      outline-offset: 2px;
+    }
+    @media (max-width: 480px) {
+      .checkout-card {
+        padding: 1rem;
+      }
+    }
+  </style>
 </head>
 <body class="bg-zinc-950 text-zinc-100 min-h-screen flex flex-col justify-between selection:bg-zinc-100 selection:text-zinc-950 antialiased" style="--agency-primary: {{ agency_settings.primary_color }}; --agency-on-primary: {{ agency_settings.primary_contrast }};">
 
@@ -43,7 +63,12 @@
   <header class="border-b border-zinc-800 bg-zinc-950 py-4 px-6">
     <div class="max-w-4xl mx-auto flex items-center justify-between">
       <div class="flex items-center gap-3">
-        {% include "includes/agency_brand.html" %}
+        {% if agency_settings and agency_settings.logo_url %}
+          <img src="{{ agency_settings.logo_url }}" class="h-8 w-auto object-contain" alt="{{ agency_settings.agency_name }}" onerror="this.style.display='none'; this.nextElementSibling.classList.remove('hidden')">
+          <span class="font-bold font-mono text-sm hidden">{{ agency_settings.agency_name }}</span>
+        {% else %}
+          <span class="font-bold font-mono text-sm">{{ agency_settings.agency_name }}</span>
+        {% endif %}
       </div>
       <div class="flex items-center gap-2 font-mono text-xs text-zinc-400 uppercase tracking-widest">
         <span class="inline-block h-2 w-2 rounded-full bg-emerald-400"></span>
@@ -54,16 +79,16 @@
 
   <!-- Main Checkout Interface -->
   <main class="flex-1 flex items-center justify-center p-6">
-    <div class="w-full max-w-lg border border-zinc-800 bg-zinc-900 rounded-lg overflow-hidden shadow-2xl">
+    <div class="w-full max-w-lg border border-zinc-800 bg-zinc-900 rounded-lg overflow-hidden shadow-2xl checkout-card">
 
       <!-- Context Header -->
       <div class="p-6 border-b border-zinc-800 bg-zinc-950 font-mono text-xs">
         <div class="flex items-center justify-between mb-3">
           {% if addon %}
-          <span class="badge badge-amber">SCOPE ADD-ON ORDER</span>
+          <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-950 text-amber-300 border border-amber-800">SCOPE ADD-ON ORDER</span>
           <span class="text-zinc-400">#{{ addon.invoice.invoice_number }}</span>
           {% else %}
-          <span class="badge badge-indigo">MILESTONE {{ milestone_num }} OF 3</span>
+          <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-zinc-800 text-zinc-300 border border-zinc-700">MILESTONE {{ milestone_num }} OF 3</span>
           <span class="text-zinc-400">PROJECT #{{ project.id }}</span>
           {% endif %}
         </div>
@@ -84,7 +109,7 @@
       <!-- Error Notification Slot -->
       <div id="paymentErrorBox" class="hidden m-6 mb-0 p-3.5 rounded border border-red-500/30 bg-red-500/10 text-red-300 text-xs flex items-center justify-between font-mono">
         <span id="paymentErrorMsg">Transaction failed.</span>
-        <button type="button" onclick="this.parentElement.classList.add('hidden'); this.parentElement.classList.remove('flex')" class="text-zinc-400 hover:text-white ml-2 text-sm">✕</button>
+        <button type="button" onclick="this.parentElement.classList.add('hidden'); this.parentElement.classList.remove('flex')" class="text-zinc-400 hover:text-white ml-2 text-sm cursor-pointer">✕</button>
       </div>
 
       <!-- Financial Calculation Grid -->
@@ -149,11 +174,11 @@
           data-csrf="{{ csrf_token() }}"
           data-agency-name="{{ agency_settings.agency_name }}"
           data-logo-url="{{ agency_settings.logo_url or '' }}"
-          data-primary-color="{{ agency_settings.primary_color or '#09090b' }}"
+          data-primary-color="{{ agency_settings.primary_color }}"
           data-description="{% if addon %}{{ addon.title }}{% else %}Milestone {{ milestone_num }} for Project #{{ project.id }}{% endif %}"
           data-gross-formatted="{{ gross_val|format_currency(currency) }}"
           data-return-url="{{ url_for('customer.project_details', project_id=project.id) }}"
-          class="btn btn-primary w-full h-12 text-sm font-bold tracking-wide cursor-pointer font-mono"
+          class="w-full h-12 text-sm font-bold tracking-wide cursor-pointer font-mono rounded"
         >
           <span id="btnText">
             Pay Milestone {{ milestone_num if milestone_num else 1 }} of 3 ({{ gross_val|format_currency(currency) }}) →
@@ -162,8 +187,8 @@
 
         <!-- Direct Development Sandbox Clearance Form -->
         {% if is_test_mode %}
-        <div class="p-4 rounded border border-indigo-500/30 bg-indigo-950/20 text-xs font-mono space-y-2 text-center">
-          <span class="badge badge-indigo">DEVELOPMENT MODE CLEARANCE</span>
+        <div class="p-4 rounded border border-zinc-700 bg-zinc-950 text-xs font-mono space-y-2 text-center">
+          <span class="px-2 py-0.5 rounded text-[10px] bg-zinc-800 text-zinc-300 border border-zinc-700">DEVELOPMENT MODE CLEARANCE</span>
           <p class="text-zinc-400 font-sans text-[11px]">
             Testing without live merchant keys. Click below to verify escrow and advance immediately to the project workspace.
           </p>
@@ -260,7 +285,6 @@
           throw new Error(orderData.message || "Failed to initialize gateway order.");
         }
 
-        // Automatic development sandbox fallback
         if (orderData.order_id && orderData.order_id.startsWith("order_sim_")) {
           btnText.textContent = "Simulating test verification...";
           var verifyRes = await fetch("/payment/verify", {
@@ -285,7 +309,6 @@
           }
         }
 
-        // Real Gateway Checkout Modal
         var options = {
           key: orderData.key_id,
           amount: orderData.amount,
@@ -328,7 +351,7 @@
               btnText.textContent = "Pay Milestone " + milestoneNum + " of 3 (" + grossFormatted + ") →";
             }
           },
-          theme: { color: primaryColor }
+          theme: { color: "{{ agency_settings.primary_color }}" }
         };
 
         if (window.Razorpay) {

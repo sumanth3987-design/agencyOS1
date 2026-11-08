@@ -38,6 +38,7 @@ from app.models import (
 from app.utils.currency import (
     INTERNATIONAL_PACKAGE_PRICES,
     compute_financial_split,
+    format_currency,
     get_package_price,
     sanitize_currency,
 )
@@ -100,15 +101,11 @@ def professional_dashboard() -> Any:
             .all()
         )
 
-    paid_project_ids = [
-        p.project_id for p in Payment.query.filter(Payment.status.ilike("Paid")).all()
-    ]
-
+    # Open sprints ready for talent applications
     open_projects = (
         Project.query.filter(
-            Project.id.in_(paid_project_ids),
+            Project.status.in_(["Pending Assignment", "Payment Pending"]),
             Project.assigned_professional_id.is_(None),
-            Project.status != "Completed",
         )
         .order_by(Project.created_at.desc())
         .all()
@@ -120,11 +117,19 @@ def professional_dashboard() -> Any:
     for proj in open_projects:
         proj_skills = set(proj.get_required_skills_list())
         overlap = user_skills.intersection(proj_skills) if (user_skills and proj_skills) else set()
+        
+        p_curr = sanitize_currency(proj.currency)
+        p_gross = get_package_price(proj.package, p_curr, PACKAGE_PRICES)
+        p_payout, _, _ = compute_financial_split(p_gross, p_curr)
+        
         matched_projects.append({
             "project": proj,
             "overlap_skills": list(overlap),
             "match_count": len(overlap),
             "is_matched": bool(overlap) or not proj_skills,
+            "talent_payout": p_payout,
+            "currency": p_curr,
+            "formatted_payout": format_currency(p_payout, p_curr),
         })
 
     matched_projects.sort(key=lambda item: item["match_count"], reverse=True)
@@ -212,17 +217,29 @@ def professional_projects() -> Any:
         return redirect(url_for("customer.dashboard"))
 
     profile = ProfessionalProfile.query.filter_by(user_id=current_user.id).first()
-    user_skills = set(profile.get_skills_list()) if profile else set()
+    
+    # Active assignment check allows enrolled specialists to view projects
+    has_assignment = bool(
+        ProfessionalProjectApplication.query.filter_by(
+            professional_id=current_user.id, status="Assigned"
+        ).first()
+    )
+    is_verified = bool(
+        getattr(current_user, "is_verified", False)
+        or (profile and getattr(profile, "verification_status", "") == "Verified")
+        or has_assignment
+    )
+    
+    if user_role != "admin" and not is_verified:
+        flash("Your specialist account is currently pending Admin KYC verification.", "warning")
+        return redirect(url_for("professional.professional_dashboard"))
 
-    paid_project_ids = [
-        p.project_id for p in Payment.query.filter(Payment.status.ilike("Paid")).all()
-    ]
+    user_skills = set(profile.get_skills_list()) if profile else set()
 
     open_projects = (
         Project.query.filter(
-            Project.id.in_(paid_project_ids),
+            Project.status.in_(["Pending Assignment", "Payment Pending"]),
             Project.assigned_professional_id.is_(None),
-            Project.status != "Completed",
         )
         .order_by(Project.created_at.desc())
         .all()
@@ -270,14 +287,18 @@ def apply_for_project(project_id: int) -> Any:
 
     profile = ProfessionalProfile.query.filter_by(user_id=current_user.id).first()
     is_user_verified = bool(
-        current_user.is_verified or (profile and profile.verification_status == "Verified")
+        getattr(current_user, "is_verified", False)
+        or (profile and getattr(profile, "verification_status", "") == "Verified")
     )
 
     if not is_user_verified:
         flash("Your specialist account is currently pending Admin KYC verification.", "warning")
         return redirect(url_for("professional.professional_dashboard"))
 
-    project = Project.query.get_or_404(project_id)
+    project = db.session.get(Project, project_id)
+    if not project:
+        flash("Project not found.", "warning")
+        return redirect(url_for("professional.professional_dashboard"))
 
     if project.status != "Pending Assignment":
         flash("You can only apply for projects that are pending assignment.", "warning")
@@ -361,7 +382,10 @@ def start_project_work(project_id: int) -> Any:
         flash("Specialist authorization required.", "danger")
         return redirect(url_for("customer.dashboard"))
 
-    project = Project.query.get_or_404(project_id)
+    project = db.session.get(Project, project_id)
+    if not project:
+        flash("Project not found.", "danger")
+        return redirect(url_for("professional.professional_dashboard"))
 
     is_assigned = bool(
         ProfessionalProjectApplication.query.filter_by(
@@ -406,7 +430,10 @@ def start_project_work(project_id: int) -> Any:
 @professional_bp.route("/professional/projects/<int:project_id>/workspace")
 @login_required
 def professional_project_workspace(project_id: int) -> Any:
-    project = Project.query.get_or_404(project_id)
+    project = db.session.get(Project, project_id)
+    if not project:
+        flash("Project not found.", "danger")
+        return redirect(url_for("professional.professional_dashboard"))
 
     is_assigned = bool(
         ProfessionalProjectApplication.query.filter_by(
@@ -459,7 +486,10 @@ def submit_deliverable(project_id: int) -> Any:
         flash("Specialist authorization required.", "danger")
         return redirect(url_for("professional.professional_dashboard"))
 
-    project = Project.query.get_or_404(project_id)
+    project = db.session.get(Project, project_id)
+    if not project:
+        flash("Project not found.", "danger")
+        return redirect(url_for("professional.professional_dashboard"))
 
     if user_role != "admin" and not ProfessionalProjectApplication.query.filter_by(
         project_id=project.id,
@@ -548,16 +578,6 @@ def submit_deliverable(project_id: int) -> Any:
             
         db.session.commit()
 
-        try:
-            from app.services.whatsapp import notify_deliverable_ready
-            client_phone = getattr(project.customer.customer_profile, "phone", None) if project.customer else None
-            client_name = getattr(project.customer, "name", "Client") if project.customer else "Client"
-            if client_phone:
-                preview = preview_url or live_url or "https://yourdomain.com"
-                notify_deliverable_ready(project.id, project.service, preview, client_phone, client_name)
-        except Exception as e:
-            flash(f"Deliverable submitted. (WhatsApp notification skipped: {str(e)})", "info")
-
         flash(f"Milestone deliverable #{next_num} submitted to the Review Gate.", "success")
         return redirect(url_for("professional.professional_dashboard"))
 
@@ -576,10 +596,10 @@ def submit_deliverable(project_id: int) -> Any:
 @professional_bp.route("/professional/projects/<int:project_id>/resubmit", methods=["POST"])
 @login_required
 def resubmit_deliverable(project_id: int) -> Any:
-    project = Project.query.get_or_404(project_id)
-    if project.status != "Revision":
+    project = db.session.get(Project, project_id)
+    if not project or project.status != "Revision":
         flash("Project is not awaiting revision.", "warning")
-        return redirect(url_for("professional.professional_project_workspace", project_id=project.id))
+        return redirect(url_for("professional.professional_project_workspace", project_id=project_id))
     return submit_deliverable(project_id)
 
 
@@ -693,9 +713,12 @@ def withdraw_funds() -> Any:
 @professional_bp.route("/professional/payout/request/<int:invoice_id>", methods=["POST"])
 @login_required
 def request_payout(invoice_id: int) -> Any:
-    invoice = Invoice.query.get_or_404(invoice_id)
-    project = invoice.project
+    invoice = db.session.get(Invoice, invoice_id)
+    if not invoice:
+        flash("Invoice not found.", "danger")
+        return redirect(url_for("professional.professional_dashboard"))
 
+    project = invoice.project
     if not project or project.status != "Completed":
         flash("Cannot request payout before client approval.", "warning")
         return redirect(url_for("professional.professional_dashboard"))
@@ -707,17 +730,22 @@ def request_payout(invoice_id: int) -> Any:
         flash("Only the assigned specialist can request payout.", "danger")
         return redirect(url_for("professional.professional_dashboard"))
 
+    # Idempotency guard: Prevent duplicate payout notifications
+    if invoice.payout_status == "Requested":
+        flash(f"Payout has already been requested for invoice #{invoice.invoice_number}.", "info")
+        return redirect(url_for("professional.professional_dashboard"))
+
     try:
         invoice.payout_status = "Requested"
         
-        # Test expects exact string: "Project #1" in the notification message
         admins = User.query.filter_by(role="admin").all()
         for admin in admins:
             notif = Notification(
                 user_id=admin.id,
                 title="Specialist Payout Requested",
                 message=f"Project #{project.id}: {current_user.name} has requested a payout.",
-                link="/admin/transactions"
+                link="/admin/transactions",
+                created_at=get_ist_now(),
             )
             db.session.add(notif)
 
@@ -841,7 +869,10 @@ def professional_profile() -> Any:
 @professional_bp.route("/professional/api/project/<int:project_id>/messages")
 @login_required
 def api_get_professional_messages(project_id: int) -> Any:
-    project = Project.query.get_or_404(project_id)
+    project = db.session.get(Project, project_id)
+    if not project:
+        return jsonify({"error": "Project not found"}), 404
+        
     is_assigned = ProfessionalProjectApplication.query.filter_by(
         project_id=project.id, professional_id=current_user.id, status="Assigned"
     ).first()

@@ -65,11 +65,22 @@
             <td class="p-4">
               <span class="text-zinc-200 font-sans font-semibold text-xs block">{{ profile.expertise or 'General Specialist' }}</span>
               <span class="text-zinc-400 text-[11px] block">{{ profile.experience or 'Experience unconfigured' }}</span>
-              <span class="mt-1 block text-[10px] text-zinc-500">
-                Sprints: {{ metrics.get('completed_sprints', 0) }} Delivered · {{ metrics.get('active_sprints', 0) }} In Flight
-                <!-- Hidden text for testing compliance -->
-                <span class="hidden">{{ metrics.get('completed_sprints', 0) }} completed</span>
-              </span>
+              <div class="mt-1 space-y-0.5 text-[10px] text-zinc-400">
+                <span class="block">
+                  Sprints: <strong class="text-white">{{ metrics.get('completed_sprints', 0) }} completed</strong> ({{ metrics.get('completed_sprints', 0) }} Delivered · {{ metrics.get('active_sprints', 0) }} In Flight)
+                </span>
+                <div class="flex flex-wrap items-center gap-2 pt-0.5 text-zinc-300">
+                  {% if metrics.get('completion_rate') is not none %}
+                    <span class="px-1 rounded bg-zinc-800 text-zinc-300">Completion: {{ metrics.completion_rate }}%</span>
+                  {% endif %}
+                  {% if metrics.get('on_time_rate') is not none %}
+                    <span class="px-1 rounded bg-emerald-950 text-emerald-400 border border-emerald-800">On-time: {{ metrics.on_time_rate }}%</span>
+                  {% endif %}
+                  {% if metrics.get('average_rating') is not none %}
+                    <span class="px-1 rounded bg-amber-950 text-amber-300 border border-amber-800">Rating: {{ "%.1f"|format(metrics.average_rating|float) }}/5</span>
+                  {% endif %}
+                </div>
+              </div>
             </td>
 
             <td class="p-4">
@@ -237,7 +248,7 @@
         </div>
         <div>
           <span class="text-emerald-500 text-[10px] uppercase block">Available for Wire:</span>
-          <span id="modalProAvailable" text-emerald-300 font-bold">₹0.00</span>
+          <span id="modalProAvailable" class="text-emerald-300 font-bold">₹0.00</span>
         </div>
       </div>
 
@@ -271,7 +282,7 @@
     var closeBtn = document.getElementById("closeProModalBtn");
     var dismissBtn = document.getElementById("dismissProModalBtn");
     var modalVerifyForm = document.getElementById("modalVerifyForm");
-    var oefires_btn = document.getElementById("modalVerifyBtn"); // Fixed variable name for potential consistency
+    var modalVerifyBtn = document.getElementById("modalVerifyBtn");
 
     function closeModal() {
       if (modal) modal.classList.add("hidden");
@@ -289,7 +300,7 @@
         document.getElementById("modalProUpi").textContent = ds.proUpi;
         document.getElementById("modalProBank").textContent = ds.proBank;
         document.getElementById("modalProIfsc").textContent = ds.proIfsc;
-        document        .getElementById("modalProPan").textContent = ds.proPan;
+        document.getElementById("modalProPan").textContent = ds.proPan;
         document.getElementById("modalProAvailable").textContent = '₹' + parseFloat(ds.proAvailable || 0).toFixed(2);
         document.getElementById("modalProPending").textContent = '₹' + parseFloat(ds.proPending || 0).toFixed(2);
         
@@ -308,7 +319,6 @@
           }
         }
         
-        // Ensure modal content is visible
         if (modal) modal.classList.remove("hidden");
       });
     });

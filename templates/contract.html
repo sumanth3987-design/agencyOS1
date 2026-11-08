@@ -76,7 +76,7 @@
       <div class="p-8 border-b border-zinc-800 bg-zinc-950">
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <span class="badge badge-indigo mb-2">MASTER ENGAGEMENT SOW</span>
+            <span class="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-zinc-800 text-zinc-300 border border-zinc-700 mb-2 inline-block">MASTER ENGAGEMENT SOW</span>
             <h1 class="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">Statement of Work (SOW)</h1>
             <p class="text-xs font-mono text-zinc-400 mt-1">
               Project Identifier: <strong class="text-white">#{{ project.id }}</strong> • Service Engagement: <strong class="text-white">{{ project.service }}</strong>
@@ -84,9 +84,11 @@
           </div>
 
           <div class="text-left sm:text-right font-mono text-xs text-zinc-400">
-            <strong class="text-white font-sans text-sm block">{{ agency_settings.agency_name }}</strong>
             {% if agency_settings.logo_url %}
-            <img src="{{ agency_settings.logo_url }}" class="h-6 w-auto ml-auto mt-1 object-contain" alt="Agency Logo">
+            <img src="{{ agency_settings.logo_url }}" class="h-8 w-auto ml-auto mb-1 object-contain" alt="{{ agency_settings.agency_name }}" onerror="this.style.display='none'; this.nextElementSibling.classList.remove('hidden')">
+            <strong class="text-white font-sans text-sm block hidden">{{ agency_settings.agency_name }}</strong>
+            {% else %}
+            <strong class="text-white font-sans text-sm block">{{ agency_settings.agency_name }}</strong>
             {% endif %}
             <span class="block mt-0.5">SAC Code: 998311</span>
             <span class="text-emerald-400 block mt-0.5">● Escrow Gated</span>

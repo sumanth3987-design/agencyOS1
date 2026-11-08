@@ -135,7 +135,7 @@ def dashboard_quick_message() -> Any:
 
     try:
         pid = int(project_id_str)
-        project = Project.query.get(pid)
+        project = db.session.get(Project, pid)
         if not project or (getattr(current_user, "role", "").lower() != "admin" and project.customer_id != current_user.id):
             flash(f"Project #{pid} not accessible.", "warning")
             return redirect(url_for("customer.dashboard"))
@@ -172,7 +172,7 @@ def project_details(project_id: int | str) -> Any:
         flash(f"Invalid project reference: {project_id}", "warning")
         return redirect(url_for("customer.dashboard"))
 
-    project = Project.query.get(pid)
+    project = db.session.get(Project, pid)
     if not project:
         flash(f"Project #{pid} not found.", "warning")
         return redirect(url_for("customer.dashboard"))
@@ -270,7 +270,11 @@ def send_project_message(project_id: int | str) -> Any:
         flash("Invalid project reference.", "danger")
         return redirect(url_for("customer.dashboard"))
 
-    project = Project.query.get_or_404(pid)
+    project = db.session.get(Project, pid)
+    if not project:
+        flash("Project not found.", "danger")
+        return redirect(url_for("customer.dashboard"))
+
     user_role = getattr(current_user, "role", "").lower()
     if user_role != "admin" and project.customer_id != current_user.id:
         flash("Unauthorized action.", "danger")
@@ -314,7 +318,10 @@ def view_invoice(project_id: int | str) -> Any:
         flash("Invalid project identifier.", "danger")
         return redirect(url_for("customer.dashboard"))
 
-    project = Project.query.get_or_404(pid)
+    project = db.session.get(Project, pid)
+    if not project:
+        flash("Project not found.", "danger")
+        return redirect(url_for("customer.dashboard"))
 
     user_role = getattr(current_user, "role", "").lower()
     if user_role != "admin" and project.customer_id != current_user.id:
@@ -338,7 +345,7 @@ def view_invoice(project_id: int | str) -> Any:
             .first()
         )
 
-    customer = project.customer
+    customer = getattr(project, "customer", None) or db.session.get(User, project.customer_id)
     profile = customer.customer_profile if customer else None
 
     invoice_currency = sanitize_currency(
@@ -409,7 +416,11 @@ def download_sow_pdf(project_id: int | str) -> Any:
         flash("Invalid project reference.", "danger")
         return redirect(url_for("customer.dashboard"))
 
-    project = Project.query.get_or_404(pid)
+    project = db.session.get(Project, pid)
+    if not project:
+        flash("Project not found.", "danger")
+        return redirect(url_for("customer.dashboard"))
+
     user_role = getattr(current_user, "role", "").lower()
     if user_role != "admin" and project.customer_id != current_user.id:
         flash("Unauthorized access to agreement.", "danger")
@@ -421,8 +432,9 @@ def download_sow_pdf(project_id: int | str) -> Any:
         return redirect(url_for("customer.project_contract", project_id=project.id))
 
     try:
+        customer_user = getattr(project, "customer", None) or db.session.get(User, project.customer_id)
         pdf_buffer = generate_sow_pdf(
-            project, project.customer, project.business, signature
+            project, customer_user, project.business, signature
         )
         return send_file(
             pdf_buffer,
@@ -472,14 +484,18 @@ def project_contract(project_id: int | str) -> Any:
         flash("Invalid project reference.", "danger")
         return redirect(url_for("customer.dashboard"))
 
-    project = Project.query.get_or_404(pid)
+    project = db.session.get(Project, pid)
+    if not project:
+        flash("Project not found.", "danger")
+        return redirect(url_for("customer.dashboard"))
+
     user_role = getattr(current_user, "role", "").lower()
 
     if user_role != "admin" and project.customer_id != current_user.id:
         flash("Unauthorized access to contract.", "danger")
         return redirect(url_for("customer.dashboard"))
 
-    customer = project.customer
+    customer = getattr(project, "customer", None) or db.session.get(User, project.customer_id)
     business = project.business
 
     if request.method == "POST":
@@ -546,7 +562,10 @@ def customer_approve_project(project_id: int | str) -> Any:
         flash("Invalid project reference.", "danger")
         return redirect(url_for("customer.dashboard"))
 
-    project = Project.query.get_or_404(pid)
+    project = db.session.get(Project, pid)
+    if not project:
+        flash("Project not found.", "danger")
+        return redirect(url_for("customer.dashboard"))
 
     user_role = getattr(current_user, "role", "").lower()
     if user_role != "admin" and project.customer_id != current_user.id:
@@ -720,7 +739,10 @@ def customer_request_revision(project_id: int | str) -> Any:
         flash("Invalid project reference.", "danger")
         return redirect(url_for("customer.dashboard"))
 
-    project = Project.query.get_or_404(pid)
+    project = db.session.get(Project, pid)
+    if not project:
+        flash("Project not found.", "danger")
+        return redirect(url_for("customer.dashboard"))
 
     user_role = getattr(current_user, "role", "").lower()
     if user_role != "admin" and project.customer_id != current_user.id:
@@ -780,7 +802,11 @@ def submit_project_review(project_id: int | str) -> Any:
         flash("Invalid project reference.", "danger")
         return redirect(url_for("customer.dashboard"))
 
-    project = Project.query.get_or_404(pid)
+    project = db.session.get(Project, pid)
+    if not project:
+        flash("Project not found.", "danger")
+        return redirect(url_for("customer.dashboard"))
+
     if project.customer_id != current_user.id and getattr(current_user, "role", "").lower() != "admin":
         flash("Unauthorized action.", "danger")
         return redirect(url_for("customer.dashboard"))
@@ -832,7 +858,9 @@ def submit_project_review(project_id: int | str) -> Any:
 def businesses() -> Any:
     user_role = getattr(current_user, "role", "").lower()
     if user_role not in ("customer", "client"):
-        return redirect(url_for("auth.login"))
+        if user_role == "admin":
+            return redirect(url_for("admin.admin_dashboard"))
+        return redirect(url_for("professional.professional_dashboard"))
 
     user_businesses = Business.query.filter_by(customer_id=current_user.id).all()
     return render_template("businesses.html", businesses=user_businesses)
@@ -845,7 +873,9 @@ def businesses() -> Any:
 def add_business() -> Any:
     user_role = getattr(current_user, "role", "").lower()
     if user_role not in ("customer", "client"):
-        return redirect(url_for("auth.login"))
+        if user_role == "admin":
+            return redirect(url_for("admin.admin_dashboard"))
+        return redirect(url_for("professional.professional_dashboard"))
 
     if request.method == "POST":
         name = request.form.get("name", "").strip()
@@ -882,7 +912,9 @@ def add_business() -> Any:
 def edit_business(business_id: int) -> Any:
     user_role = getattr(current_user, "role", "").lower()
     if user_role not in ("customer", "client"):
-        return redirect(url_for("auth.login"))
+        if user_role == "admin":
+            return redirect(url_for("admin.admin_dashboard"))
+        return redirect(url_for("professional.professional_dashboard"))
 
     business = Business.query.filter_by(id=business_id, customer_id=current_user.id).first_or_404()
 
@@ -914,7 +946,9 @@ def edit_business(business_id: int) -> Any:
 def delete_business(business_id: int) -> Any:
     user_role = getattr(current_user, "role", "").lower()
     if user_role not in ("customer", "client"):
-        return redirect(url_for("auth.login"))
+        if user_role == "admin":
+            return redirect(url_for("admin.admin_dashboard"))
+        return redirect(url_for("professional.professional_dashboard"))
 
     business = Business.query.filter_by(id=business_id, customer_id=current_user.id).first_or_404()
     try:
@@ -1244,7 +1278,10 @@ def cancel_project(project_id: int | str) -> Any:
         flash("Invalid project reference.", "danger")
         return redirect(url_for("customer.dashboard"))
 
-    project = Project.query.filter_by(id=pid, customer_id=current_user.id).first_or_404()
+    project = db.session.get(Project, pid)
+    if not project or project.customer_id != current_user.id:
+        flash("Project not found.", "warning")
+        return redirect(url_for("customer.dashboard"))
 
     if project.status not in ("Payment Pending", "Pending Assignment"):
         flash("Cannot cancel an active or paid project.", "warning")
@@ -1276,7 +1313,11 @@ def raise_dispute(project_id: int | str) -> Any:
         flash("Invalid project reference.", "danger")
         return redirect(url_for("customer.dashboard"))
 
-    project = Project.query.get_or_404(pid)
+    project = db.session.get(Project, pid)
+    if not project:
+        flash("Project not found.", "danger")
+        return redirect(url_for("customer.dashboard"))
+
     if project.customer_id != current_user.id and getattr(current_user, "role", "").lower() != "admin":
         flash("Unauthorized action.", "danger")
         return redirect(url_for("customer.dashboard"))
@@ -1326,7 +1367,9 @@ def raise_dispute(project_id: int | str) -> Any:
 @customer_bp.route("/api/project/<int:project_id>/messages")
 @login_required
 def api_get_messages(project_id: int) -> Any:
-    project = Project.query.get_or_404(project_id)
+    project = db.session.get(Project, project_id)
+    if not project:
+        return jsonify({"error": "Project not found"}), 404
     if project.customer_id != current_user.id and getattr(current_user, "role", "").lower() != "admin":
         return jsonify({"error": "Unauthorized"}), 403
     

@@ -333,7 +333,11 @@ def verify_customer(user_id: int) -> Any:
         return redirect(url_for("customer.dashboard"))
 
     try:
-        customer = User.query.get_or_404(user_id)
+        customer = db.session.get(User, user_id)
+        if not customer:
+            flash("Customer not found.", "danger")
+            return redirect(url_for("admin.admin_customers"))
+
         customer.is_verified = True
         customer.verification_status = "Verified"
         customer.verified_at = get_ist_now()
@@ -363,7 +367,11 @@ def reject_customer(user_id: int) -> Any:
         return redirect(url_for("customer.dashboard"))
 
     try:
-        customer = User.query.get_or_404(user_id)
+        customer = db.session.get(User, user_id)
+        if not customer:
+            flash("Customer not found.", "danger")
+            return redirect(url_for("admin.admin_customers"))
+
         customer.is_verified = False
         customer.verification_status = "Rejected"
         db.session.commit()
@@ -412,12 +420,17 @@ def admin_view_professional(profile_id: int) -> Any:
         flash("Admin access required.", "danger")
         return redirect(url_for("customer.dashboard"))
 
-    profile = ProfessionalProfile.query.get_or_404(profile_id)
+    profile = db.session.get(ProfessionalProfile, profile_id)
+    if not profile:
+        flash("Specialist profile not found.", "danger")
+        return redirect(url_for("admin.admin_professionals"))
+
     metrics = profile.get_performance_metrics()
     return render_template("admin_professional_profile.html", profile=profile, metrics=metrics)
 
 
 @admin_bp.route("/admin/professionals/<int:profile_id>/verify", methods=["POST"])
+@limiter.limit("20 per minute")
 @login_required
 def verify_professional(profile_id: int) -> Any:
     if getattr(current_user, "role", "").lower() != "admin":
@@ -425,17 +438,22 @@ def verify_professional(profile_id: int) -> Any:
         return redirect(url_for("customer.dashboard"))
 
     try:
-        profile = ProfessionalProfile.query.get_or_404(profile_id)
+        profile = db.session.get(ProfessionalProfile, profile_id)
+        if not profile:
+            flash("Profile not found.", "danger")
+            return redirect(url_for("admin.admin_professionals"))
+
         profile.verification_status = "Verified"
         profile.verification_notes = "Verified by agency administrator."
         
-        if profile.user:
-            profile.user.is_verified = True
-            profile.user.verification_status = "Verified"
-            profile.user.verified_at = get_ist_now()
+        target_user = getattr(profile, "user", None) or db.session.get(User, profile.user_id)
+        if target_user:
+            target_user.is_verified = True
+            target_user.verification_status = "Verified"
+            target_user.verified_at = get_ist_now()
 
             notif = Notification()
-            notif.user_id = profile.user.id
+            notif.user_id = target_user.id
             notif.title = "Specialist Profile Approved 🛡️"
             notif.message = "Your profile is verified. You can now apply for matched sprint projects."
             notif.link = "/professional/dashboard"
@@ -452,6 +470,7 @@ def verify_professional(profile_id: int) -> Any:
 
 
 @admin_bp.route("/admin/professionals/<int:profile_id>/reject", methods=["POST"])
+@limiter.limit("20 per minute")
 @login_required
 def reject_professional(profile_id: int) -> Any:
     if getattr(current_user, "role", "").lower() != "admin":
@@ -459,11 +478,16 @@ def reject_professional(profile_id: int) -> Any:
         return redirect(url_for("customer.dashboard"))
 
     try:
-        profile = ProfessionalProfile.query.get_or_404(profile_id)
+        profile = db.session.get(ProfessionalProfile, profile_id)
+        if not profile:
+            flash("Profile not found.", "danger")
+            return redirect(url_for("admin.admin_professionals"))
+
         profile.verification_status = "Rejected"
-        if profile.user:
-            profile.user.is_verified = False
-            profile.user.verification_status = "Rejected"
+        target_user = getattr(profile, "user", None) or db.session.get(User, profile.user_id)
+        if target_user:
+            target_user.is_verified = False
+            target_user.verification_status = "Rejected"
 
         db.session.commit()
         flash("Specialist onboarding application rejected.", "warning")
@@ -500,31 +524,34 @@ def assign_professional(application_id: int) -> Any:
         flash("Admin access required.", "danger")
         return redirect(url_for("customer.dashboard"))
 
-    app_record = ProfessionalProjectApplication.query.get_or_404(application_id)
-    project = app_record.project
+    app_record = db.session.get(ProfessionalProjectApplication, application_id)
+    if not app_record:
+        flash("Application not found.", "danger")
+        return redirect(url_for("admin.admin_applications"))
+
+    project: Any = db.session.get(Project, app_record.project_id) if app_record.project_id else getattr(app_record, "project", None)
+    if not project:
+        flash("Associated project not found.", "danger")
+        return redirect(url_for("admin.admin_applications"))
 
     if app_record.status != "Applied":
         flash("This application has already been processed.", "warning")
         return redirect(url_for("admin.admin_applications"))
 
-    # GATE 1: Project must be in 'Pending Assignment' status to assign
     if project.status != "Pending Assignment":
         flash("Cannot assign a project that is not in Pending Assignment status.", "warning")
         return redirect(url_for("admin.admin_applications"))
 
-    # GATE 2: Specialist must be verified and have an active profile
     specialist_profile = ProfessionalProfile.query.filter_by(user_id=app_record.professional_id).first()
     if not specialist_profile or (specialist_profile.verification_status or "").strip() != "Verified":
         flash("Cannot assign an unverified specialist.", "warning")
         return redirect(url_for("admin.admin_applications"))
 
     try:
-        # 1. Update Application & Project State
         app_record.status = "Assigned"
         project.status = "Assigned"
         project.assigned_professional_id = app_record.professional_id
 
-        # 2. Reject Other Applicants
         other_apps = ProfessionalProjectApplication.query.filter(
             ProfessionalProjectApplication.project_id == project.id,
             ProfessionalProjectApplication.id != app_record.id,
@@ -533,18 +560,15 @@ def assign_professional(application_id: int) -> Any:
         for o in other_apps:
             o.status = "Not Selected"
 
-        # 3. Compute Specialist Payout Allocation
         currency = sanitize_currency(project.currency)
         gross = get_package_price(project.package, currency, PACKAGE_PRICES)
         talent_share, _, _ = compute_financial_split(gross, currency)
         
         locked_amount = Decimal(str(app_record.proposed_rate)) if app_record.proposed_rate is not None else talent_share
 
-        # 4. Lock in Specialist Two-Stage Wallet
         current_pending = Decimal(str(specialist_profile.pending_balance or 0))
         specialist_profile.pending_balance = current_pending + locked_amount
 
-        # 5. Log Wallet Transaction Audit
         tx = WalletTransaction()
         tx.user_id = app_record.professional_id
         tx.amount = locked_amount
@@ -556,7 +580,6 @@ def assign_professional(application_id: int) -> Any:
         tx.created_at = get_ist_now()
         db.session.add(tx)
 
-        # 6. Dispatch Notification to Specialist
         notif = Notification()
         notif.user_id = app_record.professional_id
         notif.title = f"Sprint Assigned: #{project.id} {project.service}"
@@ -568,16 +591,19 @@ def assign_professional(application_id: int) -> Any:
         notif.created_at = get_ist_now()
         db.session.add(notif)
 
+        specialist_user = getattr(app_record, "professional", None) or db.session.get(User, app_record.professional_id)
+        specialist_name = specialist_user.name if specialist_user else "Specialist"
+
         ActivityLog.log_event(
             project_id=project.id,
             action="SPECIALIST_ASSIGNED",
-            description=f"Specialist {app_record.professional.name} assigned to project #{project.id}. Escrow locked: ₹{locked_amount}.",
+            description=f"Specialist {specialist_name} assigned to project #{project.id}. Escrow locked: ₹{locked_amount}.",
             user_id=current_user.id,
             category="success",
         )
 
         db.session.commit()
-        flash(f"Specialist {app_record.professional.name} assigned to Project #{project.id}. ₹{locked_amount} locked in escrow.", "success")
+        flash(f"Specialist {specialist_name} assigned to Project #{project.id}. ₹{locked_amount} locked in escrow.", "success")
     except Exception as e:
         db.session.rollback()
         logger.error(f"Error assigning specialist application {application_id}: {str(e)}")
@@ -608,7 +634,11 @@ def send_admin_reminder(project_id: int) -> Any:
         flash("Admin access required.", "danger")
         return redirect(url_for("customer.dashboard"))
 
-    project = Project.query.get_or_404(project_id)
+    project = db.session.get(Project, project_id)
+    if not project:
+        flash("Project not found.", "danger")
+        return redirect(url_for("admin.admin_project_management"))
+
     if project.status == "Payment Pending":
         from app.services.reminders import send_payment_reminder
         sent = send_payment_reminder(project.id, force=True)
@@ -664,9 +694,11 @@ def request_project_revision(project_id: int) -> Any:
         flash("Admin access required.", "danger")
         return redirect(url_for("customer.dashboard"))
 
-    project = Project.query.get_or_404(project_id)
+    project = db.session.get(Project, project_id)
+    if not project:
+        flash("Project not found.", "danger")
+        return redirect(url_for("admin.admin_project_review"))
 
-    # GATE: Project must be in 'Submitted' status to request a revision
     if project.status != "Submitted":
         flash("Project must be in Submitted status to request a revision.", "warning")
         return redirect(url_for("admin.admin_project_review"))
@@ -709,9 +741,11 @@ def approve_project(project_id: int) -> Any:
         flash("Admin access required.", "danger")
         return redirect(url_for("customer.dashboard"))
 
-    project = Project.query.get_or_404(project_id)
+    project = db.session.get(Project, project_id)
+    if not project:
+        flash("Project not found.", "danger")
+        return redirect(url_for("admin.admin_project_review"))
 
-    # GATE: Project must be in 'Submitted' status to approve
     if project.status != "Submitted":
         flash("Project must be in Submitted status to approve deliverables.", "warning")
         return redirect(url_for("admin.admin_project_review"))
@@ -798,7 +832,11 @@ def admin_mark_paid(project_id: int) -> Any:
         return redirect(url_for("customer.dashboard"))
 
     try:
-        project = Project.query.get_or_404(project_id)
+        project = db.session.get(Project, project_id)
+        if not project:
+            flash("Project not found.", "danger")
+            return redirect(url_for("admin.admin_dashboard"))
+
         currency = sanitize_currency(project.currency)
         amount = get_package_price(project.package, currency, PACKAGE_PRICES)
 
@@ -869,7 +907,11 @@ def create_project_addon(project_id: int) -> Any:
         flash("Admin access required.", "danger")
         return redirect(url_for("customer.dashboard"))
 
-    project = Project.query.get_or_404(project_id)
+    project = db.session.get(Project, project_id)
+    if not project:
+        flash("Project not found.", "danger")
+        return redirect(url_for("customer.dashboard"))
+
     if project.status not in {"Assigned", "In Progress", "Submitted", "Revision"}:
         flash("Paid scope add-ons can only be issued for active projects.", "warning")
         return redirect(url_for("customer.project_details", project_id=project.id))
@@ -938,7 +980,11 @@ def unassign_professional(project_id: int) -> Any:
         return redirect(url_for("customer.dashboard"))
 
     try:
-        project = Project.query.get_or_404(project_id)
+        project = db.session.get(Project, project_id)
+        if not project:
+            flash("Project not found.", "danger")
+            return redirect(url_for("admin.admin_dashboard"))
+
         assigned_apps = ProfessionalProjectApplication.query.filter_by(
             project_id=project.id, status="Assigned"
         ).all()
@@ -965,7 +1011,10 @@ def delete_project(project_id: int) -> Any:
         flash("Admin access required.", "danger")
         return redirect(url_for("customer.dashboard"))
 
-    project = Project.query.get_or_404(project_id)
+    project = db.session.get(Project, project_id)
+    if not project:
+        flash("Project not found.", "danger")
+        return redirect(url_for("admin.admin_dashboard"))
 
     try:
         db.session.execute(db.delete(ChatMessage).where(ChatMessage.project_id == project.id))
@@ -1045,7 +1094,11 @@ def approve_withdrawal(request_id: int) -> Any:
         return redirect(url_for("customer.dashboard"))
 
     try:
-        req = WithdrawalRequest.query.get_or_404(request_id)
+        req = db.session.get(WithdrawalRequest, request_id)
+        if not req:
+            flash("Withdrawal request not found.", "danger")
+            return redirect(url_for("admin.admin_transactions"))
+
         if req.status != "Pending":
             flash("This withdrawal request has already been processed.", "warning")
             return redirect(url_for("admin.admin_transactions"))
@@ -1088,7 +1141,11 @@ def reject_withdrawal(request_id: int) -> Any:
         return redirect(url_for("customer.dashboard"))
 
     try:
-        req = WithdrawalRequest.query.get_or_404(request_id)
+        req = db.session.get(WithdrawalRequest, request_id)
+        if not req:
+            flash("Withdrawal request not found.", "danger")
+            return redirect(url_for("admin.admin_transactions"))
+
         if req.status != "Pending":
             flash("This withdrawal request is not pending.", "warning")
             return redirect(url_for("admin.admin_transactions"))
@@ -1139,7 +1196,11 @@ def release_talent_payout(invoice_id: int) -> Any:
         return redirect(url_for("customer.dashboard"))
 
     try:
-        invoice = Invoice.query.get_or_404(invoice_id)
+        invoice = db.session.get(Invoice, invoice_id)
+        if not invoice:
+            flash("Invoice not found.", "danger")
+            return redirect(url_for("admin.admin_transactions"))
+
         if invoice.status.lower() != "paid":
             flash("Cannot release payout for an unpaid milestone.", "warning")
             return redirect(url_for("admin.admin_transactions"))
@@ -1334,7 +1395,11 @@ def resolve_dispute(dispute_id: int) -> Any:
         return redirect(url_for("customer.dashboard"))
 
     try:
-        dispute = Dispute.query.get_or_404(dispute_id)
+        dispute = db.session.get(Dispute, dispute_id)
+        if not dispute:
+            flash("Dispute not found.", "danger")
+            return redirect(url_for("admin.admin_disputes"))
+
         verdict = request.form.get("verdict")
         notes = request.form.get("admin_notes", "").strip()
 
@@ -1342,23 +1407,24 @@ def resolve_dispute(dispute_id: int) -> Any:
         dispute.admin_verdict_notes = notes
         dispute.resolved_at = get_ist_now()
 
-        project = dispute.project
-        assigned_app = ProfessionalProjectApplication.query.filter_by(project_id=project.id, status="Assigned").first()
+        project: Any = db.session.get(Project, dispute.project_id) if dispute.project_id else getattr(dispute, "project", None)
+        assigned_app = ProfessionalProjectApplication.query.filter_by(project_id=project.id, status="Assigned").first() if project else None
         specialist_profile = ProfessionalProfile.query.filter_by(user_id=assigned_app.professional_id).first() if assigned_app else None
 
-        currency = sanitize_currency(project.currency)
-        gross = get_package_price(project.package, currency, PACKAGE_PRICES)
+        currency = sanitize_currency(project.currency) if project else "INR"
+        gross = get_package_price(project.package, currency, PACKAGE_PRICES) if project else Decimal("0.00")
         talent_share, _, _ = compute_financial_split(gross, currency)
         
         amount = Decimal(str(assigned_app.proposed_rate)) if (assigned_app and assigned_app.proposed_rate is not None) else talent_share
 
         if verdict == "RELEASED_SPECIALIST":
-            project.status = "Completed"
+            if project:
+                project.status = "Completed"
             if specialist_profile:
                 specialist_profile.pending_balance = max(Decimal("0.00"), Decimal(str(specialist_profile.pending_balance or 0)) - amount)
                 specialist_profile.available_balance = Decimal(str(specialist_profile.available_balance or 0)) + amount
             
-            if assigned_app:
+            if assigned_app and project:
                 db.session.add(Notification(
                     user_id=assigned_app.professional_id,
                     title="⚖️ Dispute Resolved in Your Favor",
@@ -1366,30 +1432,34 @@ def resolve_dispute(dispute_id: int) -> Any:
                     link="/professional/dashboard"
                 ))
         elif verdict == "REFUNDED_CLIENT":
-            project.status = "Cancelled"
+            if project:
+                project.status = "Cancelled"
             if specialist_profile:
                 specialist_profile.pending_balance = max(Decimal("0.00"), Decimal(str(specialist_profile.pending_balance or 0)) - amount)
 
-            db.session.add(Notification(
-                user_id=project.customer_id,
-                title="⚖️ Dispute Resolved — Refund Issued",
-                message=f"Admin resolved dispute for Project #{project.id}. Refund verdict executed.",
-                link=f"/project/{project.id}"
-            ))
+            if project:
+                db.session.add(Notification(
+                    user_id=project.customer_id,
+                    title="⚖️ Dispute Resolved — Refund Issued",
+                    message=f"Admin resolved dispute for Project #{project.id}. Refund verdict executed.",
+                    link=f"/project/{project.id}"
+                ))
         elif verdict == "SPLIT":
-            project.status = "Completed"
+            if project:
+                project.status = "Completed"
             half_amount = (amount / Decimal("2")).quantize(Decimal("0.01"))
             if specialist_profile:
                 specialist_profile.pending_balance = max(Decimal("0.00"), Decimal(str(specialist_profile.pending_balance or 0)) - amount)
                 specialist_profile.available_balance = Decimal(str(specialist_profile.available_balance or 0)) + half_amount
 
-        ActivityLog.log_event(
-            project_id=project.id,
-            action="DISPUTE_RESOLVED",
-            description=f"Admin resolved dispute with verdict '{verdict}': {notes}",
-            user_id=current_user.id,
-            category="success",
-        )
+        if project:
+            ActivityLog.log_event(
+                project_id=project.id,
+                action="DISPUTE_RESOLVED",
+                description=f"Admin resolved dispute with verdict '{verdict}': {notes}",
+                user_id=current_user.id,
+                category="success",
+            )
 
         db.session.commit()
         flash(f"Dispute resolved with binding verdict: {verdict}", "success")

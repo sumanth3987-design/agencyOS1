@@ -241,12 +241,13 @@ def login() -> Any:
 
             if current_app.config.get("EMAIL_VERIFICATION_REQUIRED", False) and not user.email_verified_at:
                 flash("Please verify your email address first.", "login_error")
-                return render_template("login.html"), 200
+                return redirect(url_for("auth.login"))
 
-            # Preserve pre-existing non-auth keys in session before login
-            saved_keys = {k: v for k, v in session.items() if not k.startswith("_")}
+            # Session hardening: Preserves ONLY CSRF token while clearing all pre-login session markers
+            active_csrf = session.get("csrf_token")
             session.clear()
-            session.update(saved_keys)
+            if active_csrf:
+                session["csrf_token"] = active_csrf
 
             login_user(user)
             session.permanent = True

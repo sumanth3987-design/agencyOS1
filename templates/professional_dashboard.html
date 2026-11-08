@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Specialist Dashboard &amp; Escrow Ledger — {{ agency_settings.agency_name if agency_settings else 'AgencyOS' }}</title>
+  <title>Specialist Dashboard &amp; Escrow Ledger — {{ agency_settings.agency_name }}</title>
 
   <!-- Typography: Plus Jakarta Sans & JetBrains Mono -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -38,23 +38,35 @@
   </script>
 
   <style>
+    :root {
+      --agency-primary: {{ agency_settings.primary_color }};
+      --agency-on-primary: {{ agency_settings.primary_contrast }};
+    }
     input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-visible, a:focus-visible {
-      outline: 2px solid #6366f1 !important;
+      outline: 2px solid var(--agency-primary) !important;
       outline-offset: 1px;
     }
   </style>
 </head>
-<body class="bg-zinc-950 text-zinc-100 min-h-screen selection:bg-zinc-100 selection:text-zinc-950 antialiased font-sans">
+<body class="bg-zinc-950 text-zinc-100 min-h-screen selection:bg-zinc-100 selection:text-zinc-950 antialiased font-sans" style="--agency-primary: {{ agency_settings.primary_color }}; --agency-on-primary: {{ agency_settings.primary_contrast }};">
 
   <!-- TOP NAVIGATION BAR -->
   <header class="border-b border-zinc-800 bg-zinc-950/95 sticky top-0 z-40">
     <div class="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
       <div class="flex items-center gap-4">
         <a href="{{ url_for('professional.professional_dashboard') }}" class="flex items-center gap-2 font-mono text-sm font-bold tracking-tight text-white">
-          <span class="w-7 h-7 rounded bg-indigo-600 text-white flex items-center justify-center font-black text-xs">A</span>
-          <span>{{ agency_settings.agency_name if agency_settings else 'Agency' }}<span class="text-indigo-400">OS</span></span>
+          {% if agency_settings and agency_settings.logo_url %}
+            <img src="{{ agency_settings.logo_url }}" class="h-7 w-auto object-contain" alt="{{ agency_settings.agency_name }}" onerror="this.style.display='none'; this.nextElementSibling.classList.remove('hidden')">
+            <span class="hidden flex items-center gap-2">
+              <span class="w-7 h-7 rounded bg-zinc-800 text-white flex items-center justify-center font-black text-xs">A</span>
+              <span>{{ agency_settings.agency_name }}</span>
+            </span>
+          {% else %}
+            <span class="w-7 h-7 rounded bg-zinc-800 text-white flex items-center justify-center font-black text-xs">A</span>
+            <span>{{ agency_settings.agency_name }}</span>
+          {% endif %}
         </a>
-        <span class="hidden sm:inline-flex items-center px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-indigo-950 text-indigo-300 border border-indigo-800">
+        <span class="hidden sm:inline-flex items-center px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-zinc-800 text-zinc-300 border border-zinc-700">
           Specialist Portal
         </span>
       </div>
@@ -63,7 +75,7 @@
         <a href="{{ url_for('professional.professional_dashboard') }}" class="px-3 py-1.5 rounded bg-zinc-850 text-white font-semibold">Dashboard</a>
         <a href="{{ url_for('professional.professional_projects') }}" class="px-3 py-1.5 rounded text-zinc-400 hover:text-white hover:bg-zinc-900 transition-colors">Opportunities</a>
         <a href="{{ url_for('professional.professional_profile') }}" class="px-3 py-1.5 rounded text-zinc-400 hover:text-white hover:bg-zinc-900 transition-colors">Payout Profile</a>
-        <a href="/auth/logout" class="ml-2 px-3 py-1.5 rounded text-rose-400 hover:bg-rose-950/50 hover:text-rose-300 transition-colors">Logout</a>
+        <a href="/logout" class="ml-2 px-3 py-1.5 rounded text-rose-400 hover:bg-rose-950/50 hover:text-rose-300 transition-colors">Logout</a>
       </nav>
     </div>
   </header>
@@ -78,7 +90,7 @@
               {% if category == 'success' %} bg-emerald-950/60 border-emerald-800 text-emerald-300
               {% elif category == 'danger' or category == 'error' %} bg-rose-950/60 border-rose-800 text-rose-300
               {% elif category == 'warning' %} bg-amber-950/60 border-amber-800 text-amber-300
-              {% else %} bg-indigo-950/60 border-indigo-800 text-indigo-300 {% endif %}">
+              {% else %} bg-zinc-850 border-zinc-700 text-zinc-200 {% endif %}">
               <span>{{ message }}</span>
               <button type="button" onclick="this.parentElement.remove()" class="text-zinc-400 hover:text-white ml-auto cursor-pointer">&times;</button>
             </div>
@@ -92,9 +104,9 @@
   {% if not current_user.is_verified %}
     {% set has_submitted_banking = profile and (profile.upi_id or profile.bank_account_number) %}
     <div class="max-w-7xl mx-auto px-6 w-full mt-4">
-      <div class="p-4 rounded-xl border {% if has_submitted_banking %}border-indigo-800/80 bg-indigo-950/40{% else %}border-amber-800/80 bg-amber-950/40{% endif %} flex flex-col sm:flex-row sm:items-center justify-between gap-4 font-mono text-xs">
+      <div class="p-4 rounded-xl border {% if has_submitted_banking %}border-zinc-800 bg-zinc-900{% else %}border-amber-800/80 bg-amber-950/40{% endif %} flex flex-col sm:flex-row sm:items-center justify-between gap-4 font-mono text-xs">
         <div class="flex items-start gap-3">
-          <span class="w-6 h-6 rounded-full {% if has_submitted_banking %}bg-indigo-900 text-indigo-300{% else %}bg-amber-900 text-amber-300{% endif %} flex items-center justify-center font-bold text-xs shrink-0 mt-0.5">
+          <span class="w-6 h-6 rounded-full {% if has_submitted_banking %}bg-zinc-800 text-zinc-300{% else %}bg-amber-900 text-amber-300{% endif %} flex items-center justify-center font-bold text-xs shrink-0 mt-0.5">
             {% if has_submitted_banking %}ℹ{% else %}!{% endif %}
           </span>
           <div>
@@ -117,7 +129,7 @@
             Setup Payout Profile →
           </a>
         {% else %}
-          <span class="px-3 py-1.5 rounded bg-indigo-950 text-indigo-300 border border-indigo-800 text-[11px] font-bold whitespace-nowrap text-center">
+          <span class="px-3 py-1.5 rounded bg-zinc-800 text-zinc-300 border border-zinc-700 text-[11px] font-bold whitespace-nowrap text-center">
             Under Admin Review
           </span>
         {% endif %}
@@ -212,11 +224,65 @@
           {{ completed_sprints }} <span class="text-sm font-normal text-zinc-500">Sprints</span>
         </div>
         <p class="text-[11px] text-zinc-500 pt-1 font-sans">
-          Profile Health: <strong class="text-indigo-400 font-mono">{{ completion_score }}%</strong>
+          Profile Health: <strong class="text-zinc-200 font-mono">{{ completion_score }}%</strong>
         </p>
       </div>
 
     </div>
+
+    <!-- REDEEMABLE INVOICES SECTION -->
+    {% if redeemable_invoices %}
+    <section class="space-y-4">
+      <div class="flex items-center justify-between font-mono text-xs">
+        <span class="text-white font-bold uppercase tracking-wider">Completed Milestone Invoices ({{ redeemable_invoices|length }})</span>
+        <span class="text-zinc-500">Direct Payout Clearance</span>
+      </div>
+
+      <div class="border border-zinc-800 bg-zinc-900 rounded-xl overflow-hidden shadow-xl font-mono text-xs">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Invoice #</th>
+              <th>Project Ref</th>
+              <th>Talent Allocation</th>
+              <th>Redemption Status</th>
+              <th class="text-right">Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for inv in redeemable_invoices %}
+            <tr>
+              <td class="font-bold text-white">{{ inv.invoice_number }}</td>
+              <td class="text-zinc-300">#{{ inv.project_id }}</td>
+              <td class="text-emerald-400 font-bold">
+                {{ inv.talent_payout|format_currency(inv.currency) }}
+              </td>
+              <td>
+                <span class="badge {% if inv.payout_status == 'Settled' %}badge-emerald{% elif inv.payout_status in ['Requested', 'Processing'] %}badge-neutral{% else %}badge-amber{% endif %}">
+                  {{ inv.payout_status or 'Pending Approval' }}
+                </span>
+              </td>
+              <td class="text-right">
+                {% if inv.payout_status in ['Requested', 'Processing'] %}
+                  <span class="px-3 py-1 bg-zinc-800 text-zinc-400 rounded text-xs">Redemption Processing</span>
+                {% elif inv.payout_status == 'Settled' %}
+                  <span class="text-emerald-400 font-bold text-xs">Settled ({{ inv.payout_utr }})</span>
+                {% else %}
+                  <form method="POST" action="{{ url_for('professional.request_payout', invoice_id=inv.id) }}" class="inline">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-primary text-xs h-7 px-3 font-semibold cursor-pointer">
+                      Redeem to UPI ⚡
+                    </button>
+                  </form>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+    {% endif %}
 
     <!-- ACTIVE WORKSPACES & DELIVERABLES -->
     <section class="space-y-4">
@@ -240,7 +306,7 @@
             {% for project in assigned_projects %}
             <tr>
               <td>
-                <span class="text-indigo-400 font-bold block">#{{ project.id }}</span>
+                <span class="text-zinc-300 font-bold block">#{{ project.id }}</span>
                 <span class="text-white font-sans font-semibold text-xs">{{ project.service }}</span>
               </td>
               <td class="text-zinc-300">
@@ -250,7 +316,7 @@
                 {{ project.currency }}
               </td>
               <td>
-                <span class="badge {% if project.status == 'Completed' %}badge-emerald{% elif project.status == 'Revision' %}badge-amber{% else %}badge-indigo{% endif %}">
+                <span class="badge {% if project.status == 'Completed' %}badge-emerald{% elif project.status == 'Revision' %}badge-amber{% else %}badge-neutral{% endif %}">
                   {{ project.status }}
                 </span>
               </td>
@@ -279,7 +345,7 @@
           <span class="text-white font-bold uppercase tracking-wider block">Skill-Matched Sprints &amp; Opportunities</span>
           <span class="text-zinc-500 font-sans">Open engagements matching your tech stack profile</span>
         </div>
-        <a href="{{ url_for('professional.professional_projects') }}" class="text-indigo-400 hover:text-indigo-300">View All →</a>
+        <a href="{{ url_for('professional.professional_projects') }}" class="text-zinc-400 hover:text-white">View All →</a>
       </div>
 
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -288,7 +354,7 @@
           <div class="p-5 rounded-xl border border-zinc-800 bg-zinc-900 flex flex-col justify-between space-y-4 hover:border-zinc-700 transition">
             <div class="space-y-2">
               <div class="flex justify-between items-start gap-2 font-mono text-xs">
-                <span class="text-indigo-400 font-bold">#{{ proj.id }} · {{ proj.currency }}</span>
+                <span class="text-zinc-300 font-bold">#{{ proj.id }} · {{ proj.currency }}</span>
                 {% if match.match_count > 0 %}
                   <span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-950 text-emerald-400 border border-emerald-800">
                     {{ match.match_count }} Skill Match
@@ -298,6 +364,10 @@
               <h3 class="font-bold text-white font-sans text-sm">{{ proj.package }}</h3>
               <p class="text-xs text-zinc-400 font-mono">{{ proj.service }}</p>
               
+              <div class="text-emerald-400 font-bold text-xs font-mono">
+                Allocation: {{ match.formatted_payout }}
+              </div>
+
               <p class="text-xs text-zinc-500 font-sans line-clamp-2 leading-relaxed">
                 {{ proj.requirements }}
               </p>
@@ -376,7 +446,7 @@
               <td class="text-zinc-500">{{ w.requested_at.strftime('%d %b %Y, %H:%M') if w.requested_at else '—' }}</td>
               <td>
                 {% if w.payout_mode == 'UPI' %}
-                  <span class="text-indigo-400 font-bold">📱 UPI: {{ w.upi_id }}</span>
+                  <span class="text-zinc-300 font-bold">📱 UPI: {{ w.upi_id }}</span>
                 {% else %}
                   <span class="text-zinc-300">🏦 Direct Bank Wire</span>
                 {% endif %}
@@ -424,7 +494,7 @@
           </div>
           <div>
             <span class="text-zinc-500 text-[10px] uppercase block">Currency:</span>
-            <strong id="detailsModalCurrency" class="text-indigo-400">INR</strong>
+            <strong id="detailsModalCurrency" class="text-zinc-200">INR</strong>
           </div>
         </div>
 
@@ -470,7 +540,7 @@
             rows="4"
             required
             placeholder="Explain your approach, architecture, relevant portfolio projects..."
-            class="w-full p-3 rounded bg-zinc-950 border border-zinc-800 text-white font-sans text-xs focus:outline-none focus:border-indigo-500"
+            class="w-full p-3 rounded bg-zinc-950 border border-zinc-800 text-white font-sans text-xs focus:outline-none focus:border-zinc-500"
           ></textarea>
         </div>
 
@@ -545,7 +615,7 @@
         <div>
           <label class="block text-zinc-400 mb-1">Payout Method</label>
           <div class="grid grid-cols-2 gap-2">
-            <button type="button" id="tabUPI" class="py-2 px-3 border border-indigo-500 bg-indigo-950/60 rounded text-xs font-bold text-indigo-300 cursor-pointer">
+            <button type="button" id="tabUPI" class="py-2 px-3 border border-zinc-700 bg-zinc-900 rounded text-xs font-bold text-zinc-200 cursor-pointer">
               📱 UPI ID
             </button>
             <button type="button" id="tabBank" class="py-2 px-3 border border-zinc-800 bg-zinc-950 rounded text-xs text-zinc-400 cursor-pointer">
@@ -611,7 +681,7 @@
   </div>
 
   <footer class="border-t border-zinc-800 bg-zinc-950 py-6 px-6 text-center text-xs font-mono text-zinc-500 mt-12">
-    {{ agency_settings.agency_name if agency_settings else 'AgencyOS' }} Specialist Node &bull; Escrow Protection &bull; SAC 998311 Compliant
+    {{ agency_settings.agency_name }} Specialist Node &bull; Escrow Protection &bull; SAC 998311 Compliant
   </footer>
 
   <script>
@@ -700,7 +770,7 @@
       if (tabUPI && tabBank) {
         tabUPI.addEventListener("click", function () {
           payoutModeInput.value = "UPI";
-          tabUPI.className = "py-2 px-3 border border-indigo-500 bg-indigo-950/60 rounded text-xs font-bold text-indigo-300 cursor-pointer";
+          tabUPI.className = "py-2 px-3 border border-zinc-700 bg-zinc-900 rounded text-xs font-bold text-zinc-200 cursor-pointer";
           tabBank.className = "py-2 px-3 border border-zinc-800 bg-zinc-950 rounded text-xs text-zinc-400 cursor-pointer";
           if (upiSec)  upiSec.classList.remove("hidden");
           if (bankSec) bankSec.classList.add("hidden");
@@ -708,7 +778,7 @@
 
         tabBank.addEventListener("click", function () {
           payoutModeInput.value = "BANK_TRANSFER";
-          tabBank.className = "py-2 px-3 border border-indigo-500 bg-indigo-950/60 rounded text-xs font-bold text-indigo-300 cursor-pointer";
+          tabBank.className = "py-2 px-3 border border-zinc-700 bg-zinc-900 rounded text-xs font-bold text-zinc-200 cursor-pointer";
           tabUPI.className = "py-2 px-3 border border-zinc-800 bg-zinc-950 rounded text-xs text-zinc-400 cursor-pointer";
           if (upiSec)  upiSec.classList.add("hidden");
           if (bankSec) bankSec.classList.remove("hidden");
