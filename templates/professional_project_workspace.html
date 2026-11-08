@@ -41,7 +41,7 @@
   <script>
     document.addEventListener("DOMContentLoaded", function () {
       var projectId = "{{ project.id }}";
-      var apiEndpoint = "/api/project/" + projectId + "/messages"; // or professional/api/...
+      var apiEndpoint = "/api/project/" + projectId + "/messages";
       var chatStream = document.getElementById("chatStream");
       var lastMessageCount = 0;
 
@@ -73,24 +73,33 @@
           .catch(err => console.error("Chat sync error:", err));
       }
 
-      // Poll every 3 seconds for lightning-fast real-time chat
       setInterval(pollChat, 3000);
     });
   </script>
 
   <style>
+    :root {
+      --agency-primary: {{ agency_settings.primary_color if agency_settings else '#6366f1' }};
+      --agency-on-primary: {{ agency_settings.primary_contrast if agency_settings else '#ffffff' }};
+    }
     input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-visible, a:focus-visible {
-      outline: 2px solid #6366f1 !important;
+      outline: 2px solid var(--agency-primary) !important;
       outline-offset: 1px;
     }
   </style>
 </head>
-<body class="bg-zinc-950 text-zinc-100 min-h-screen selection:bg-zinc-100 selection:text-zinc-950 antialiased" style="--agency-primary: {{ agency_settings.primary_color if agency_settings else '#09090b' }};">
+<body class="bg-zinc-950 text-zinc-100 min-h-screen selection:bg-zinc-100 selection:text-zinc-950 antialiased" style="--agency-primary: {{ agency_settings.primary_color if agency_settings else '#6366f1' }}; --agency-on-primary: {{ agency_settings.primary_contrast if agency_settings else '#ffffff' }};">
 
   <!-- TOP WORKBENCH HEADER -->
   <header class="border-b border-zinc-800 bg-zinc-950/95 sticky top-0 z-50">
     <div class="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
       <div class="flex items-center gap-4">
+        {% if agency_settings and agency_settings.logo_url %}
+          <img src="{{ agency_settings.logo_url }}" class="h-7 w-auto object-contain" alt="{{ agency_settings.agency_name }}" onerror="this.style.display='none'; this.nextElementSibling.classList.remove('hidden')">
+          <span class="font-bold font-mono text-sm hidden">{{ agency_settings.agency_name }}</span>
+        {% else %}
+          <span class="font-bold font-mono text-sm">{{ agency_settings.agency_name if agency_settings else 'AgencyOS' }}</span>
+        {% endif %}
         <a href="{{ url_for('professional.professional_dashboard') }}" class="px-3 py-1.5 rounded-lg border border-zinc-700 hover:border-zinc-600 bg-zinc-900 text-zinc-300 hover:text-white text-xs transition-colors font-semibold">
           ← Return to Specialist Hub
         </a>
@@ -117,7 +126,7 @@
       {% if messages %}
         <div class="space-y-2 font-mono text-xs">
           {% for category, message in messages %}
-            <div class="p-3 rounded border {% if category == 'success' %}bg-emerald-950/60 border-emerald-800 text-emerald-300{% elif category == 'danger' or category == 'error' %}bg-rose-950/60 border-rose-800 text-rose-300{% elif category == 'warning' %}bg-amber-950/60 border-amber-800 text-amber-300{% else %}bg-indigo-950/60 border-indigo-800 text-indigo-300{% endif %} flex justify-between">
+            <div class="p-3 rounded border {% if category == 'success' %}bg-emerald-950/60 border-emerald-800 text-emerald-300{% elif category == 'danger' or category == 'error' %}bg-rose-950/60 border-rose-800 text-rose-300{% elif category == 'warning' %}bg-amber-950/60 border-amber-800 text-amber-300{% else %}bg-zinc-800 border-zinc-700 text-zinc-200{% endif %} flex justify-between">
               <span>{{ message }}</span>
               <button onclick="this.parentElement.remove()" class="text-zinc-400 hover:text-white ml-auto cursor-pointer">&times;</button>
             </div>
@@ -130,7 +139,7 @@
     <div class="border-b border-zinc-800 pb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
       <div>
         <div class="flex items-center gap-2 mb-1">
-          <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-950 text-indigo-300 border border-indigo-800 font-mono">ACTIVE SPRINT WORKBENCH</span>
+          <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-zinc-800 text-zinc-300 border border-zinc-700 font-mono">ACTIVE SPRINT WORKBENCH</span>
           <span class="font-mono text-xs text-zinc-500">•</span>
           <span class="font-mono text-xs text-zinc-400">#{{ project.id }}</span>
         </div>
@@ -209,7 +218,7 @@
                 name="preview_url"
                 required
                 placeholder="https://staging.domain.com or https://figma.com/@file"
-                class="w-full p-2.5 rounded bg-zinc-950 border border-zinc-800 text-white focus:outline-none focus:border-indigo-500"
+                class="w-full p-2.5 rounded bg-zinc-950 border border-zinc-800 text-white focus:outline-none focus:border-zinc-500"
               >
               <span class="text-[10px] text-zinc-500 font-sans mt-0.5 block">For Step 1 submit Figma/Wireframes. For Step 2 submit live staging test link.</span>
             </div>
@@ -223,7 +232,7 @@
                 type="url"
                 name="live_url"
                 placeholder="https://clientdomain.com"
-                class="w-full p-2.5 rounded bg-zinc-950 border border-zinc-800 text-white focus:outline-none focus:border-indigo-500"
+                class="w-full p-2.5 rounded bg-zinc-950 border border-zinc-800 text-white focus:outline-none focus:border-zinc-500"
               >
               <span class="text-[10px] text-zinc-500 font-sans mt-0.5 block">Required for final Milestone 3 handover when DNS is pointed to production.</span>
             </div>
@@ -237,7 +246,7 @@
                 type="url"
                 name="source_url"
                 placeholder="https://github.com/organization/project-repo"
-                class="w-full p-2.5 rounded bg-zinc-950 border border-zinc-800 text-white focus:outline-none focus:border-indigo-500"
+                class="w-full p-2.5 rounded bg-zinc-950 border border-zinc-800 text-white focus:outline-none focus:border-zinc-500"
               >
               <span class="text-[10px] text-zinc-500 font-sans mt-0.5 block">Repository transfer for client code ownership sign-off.</span>
             </div>
@@ -250,7 +259,7 @@
                 rows="3"
                 required
                 placeholder="Detail the completed milestone features, staging test credentials, or DNS notes..."
-                class="w-full p-2.5 rounded bg-zinc-950 border border-zinc-800 text-white font-sans focus:outline-none focus:border-indigo-500"
+                class="w-full p-2.5 rounded bg-zinc-950 border border-zinc-800 text-white font-sans focus:outline-none focus:border-zinc-500"
               ></textarea>
             </div>
 
@@ -285,7 +294,7 @@
               </div>  
             </div>
 
-            <button type="submit" class="w-full mt-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-bold uppercase tracking-wider text-xs shadow-md shadow-indigo-500/20 transition-colors">
+            <button type="submit" class="w-full mt-6 py-3 btn btn-primary text-white rounded-lg font-bold uppercase tracking-wider text-xs shadow-md transition-colors cursor-pointer">
               Submit Deliverable for Review ⚡
             </button>
           </form>
@@ -310,12 +319,12 @@
                     <strong class="text-white block">Submission #{{ delivery.submission_number }}</strong> 
                     <span class="text-[10px] text-zinc-500">{{ delivery.submitted_at.strftime('%d %b %Y, %H:%M') if delivery.submitted_at else '' }}</span>
                   </div>
-                  <span class="px-1.5 py-0.5 rounded {% if delivery.status == 'Approved' %}bg-emerald-950 text-emerald-400 border border-emerald-800{% elif delivery.status == 'Revision' %}bg-amber-950 text-amber-400 border border-amber-800{% else %}bg-indigo-950 text-indigo-400 border border-indigo-800{% endif %} text-[9px] font-bold">{{ delivery.status|upper }}</span>
+                  <span class="px-1.5 py-0.5 rounded {% if delivery.status == 'Approved' %}bg-emerald-950 text-emerald-400 border border-emerald-800{% elif delivery.status == 'Revision' %}bg-amber-950 text-amber-400 border border-amber-800{% else %}bg-zinc-800 text-zinc-300 border border-zinc-700{% endif %} text-[9px] font-bold">{{ delivery.status|upper }}</span>
                 </div>
-                <div class="flex flex-wrap gap-3 text-indigo-400 font-sans font-semibold text-[11px] pt-1.5 border-t border-zinc-800">
-                  {% if delivery.preview_url %}<a href="{{ delivery.preview_url }}" target="_blank" rel="noopener noreferrer" class="hover:text-indigo-300 hover:underline">Preview / Staging ↗</a>{% endif %}
-                  {% if delivery.live_url %}<a href="{{ delivery.live_url }}" target="_blank" rel="noopener noreferrer" class="hover:text-indigo-300 hover:underline">Live Production ↗</a>{% endif %}
-                  {% if delivery.source_url %}<a href="{{ delivery.source_url }}" target="_blank" rel="noopener noreferrer" class="hover:text-indigo-300 hover:underline">Source Code ↗</a>{% endif %}
+                <div class="flex flex-wrap gap-3 text-zinc-300 font-sans font-semibold text-[11px] pt-1.5 border-t border-zinc-800">
+                  {% if delivery.preview_url %}<a href="{{ delivery.preview_url }}" target="_blank" rel="noopener noreferrer" class="hover:text-white hover:underline">Preview / Staging ↗</a>{% endif %}
+                  {% if delivery.live_url %}<a href="{{ delivery.live_url }}" target="_blank" rel="noopener noreferrer" class="hover:text-white hover:underline">Live Production ↗</a>{% endif %}
+                  {% if delivery.source_url %}<a href="{{ delivery.source_url }}" target="_blank" rel="noopener noreferrer" class="hover:text-white hover:underline">Source Code ↗</a>{% endif %}
                 </div>
               </div>
               {% endfor %}
@@ -362,8 +371,8 @@
           <!-- New Message Form -->
           <form method="POST" action="{{ url_for('professional.post_chat_message', project_id=project.id) }}" class="p-3 border-t border-zinc-800 bg-zinc-950 flex gap-2 font-mono text-xs">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token else '' }}">
-            <input type="text" name="message" required placeholder="Type a note to the agency lead..." class="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded text-white focus:outline-none focus:border-indigo-500">
-            <button type="submit" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded font-bold uppercase tracking-wider cursor-pointer">
+            <input type="text" name="message" required placeholder="Type a note to the agency lead..." class="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded text-white focus:outline-none focus:border-zinc-500">
+            <button type="submit" class="btn btn-primary px-4 py-2 text-white rounded font-bold uppercase tracking-wider cursor-pointer">
               Send
             </button>
           </form>
@@ -372,5 +381,9 @@
       </div>
     </div>
   </main>
+
+  <footer class="border-t border-zinc-800 bg-zinc-950 py-6 px-6 text-center text-xs font-mono text-zinc-500 mt-12">
+    {{ agency_settings.agency_name if agency_settings else 'AgencyOS' }} Specialist Node &bull; Escrow Protection &bull; SAC 998311
+  </footer>
 </body>
 </html>
