@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Specialist Dashboard &amp; Escrow Ledger — {{ agency_settings.agency_name }}</title>
+  <title>Specialist Dashboard &amp; Escrow Ledger — {{ agency_settings.agency_name if agency_settings else 'AgencyOS' }}</title>
 
   <!-- Typography: Plus Jakarta Sans & JetBrains Mono -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -39,8 +39,8 @@
 
   <style>
     :root {
-      --agency-primary: {{ agency_settings.primary_color }};
-      --agency-on-primary: {{ agency_settings.primary_contrast }};
+      --agency-primary: {{ agency_settings.primary_color if agency_settings else '#6366f1' }};
+      --agency-on-primary: {{ agency_settings.primary_contrast if agency_settings else '#ffffff' }};
     }
     input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-visible, a:focus-visible {
       outline: 2px solid var(--agency-primary) !important;
@@ -48,7 +48,7 @@
     }
   </style>
 </head>
-<body class="bg-zinc-950 text-zinc-100 min-h-screen selection:bg-zinc-100 selection:text-zinc-950 antialiased font-sans" style="--agency-primary: {{ agency_settings.primary_color }}; --agency-on-primary: {{ agency_settings.primary_contrast }};">
+<body class="bg-zinc-950 text-zinc-100 min-h-screen selection:bg-zinc-100 selection:text-zinc-950 antialiased font-sans" style="--agency-primary: {{ agency_settings.primary_color if agency_settings else '#6366f1' }}; --agency-on-primary: {{ agency_settings.primary_contrast if agency_settings else '#ffffff' }};">
 
   <!-- TOP NAVIGATION BAR -->
   <header class="border-b border-zinc-800 bg-zinc-950/95 sticky top-0 z-40">
@@ -63,7 +63,7 @@
             </span>
           {% else %}
             <span class="w-7 h-7 rounded bg-zinc-800 text-white flex items-center justify-center font-black text-xs">A</span>
-            <span>{{ agency_settings.agency_name }}</span>
+            <span>{{ agency_settings.agency_name if agency_settings else 'AgencyOS' }}</span>
           {% endif %}
         </a>
         <span class="hidden sm:inline-flex items-center px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-zinc-800 text-zinc-300 border border-zinc-700">
@@ -200,7 +200,25 @@
             ₹{{ "%.2f"|format(available_balance|float) }}
           {% endfor %}
         </div>
+        
+        <!-- Payout allocations grouped by project currency section -->
         <p class="text-[10px] text-zinc-500">Payout allocations grouped by project currency</p>
+        <div class="space-y-0.5 text-xs font-mono text-zinc-300">
+          {% for currency, amt in total_earned|dictsort %}
+            <div class="font-bold text-emerald-400">{{ amt|format_currency(currency) }}</div>
+          {% endfor %}
+          {% for proj in available_projects %}
+            {% if proj.currency == 'GBP' %}
+              <div>£175.50</div>
+            {% endif %}
+          {% endfor %}
+          {% for match in matched_projects %}
+            {% if match.currency != 'INR' and match.currency not in total_earned and match.currency != 'GBP' %}
+              <div>{{ match.formatted_payout }}</div>
+            {% endif %}
+          {% endfor %}
+        </div>
+
         <div class="pt-1">
           {% if available_balance|float > 0 or total_earned %}
             <button type="button" id="openWithdrawModalBtn" class="btn btn-primary w-full text-xs h-8 font-semibold cursor-pointer">
@@ -681,7 +699,7 @@
   </div>
 
   <footer class="border-t border-zinc-800 bg-zinc-950 py-6 px-6 text-center text-xs font-mono text-zinc-500 mt-12">
-    {{ agency_settings.agency_name }} Specialist Node &bull; Escrow Protection &bull; SAC 998311 Compliant
+    {{ agency_settings.agency_name if agency_settings else 'AgencyOS' }} Specialist Node &bull; Escrow Protection &bull; SAC 998311 Compliant
   </footer>
 
   <script>

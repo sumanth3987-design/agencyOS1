@@ -69,7 +69,7 @@
                 <span class="block">
                   Sprints: <strong class="text-white">{{ metrics.get('completed_sprints', 0) }} completed</strong> ({{ metrics.get('completed_sprints', 0) }} Delivered · {{ metrics.get('active_sprints', 0) }} In Flight)
                 </span>
-                <div class="flex flex-wrap items-center gap-2 pt-0.5 text-zinc-300">
+                <div class="flex flex-wrap items-center gap-2 pt-0.5 text-zinc-300 font-mono">
                   {% if metrics.get('completion_rate') is not none %}
                     <span class="px-1 rounded bg-zinc-800 text-zinc-300">Completion: {{ metrics.completion_rate }}%</span>
                   {% endif %}
@@ -153,7 +153,7 @@
                 <!-- Full Profile Read-Only View Button -->
                 <a
                   href="{{ url_for('admin.admin_view_professional', profile_id=profile.id) }}"
-                  class="px-2.5 py-1.5 bg-indigo-950 hover:bg-indigo-900 text-indigo-300 border border-indigo-800 rounded text-xs transition-colors"
+                  class="px-2.5 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700 rounded text-xs transition-colors"
                   title="View Specialist Dossier"
                 >
                   Profile ↗

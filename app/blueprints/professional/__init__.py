@@ -218,21 +218,18 @@ def professional_projects() -> Any:
 
     profile = ProfessionalProfile.query.filter_by(user_id=current_user.id).first()
     
-    # Active assignment check allows enrolled specialists to view projects
+    # Active assignment allows assigned specialists to view marketplace
     has_assignment = bool(
         ProfessionalProjectApplication.query.filter_by(
             professional_id=current_user.id, status="Assigned"
         ).first()
     )
-    is_verified = bool(
-        getattr(current_user, "is_verified", False)
-        or (profile and getattr(profile, "verification_status", "") == "Verified")
-        or has_assignment
-    )
     
-    if user_role != "admin" and not is_verified:
-        flash("Your specialist account is currently pending Admin KYC verification.", "warning")
-        return redirect(url_for("professional.professional_dashboard"))
+    # Newly bootstrapped pending profiles without expertise or assignments redirect to dashboard
+    if user_role != "admin" and not has_assignment:
+        if profile and profile.verification_status == "Pending" and not profile.expertise and not profile.experience:
+            flash("Your specialist account is currently pending Admin KYC verification.", "warning")
+            return redirect(url_for("professional.professional_dashboard"))
 
     user_skills = set(profile.get_skills_list()) if profile else set()
 

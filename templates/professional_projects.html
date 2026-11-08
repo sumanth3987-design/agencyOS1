@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Open Sprints Marketplace — AgencyOS</title>
+  <title>Open Sprints Marketplace — {{ agency_settings.agency_name }}</title>
 
   <!-- Typography: Plus Jakarta Sans & JetBrains Mono -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -36,16 +36,31 @@
       }
     }
   </script>
+
+  <style>
+    :root {
+      --agency-primary: {{ agency_settings.primary_color }};
+      --agency-on-primary: {{ agency_settings.primary_contrast }};
+    }
+  </style>
 </head>
-<body class="bg-zinc-950 text-zinc-100 min-h-screen selection:bg-zinc-100 selection:text-zinc-950 antialiased font-sans">
+<body class="bg-zinc-950 text-zinc-100 min-h-screen selection:bg-zinc-100 selection:text-zinc-950 antialiased font-sans" style="--agency-primary: {{ agency_settings.primary_color }}; --agency-on-primary: {{ agency_settings.primary_contrast }};">
 
   <!-- TOP NAVIGATION BAR -->
   <header class="border-b border-zinc-800 bg-zinc-950/95 sticky top-0 z-40">
     <div class="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
       <div class="flex items-center gap-4">
         <a href="{{ url_for('professional.professional_dashboard') }}" class="flex items-center gap-2 font-mono text-sm font-bold tracking-tight text-white">
-          <span class="w-7 h-7 rounded bg-indigo-600 text-white flex items-center justify-center font-black text-xs">A</span>
-          <span>Agency<span class="text-indigo-400">OS</span></span>
+          {% if agency_settings and agency_settings.logo_url %}
+            <img src="{{ agency_settings.logo_url }}" class="h-7 w-auto object-contain" alt="{{ agency_settings.agency_name }}" onerror="this.style.display='none'; this.nextElementSibling.classList.remove('hidden')">
+            <span class="hidden flex items-center gap-2">
+              <span class="w-7 h-7 rounded bg-indigo-600 text-white flex items-center justify-center font-black text-xs">A</span>
+              <span>{{ agency_settings.agency_name }}</span>
+            </span>
+          {% else %}
+            <span class="w-7 h-7 rounded bg-indigo-600 text-white flex items-center justify-center font-black text-xs">A</span>
+            <span>{{ agency_settings.agency_name }}</span>
+          {% endif %}
         </a>
         <span class="hidden sm:inline-flex items-center px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-indigo-950 text-indigo-300 border border-indigo-800">
           Specialist Portal
@@ -56,7 +71,7 @@
         <a href="{{ url_for('professional.professional_dashboard') }}" class="px-3 py-1.5 rounded text-zinc-400 hover:text-white hover:bg-zinc-900 transition-colors">Dashboard</a>
         <a href="{{ url_for('professional.professional_projects') }}" class="px-3 py-1.5 rounded bg-zinc-850 text-white font-semibold">Opportunities</a>
         <a href="{{ url_for('professional.professional_profile') }}" class="px-3 py-1.5 rounded text-zinc-400 hover:text-white hover:bg-zinc-900 transition-colors">Payout Profile</a>
-        <a href="/auth/logout" class="ml-2 px-3 py-1.5 rounded text-rose-400 hover:bg-rose-950/50 hover:text-rose-300 transition-colors">Logout</a>
+        <a href="/logout" class="ml-2 px-3 py-1.5 rounded text-rose-400 hover:bg-rose-950/50 hover:text-rose-300 transition-colors">Logout</a>
       </nav>
     </div>
   </header>
@@ -263,7 +278,7 @@
   </div>
 
   <footer class="border-t border-zinc-800 bg-zinc-950 py-6 px-6 text-center text-xs font-mono text-zinc-500 mt-12">
-    AgencyOS Specialist Node &bull; Escrow Protection &bull; SAC 998311
+    {{ agency_settings.agency_name }} Specialist Node &bull; Escrow Protection &bull; SAC 998311
   </footer>
 
   <script>

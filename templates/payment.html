@@ -42,14 +42,8 @@
       --agency-primary: {{ agency_settings.primary_color }};
       --agency-on-primary: {{ agency_settings.primary_contrast }};
     }
-    #payBtn {
-      background-color: var(--agency-primary);
-      color: var(--agency-on-primary);
-    }
-    #payBtn:focus-visible {
-      outline: 2px solid #ffffff;
-      outline-offset: 2px;
-    }
+    #payBtn { background-color: var(--agency-primary); color: var(--agency-on-primary); }
+    #payBtn:focus-visible { outline: 2px solid #ffffff; outline-offset: 2px; }
     @media (max-width: 480px) {
       .checkout-card {
         padding: 1rem;

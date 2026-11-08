@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Specialist Career Dossier & Payout Setup — AgencyOS</title>
+  <title>Specialist Career Dossier & Payout Setup — {{ agency_settings.agency_name if agency_settings else 'AgencyOS' }}</title>
 
   <!-- Typography: Plus Jakarta Sans & JetBrains Mono -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -36,18 +36,33 @@
       }
     }
   </script>
+
+  <style>
+    :root {
+      --agency-primary: {{ agency_settings.primary_color if agency_settings else '#6366f1' }};
+      --agency-on-primary: {{ agency_settings.primary_contrast if agency_settings else '#ffffff' }};
+    }
+  </style>
 </head>
-<body class="bg-zinc-950 text-zinc-100 min-h-screen selection:bg-zinc-100 selection:text-zinc-950 antialiased font-sans">
+<body class="bg-zinc-950 text-zinc-100 min-h-screen selection:bg-zinc-100 selection:text-zinc-950 antialiased font-sans" style="--agency-primary: {{ agency_settings.primary_color if agency_settings else '#6366f1' }}; --agency-on-primary: {{ agency_settings.primary_contrast if agency_settings else '#ffffff' }};">
 
   <!-- TOP NAVIGATION BAR -->
   <header class="border-b border-zinc-800 bg-zinc-950/95 sticky top-0 z-40">
     <div class="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between">
       <div class="flex items-center gap-4">
         <a href="{{ url_for('professional.professional_dashboard') }}" class="flex items-center gap-2 font-mono text-sm font-bold tracking-tight text-white">
-          <span class="w-7 h-7 rounded bg-indigo-600 text-white flex items-center justify-center font-black text-xs">A</span>
-          <span>Agency<span class="text-indigo-400">OS</span></span>
+          {% if agency_settings and agency_settings.logo_url %}
+            <img src="{{ agency_settings.logo_url }}" class="h-7 w-auto object-contain" alt="{{ agency_settings.agency_name }}" onerror="this.style.display='none'; this.nextElementSibling.classList.remove('hidden')">
+            <span class="hidden flex items-center gap-2">
+              <span class="w-7 h-7 rounded bg-zinc-800 text-white flex items-center justify-center font-black text-xs">A</span>
+              <span>{{ agency_settings.agency_name }}</span>
+            </span>
+          {% else %}
+            <span class="w-7 h-7 rounded bg-zinc-800 text-white flex items-center justify-center font-black text-xs">A</span>
+            <span>{{ agency_settings.agency_name if agency_settings else 'AgencyOS' }}</span>
+          {% endif %}
         </a>
-        <span class="hidden sm:inline-flex items-center px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-indigo-950 text-indigo-300 border border-indigo-800">
+        <span class="hidden sm:inline-flex items-center px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-zinc-800 text-zinc-300 border border-zinc-700">
           Specialist Dossier
         </span>
       </div>
@@ -56,7 +71,7 @@
         <a href="{{ url_for('professional.professional_dashboard') }}" class="px-3 py-1.5 rounded text-zinc-400 hover:text-white hover:bg-zinc-900 transition-colors">Dashboard</a>
         <a href="{{ url_for('professional.professional_projects') }}" class="px-3 py-1.5 rounded text-zinc-400 hover:text-white hover:bg-zinc-900 transition-colors">Opportunities</a>
         <a href="{{ url_for('professional.professional_profile') }}" class="px-3 py-1.5 rounded bg-zinc-850 text-white font-semibold">Payout Profile</a>
-        <a href="/auth/logout" class="ml-2 px-3 py-1.5 rounded text-rose-400 hover:bg-rose-950/50 hover:text-rose-300 transition-colors">Logout</a>
+        <a href="/logout" class="ml-2 px-3 py-1.5 rounded text-rose-400 hover:bg-rose-950/50 hover:text-rose-300 transition-colors">Logout</a>
       </nav>
     </div>
   </header>
@@ -69,7 +84,7 @@
       {% if messages %}
         <div class="space-y-2 font-mono text-xs">
           {% for category, message in messages %}
-            <div class="p-3 rounded border {% if category == 'success' %}bg-emerald-950/60 border-emerald-800 text-emerald-300{% else %}bg-indigo-950/60 border-indigo-800 text-indigo-300{% endif %} flex justify-between">
+            <div class="p-3 rounded border {% if category == 'success' %}bg-emerald-950/60 border-emerald-800 text-emerald-300{% else %}bg-zinc-800 border-zinc-700 text-zinc-300{% endif %} flex justify-between">
               <span>{{ message }}</span>
               <button onclick="this.parentElement.remove()" class="text-zinc-400 hover:text-white ml-auto cursor-pointer">&times;</button>
             </div>
@@ -80,7 +95,7 @@
 
     <div class="border-b border-zinc-800 pb-6 flex items-center justify-between">
       <div>
-        <span class="badge badge-indigo mb-1">TALENT VERIFICATION DOSSIER</span>
+        <span class="badge badge-neutral mb-1">TALENT VERIFICATION DOSSIER</span>
         <h1 class="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">Specialist Profile &amp; Payout Settings</h1>
         <p class="text-xs font-mono text-zinc-400 mt-1">Configure your professional background, technical expertise, portfolios, and wire payout coordinates.</p>
       </div>
@@ -122,7 +137,7 @@
 
         <div>
           <label class="block text-zinc-400 mb-1">Professional Bio &amp; Summary *</label>
-          <textarea name="about" rows="4" required placeholder="Describe your background, architectural philosophy, and past engineering milestones..." class="w-full p-3 rounded bg-zinc-950 border border-zinc-800 text-white font-sans text-xs focus:outline-none focus:border-indigo-500">{{ profile.about or '' }}</textarea>
+          <textarea name="about" rows="4" required placeholder="Describe your background, architectural philosophy, and past engineering milestones..." class="w-full p-3 rounded bg-zinc-950 border border-zinc-800 text-white font-sans text-xs focus:outline-none focus:border-zinc-500">{{ profile.about or '' }}</textarea>
         </div>
       </div>
 
@@ -239,7 +254,7 @@
         <a href="{{ url_for('professional.professional_dashboard') }}" class="px-4 py-2.5 border border-zinc-800 text-zinc-400 rounded-xl text-xs hover:text-white transition-colors">
           Cancel
         </a>
-        <button type="submit" class="btn btn-primary text-xs h-10 px-6 font-semibold cursor-pointer shadow-md shadow-indigo-600/25">
+        <button type="submit" class="btn btn-primary text-xs h-10 px-6 font-semibold cursor-pointer shadow-md">
           Save Comprehensive Profile &amp; Banking ⚡
         </button>
       </div>
@@ -248,7 +263,7 @@
   </main>
 
   <footer class="border-t border-zinc-800 bg-zinc-950 py-6 px-6 text-center text-xs font-mono text-zinc-500 mt-12">
-    AgencyOS Specialist Node &bull; Escrow Protection &bull; SAC 998311
+    {{ agency_settings.agency_name }} Specialist Node &bull; Escrow Protection &bull; SAC 998311
   </footer>
 </body>
 </html>
