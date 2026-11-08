@@ -85,6 +85,9 @@
 
           <div class="text-left sm:text-right font-mono text-xs text-zinc-400">
             <strong class="text-white font-sans text-sm block">{{ agency_settings.agency_name }}</strong>
+            {% if agency_settings.logo_url %}
+            <img src="{{ agency_settings.logo_url }}" class="h-6 w-auto ml-auto mt-1 object-contain" alt="Agency Logo">
+            {% endif %}
             <span class="block mt-0.5">SAC Code: 998311</span>
             <span class="text-emerald-400 block mt-0.5">● Escrow Gated</span>
           </div>

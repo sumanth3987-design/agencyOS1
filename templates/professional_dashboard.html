@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Specialist Dashboard &amp; Escrow Ledger — AgencyOS</title>
+  <title>Specialist Dashboard &amp; Escrow Ledger — {{ agency_settings.agency_name if agency_settings else 'AgencyOS' }}</title>
 
   <!-- Typography: Plus Jakarta Sans & JetBrains Mono -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -52,7 +52,7 @@
       <div class="flex items-center gap-4">
         <a href="{{ url_for('professional.professional_dashboard') }}" class="flex items-center gap-2 font-mono text-sm font-bold tracking-tight text-white">
           <span class="w-7 h-7 rounded bg-indigo-600 text-white flex items-center justify-center font-black text-xs">A</span>
-          <span>Agency<span class="text-indigo-400">OS</span></span>
+          <span>{{ agency_settings.agency_name if agency_settings else 'Agency' }}<span class="text-indigo-400">OS</span></span>
         </a>
         <span class="hidden sm:inline-flex items-center px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-indigo-950 text-indigo-300 border border-indigo-800">
           Specialist Portal
@@ -611,7 +611,7 @@
   </div>
 
   <footer class="border-t border-zinc-800 bg-zinc-950 py-6 px-6 text-center text-xs font-mono text-zinc-500 mt-12">
-    AgencyOS Specialist Node &bull; Escrow Protection &bull; SAC 998311
+    {{ agency_settings.agency_name if agency_settings else 'AgencyOS' }} Specialist Node &bull; Escrow Protection &bull; SAC 998311 Compliant
   </footer>
 
   <script>
@@ -673,7 +673,7 @@
       });
 
       var closeProposal = document.getElementById("closeProposalModalBtn");
-      var cancelProposal = document.getElementById("cancelProposalModalBtn");
+      var cancelProposal = document.getElementById("cancelProposalBtn");
       if (closeProposal) closeProposal.addEventListener("click", function () { proposalModal.classList.add("hidden"); });
       if (cancelProposal) cancelProposal.addEventListener("click", function () { proposalModal.classList.add("hidden"); });
 
