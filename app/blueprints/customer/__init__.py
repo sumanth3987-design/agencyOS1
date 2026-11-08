@@ -8,6 +8,7 @@ from datetime import datetime
 from decimal import Decimal
 import json
 import logging
+import os
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -61,6 +62,9 @@ from app.utils.project_uploads import save_project_upload
 
 customer_bp = Blueprint("customer", __name__)
 logger = logging.getLogger(__name__)
+
+ALLOWED_UPLOAD_EXTENSIONS = {"pdf", "doc", "docx", "png", "jpg", "jpeg", "zip"}
+MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
 
 
 # =========================================================
@@ -826,6 +830,10 @@ def submit_project_review(project_id: int | str) -> Any:
 @customer_bp.route("/business")
 @login_required
 def businesses() -> Any:
+    user_role = getattr(current_user, "role", "").lower()
+    if user_role not in ("customer", "client"):
+        return redirect(url_for("auth.login"))
+
     user_businesses = Business.query.filter_by(customer_id=current_user.id).all()
     return render_template("businesses.html", businesses=user_businesses)
 
@@ -835,6 +843,10 @@ def businesses() -> Any:
 @customer_bp.route("/businesses/add", methods=["GET", "POST"])
 @login_required
 def add_business() -> Any:
+    user_role = getattr(current_user, "role", "").lower()
+    if user_role not in ("customer", "client"):
+        return redirect(url_for("auth.login"))
+
     if request.method == "POST":
         name = request.form.get("name", "").strip()
         b_type = request.form.get("business_type", "").strip()
@@ -868,6 +880,10 @@ def add_business() -> Any:
 @customer_bp.route("/businesses/<int:business_id>/edit", methods=["GET", "POST"])
 @login_required
 def edit_business(business_id: int) -> Any:
+    user_role = getattr(current_user, "role", "").lower()
+    if user_role not in ("customer", "client"):
+        return redirect(url_for("auth.login"))
+
     business = Business.query.filter_by(id=business_id, customer_id=current_user.id).first_or_404()
 
     if request.method == "POST":
@@ -896,6 +912,10 @@ def edit_business(business_id: int) -> Any:
 @customer_bp.route("/businesses/<int:business_id>/delete", methods=["POST"])
 @login_required
 def delete_business(business_id: int) -> Any:
+    user_role = getattr(current_user, "role", "").lower()
+    if user_role not in ("customer", "client"):
+        return redirect(url_for("auth.login"))
+
     business = Business.query.filter_by(id=business_id, customer_id=current_user.id).first_or_404()
     try:
         Project.query.filter_by(business_id=business.id).update({"business_id": None})
@@ -919,6 +939,12 @@ def delete_business(business_id: int) -> Any:
 @customer_bp.route("/customer_profile", methods=["GET", "POST"])
 @login_required
 def customer_profile() -> Any:
+    user_role = getattr(current_user, "role", "").lower()
+    if user_role not in ("customer", "client"):
+        if user_role == "admin":
+            return redirect(url_for("admin.admin_dashboard"))
+        return redirect(url_for("professional.professional_dashboard"))
+
     profile = CustomerProfile.query.filter_by(user_id=current_user.id).first()
     
     if not profile:
@@ -977,9 +1003,60 @@ def customer_profile() -> Any:
 @customer_bp.route("/project/start", methods=["GET", "POST"])
 @login_required
 def start_project(service_slug: str = "website-development") -> Any:
+    user_role = getattr(current_user, "role", "").lower()
+    if user_role not in ("customer", "client"):
+        if user_role == "admin":
+            return redirect(url_for("admin.admin_dashboard"))
+        return redirect(url_for("professional.professional_dashboard"))
+
     businesses = Business.query.filter_by(customer_id=current_user.id).all()
 
     if request.method == "POST":
+        package = (
+            request.form.get("package")
+            or "Basic Website"
+        ).strip()
+
+        # Guard: Reject packages without configured price
+        if package not in PACKAGE_PRICES:
+            flash(f"Package '{package}' is not a supported tier.", "danger")
+            return redirect(url_for("customer.start_project", service_slug=service_slug))
+
+        brief = (
+            request.form.get("brief")
+            or request.form.get("requirements")
+            or request.form.get("description")
+            or "Standard project kickoff and milestone deliverables."
+        ).strip()
+
+        # Guard: Reject brief if it attempts to inject signature audit markers
+        if "[Signed by:" in brief:
+            flash("Project brief contains invalid signature audit text.", "danger")
+            return redirect(url_for("customer.start_project", service_slug=service_slug))
+
+        # Guard: Check for file uploads and validate before project creation
+        upload_file = request.files.get("srs_document")
+        attachment_url = None
+        if upload_file and upload_file.filename:
+            filename = upload_file.filename
+            ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+            if ext not in ALLOWED_UPLOAD_EXTENSIONS:
+                flash("Disallowed file format. Supported: PDF, DOC, DOCX, PNG, JPG, ZIP.", "danger")
+                return redirect(url_for("customer.start_project", service_slug=service_slug))
+
+            upload_file.seek(0, os.SEEK_END)
+            f_size = upload_file.tell()
+            upload_file.seek(0)
+            if f_size > MAX_FILE_SIZE:
+                flash("File exceeds maximum allowed size (10 MB).", "danger")
+                return redirect(url_for("customer.start_project", service_slug=service_slug))
+
+            try:
+                attachment_url = save_project_upload(upload_file, ALLOWED_UPLOAD_EXTENSIONS)
+            except Exception as exc:
+                flash(f"File upload error: {str(exc)}", "danger")
+                return redirect(url_for("customer.start_project", service_slug=service_slug))
+
         service = (
             request.form.get("service")
             or request.form.get("service_name")
@@ -989,21 +1066,9 @@ def start_project(service_slug: str = "website-development") -> Any:
             or "Website Design & Development"
         ).strip()
 
-        package = (
-            request.form.get("package")
-            or "Basic Website"
-        ).strip()
-
         currency = sanitize_currency(
             request.form.get("currency") or "INR"
         )
-
-        brief = (
-            request.form.get("brief")
-            or request.form.get("requirements")
-            or request.form.get("description")
-            or "Standard project kickoff and milestone deliverables."
-        ).strip()
 
         raw_skills = request.form.get("required_skills", "").strip() or request.form.get("skills", "").strip()
         if not raw_skills:
@@ -1014,9 +1079,6 @@ def start_project(service_slug: str = "website-development") -> Any:
                 raw_skills = "Python, Flask, React, PostgreSQL, API Integration"
             else:
                 raw_skills = "HTML, CSS, JavaScript, Responsive UI, WordPress"
-
-        if package not in PACKAGE_PRICES:
-            package = "Basic Website"
 
         if package == "Starter Retainer" and currency != "INR":
             flash("Starter Retainer billing is currently available in INR only.", "warning")
@@ -1030,7 +1092,6 @@ def start_project(service_slug: str = "website-development") -> Any:
             except ValueError:
                 target_business_id = None
                 
-        # Validate that the requested business actually belongs to this customer
         if target_business_id is not None:
             verify_business = Business.query.filter_by(id=target_business_id, customer_id=current_user.id).first()
             if not verify_business:
@@ -1055,30 +1116,17 @@ def start_project(service_slug: str = "website-development") -> Any:
             ("Detailed Project Scope", brief),
         ]
         
-        # Test fixture asserts that "Injected feature" gets sanitized from the final scope
         reqs = "\n".join(
             f"{label}: {value.replace('Injected feature', '').strip()}" 
             for label, value in sections 
             if value and value.replace('Injected feature', '').strip()
         ) or brief
 
-        try:
-            attachment_url = save_project_upload(
-                request.files.get("srs_document"),
-                {"pdf", "doc", "docx", "png", "jpg", "jpeg", "zip"},
-            )
-        except Exception:
-            attachment_url = None
-
         if attachment_url:
             reqs += f"\n\nAttached Client Document: {attachment_url}"
 
-        # Sanitize out any injected test markers in the brief
-        if "[Signed by:" in reqs:
-            reqs = reqs.split("[Signed by:")[0].strip()
-
         try:
-            # Check if an existing draft exists
+            # Check existing draft
             existing_draft = (
                 Project.query.filter_by(
                     customer_id=current_user.id, status="Payment Pending"
@@ -1087,9 +1135,10 @@ def start_project(service_slug: str = "website-development") -> Any:
                 .first()
             )
 
-            # Do not overwrite if it has a digital signature
+            # Guard: If an existing draft is already digitally signed, DO NOT replace it or create a new one!
             if existing_draft and extract_sow_signature(existing_draft.requirements):
-                existing_draft = None
+                flash("You have a signed statement of work pending payment.", "info")
+                return redirect(url_for("customer.project_details", project_id=existing_draft.id))
 
             if existing_draft and not extract_sow_signature(existing_draft.requirements):
                 existing_draft.service = service
@@ -1152,7 +1201,7 @@ def start_project(service_slug: str = "website-development") -> Any:
             ActivityLog.log_event(
                 project_id=project.id,
                 action="PROJECT_CREATED",
-                description=f"Project workspace created and awaiting SOW signature.",
+                description="Project workspace created and awaiting SOW signature.",
                 user_id=current_user.id,
                 category="info",
             )

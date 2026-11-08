@@ -34,6 +34,22 @@ auth_bp = Blueprint("auth", __name__)
 logger = logging.getLogger(__name__)
 
 
+# =========================================================
+# SESSION HARDENING & REVOCATION HOOK
+# =========================================================
+
+@auth_bp.before_app_request
+def validate_session_version():
+    """Revokes session if user's session_version has incremented (e.g. password reset)."""
+    if current_user.is_authenticated:
+        expected_version = getattr(current_user, "session_version", 0) or 0
+        current_version = session.get("session_version", 0) or 0
+        if current_version != expected_version:
+            logout_user()
+            session.clear()
+            return redirect(url_for("auth.login"))
+
+
 def _hash_token(raw_token: str) -> str:
     return hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
 
@@ -207,7 +223,7 @@ def login() -> Any:
             user = User.query.filter_by(email=email).first()
             if not user or not user.check_password(password):
                 flash("Invalid email or password.", "login_error")
-                return redirect(url_for("auth.login"))
+                return render_template("login.html"), 200
 
             user_db_role = (user.role or "customer").lower()
             if user_db_role == "client":
@@ -225,18 +241,18 @@ def login() -> Any:
 
             if current_app.config.get("EMAIL_VERIFICATION_REQUIRED", False) and not user.email_verified_at:
                 flash("Please verify your email address first.", "login_error")
-                return redirect(url_for("auth.login"))
+                return render_template("login.html"), 200
 
-            saved_csrf_token = session.get("csrf_token")
+            # Preserve pre-existing non-auth keys in session before login
+            saved_keys = {k: v for k, v in session.items() if not k.startswith("_")}
             session.clear()
-            if saved_csrf_token:
-                session["csrf_token"] = saved_csrf_token
+            session.update(saved_keys)
 
             login_user(user)
             session.permanent = True
             session["user_id"] = user.id
             session["role"] = user.role
-            session["session_version"] = getattr(user, "session_version", 0)
+            session["session_version"] = getattr(user, "session_version", 0) or 0
             session.modified = True
 
             next_url = request.args.get("next")
@@ -252,7 +268,7 @@ def login() -> Any:
         except Exception as e:
             logger.error(f"Login error: {str(e)}")
             flash("An unexpected error occurred during login.", "login_error")
-            return redirect(url_for("auth.login"))
+            return render_template("login.html"), 200
 
     return render_template("login.html")
 
@@ -267,7 +283,6 @@ def logout() -> Any:
         if not current_user.is_authenticated:
             return redirect(url_for("auth.login"))
         from flask_wtf.csrf import generate_csrf
-        # Pass test expected string and hidden input for CSRF
         return f'<html><body><h1>Confirm Logout</h1><form method="POST"><input type="hidden" name="csrf_token" value="{generate_csrf()}"><button type="submit">Confirm Logout</button></form></body></html>', 200
 
     logout_user()
@@ -319,7 +334,7 @@ def reset_password(token: str) -> Any:
 
     if request.method == "POST":
         password = request.form.get("password", "")
-        password_confirm = request.form.get("password_confirm", "")
+        password_confirm = request.form.get("confirm_password") or request.form.get("password_confirm", "")
 
         if password != password_confirm:
             flash("Passwords do not match.", "error")

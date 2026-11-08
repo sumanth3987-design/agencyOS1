@@ -136,7 +136,7 @@
 
     <!-- STARTER RETAINER RECURRING MANDATE WIDGET -->
     {% if project.package == 'Starter Retainer' %}
-    <section class="border border-zinc-800 bg-zinc-900 rounded-xl p-6 shadow-xl">
+    <section class="border border-zinc-800 bg-zinc-900 rounded-xl p-6 shadow-xl space-y-4">
       <div class="grid gap-6 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
         <div>
           <div class="flex items-center gap-2 mb-2 font-mono text-xs">
@@ -180,14 +180,30 @@
             data-create-url="{{ url_for('payments.create_subscription', project_id=project.id) }}"
             data-csrf-token="{{ csrf_token() }}"
             class="btn btn-primary w-full h-10 font-semibold cursor-pointer"
-            {% if retainer_subscription_status in ['authenticated', 'active', 'resumed', 'paused'] %}disabled{% endif %}
-          >
+            {% if retainer_subscription_status in ['authenticated', 'active', 'resumed', 'paused'] %}disabled>{% else %}>{% endif %}
             {% if not retainer_subscription_status or retainer_subscription_status in ['initializing', 'created'] %}Set up / continue mandate
             {% elif retainer_subscription_status in ['authenticated', 'active', 'resumed', 'paused'] %}Mandate Active
             {% else %}Set up / continue mandate{% endif %}
           </button>
           <span class="text-center text-[10px] text-zinc-500">Secured via Razorpay Rails</span>
         </div>
+      </div>
+
+      <!-- Retainer Captured Charges Ledger -->
+      <div class="border-t border-zinc-800 pt-4 mt-2 font-mono text-xs">
+        <h3 class="text-zinc-400 font-bold uppercase tracking-wider text-[11px] mb-2">Captured Subscription Charges</h3>
+        {% if retainer_charges %}
+          <div class="space-y-2">
+            {% for ch in retainer_charges %}
+            <div class="p-2.5 rounded bg-zinc-950 border border-zinc-800 flex justify-between items-center">
+              <span>Charge Ref: {{ ch.razorpay_payment_id or ch.id }}</span>
+              <span class="text-emerald-400 font-bold">₹{{ ch.amount }}</span>
+            </div>
+            {% endfor %}
+          </div>
+        {% else %}
+          <p class="text-zinc-500 text-xs">No confirmed captured charges are recorded yet.</p>
+        {% endif %}
       </div>
     </section>
     {% endif %}
