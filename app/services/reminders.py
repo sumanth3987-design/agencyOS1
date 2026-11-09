@@ -1,14 +1,26 @@
-"""Automated Payment and Deliverable Review Reminders for AgencyOS."""
+"""Automated Payment and Deliverable Review Reminders for AgencyOS.
 
-import logging
+Dispatches multi-channel email and WhatsApp alerts for pending milestone deposits,
+unreviewed deliverables, and overdue invoices.
+"""
+
 from datetime import datetime, timedelta, timezone
+import logging
 from urllib.parse import urlsplit
 
 from flask import current_app
 
 from app.extensions import db
-from app.models import IST, Project, ProjectDelivery, User, get_ist_now
+from app.models import (
+    CustomerProfile,
+    IST,
+    Project,
+    ProjectDelivery,
+    User,
+    get_ist_now,
+)
 from app.services.email import EmailDeliveryError, send_email
+from app.services.whatsapp import send_whatsapp_alert
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +77,7 @@ def _email_delivery_available() -> bool:
 
 
 def send_payment_reminder(project_id: int, *, force: bool = False, now: datetime | None = None) -> bool:
+    """Dispatches asynchronous payment reminders across Email and WhatsApp."""
     project = db.session.get(Project, project_id)
     if project is None or project.status != "Payment Pending":
         return False
@@ -98,16 +111,31 @@ def send_payment_reminder(project_id: int, *, force: bool = False, now: datetime
     try:
         send_email(customer.email, subject, body)
     except EmailDeliveryError:
-        logger.exception("Payment reminder failed for project #%s.", project.id)
+        logger.exception("Payment reminder email failed for project #%s.", project.id)
         return False
+
+    # Autonomous WhatsApp Channel Trigger
+    profile = CustomerProfile.query.filter_by(user_id=customer.id).first()
+    if profile and profile.phone:
+        try:
+            whatsapp_msg = (
+                f"⏰ *Reminder: Advance Deposit Pending — Project #{project.id}*\n\n"
+                f"Hi {customer.name or 'Client'},\n"
+                f"Your engagement for *{project.service}* is awaiting its milestone kickoff deposit.\n\n"
+                f"Authorize payment securely here: {payment_link}"
+            )
+            send_whatsapp_alert(profile.phone, whatsapp_msg)
+        except Exception as w_err:
+            logger.warning("Payment reminder WhatsApp alert failed: %s", w_err)
 
     project.payment_reminder_sent_at = sent_at
     db.session.commit()
-    logger.info("Payment reminder sent for project #%s.", project.id)
+    logger.info("Payment reminder dispatched for project #%s.", project.id)
     return True
 
 
 def send_review_reminder(project_id: int, *, force: bool = False, now: datetime | None = None) -> bool:
+    """Dispatches asynchronous review reminders across Email and WhatsApp."""
     project = db.session.get(Project, project_id)
     if project is None or project.status != "Submitted":
         return False
@@ -151,17 +179,31 @@ def send_review_reminder(project_id: int, *, force: bool = False, now: datetime 
     try:
         send_email(customer.email, subject, body)
     except EmailDeliveryError:
-        logger.exception("Review reminder failed for project #%s.", project.id)
+        logger.exception("Review reminder email failed for project #%s.", project.id)
         return False
+
+    # Autonomous WhatsApp Channel Trigger
+    profile = CustomerProfile.query.filter_by(user_id=customer.id).first()
+    if profile and profile.phone:
+        try:
+            whatsapp_msg = (
+                f"🚀 *Action Required: Milestone Deliverable Staged — Project #{project.id}*\n\n"
+                f"Hi {customer.name or 'Client'},\n"
+                f"A new build for *{project.service}* is ready for your sign-off.\n\n"
+                f"Review and approve or request revisions: {workspace_link}"
+            )
+            send_whatsapp_alert(profile.phone, whatsapp_msg)
+        except Exception as w_err:
+            logger.warning("Review reminder WhatsApp alert failed: %s", w_err)
 
     delivery.review_reminder_sent_at = sent_at
     db.session.commit()
-    logger.info("Review reminder sent for project #%s.", project.id)
+    logger.info("Review reminder dispatched for project #%s.", project.id)
     return True
 
 
 def run_due_reminders(now: datetime | None = None) -> dict[str, int]:
-    """Send each eligible reminder once; suitable for a scheduled CLI run."""
+    """Send each eligible reminder once; suitable for scheduled CLI / Celery execution."""
     sent_at = now or get_ist_now()
     payment_cutoff = _naive_utc(sent_at) - PAYMENT_REMINDER_AFTER
     review_cutoff = _naive_ist(sent_at) - REVIEW_REMINDER_AFTER

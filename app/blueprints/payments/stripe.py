@@ -1,38 +1,43 @@
+"""AgencyOS Stripe Multi-Currency Gateway Blueprint."""
+
+from decimal import Decimal
 import json
 import logging
 import os
-from decimal import Decimal
+from typing import Any, cast
 
 from flask import Blueprint, current_app, jsonify, request
 from flask_login import current_user, login_required
 
-from app.extensions import db, csrf
+import stripe
+from stripe import SignatureVerificationError
+
+from app.extensions import csrf, db
 from app.models import (
+    ActivityLog,
     Invoice,
+    PACKAGE_PRICES,
     Payment,
     Project,
     StripeWebhookEvent,
-    ActivityLog,
     get_ist_now,
-    PACKAGE_PRICES,
 )
 from app.utils.currency import calculate_tax_rate, format_currency, get_package_price, to_minor_units
 from app.utils.stripe_config import (
-    SUPPORTED_STRIPE_CURRENCIES,
     STRIPE_PUBLISHABLE_KEY,
     STRIPE_WEBHOOK_SECRET,
+    SUPPORTED_STRIPE_CURRENCIES,
     build_checkout_session_params,
     get_stripe_price_id,
 )
-
-import stripe
-from stripe import SignatureVerificationError
 
 logger = logging.getLogger(__name__)
 
 stripe_bp = Blueprint("stripe", __name__)
 
-stripe.api_key = os.getenv("STRIPE_SECRET_KEY", "")
+# Configure Stripe API key with safe type annotation for Pylance
+stripe_module = cast(Any, stripe)
+stripe_module.api_key = os.getenv("STRIPE_SECRET_KEY", "")
 
 
 # ---------------------------------------------------------------------------
@@ -41,9 +46,8 @@ stripe.api_key = os.getenv("STRIPE_SECRET_KEY", "")
 
 @stripe_bp.route("/payment/stripe/checkout/<int:project_id>", methods=["POST"])
 @login_required
-def create_stripe_checkout(project_id):
+def create_stripe_checkout(project_id: int) -> Any:
     """Create a Stripe Checkout Session for an international project."""
-
     user_role = getattr(current_user, "role", "").lower()
     if user_role not in ("customer", "client", "admin"):
         return jsonify({"success": False, "message": "Customer access required."}), 403
@@ -133,7 +137,7 @@ def create_stripe_checkout(project_id):
             success_url=success_url,
             cancel_url=cancel_url,
         )
-        session = stripe.checkout.Session.create(**session_params)
+        session = stripe_module.checkout.Session.create(**session_params)
     except Exception as exc:
         logger.error("Stripe checkout creation failed: %s", str(exc))
         return jsonify({
@@ -143,7 +147,6 @@ def create_stripe_checkout(project_id):
 
     session_id = session.id
 
-    # Persist a Created payment record before redirecting to Stripe
     payment = Payment()
     payment.project_id = project.id
     payment.customer_id = project.customer_id
@@ -179,9 +182,8 @@ def create_stripe_checkout(project_id):
 
 @stripe_bp.route("/payment/stripe/webhook", methods=["POST"])
 @csrf.exempt
-def stripe_webhook():
+def stripe_webhook() -> Any:
     """Handle Stripe webhook events with idempotency and state guards."""
-
     payload = request.get_data(as_text=True)
     sig_header = request.headers.get("Stripe-Signature")
     endpoint_secret = STRIPE_WEBHOOK_SECRET
@@ -190,7 +192,7 @@ def stripe_webhook():
         return jsonify({"error": "Missing Stripe signature header"}), 400
 
     try:
-        event = stripe.Webhook.construct_event(
+        event = stripe_module.Webhook.construct_event(
             payload, sig_header, endpoint_secret
         )
     except ValueError as exc:
@@ -203,46 +205,40 @@ def stripe_webhook():
     event_id = event["id"]
     event_type = event["type"]
 
-    # Idempotency: skip already-processed events
     if StripeWebhookEvent.is_processed(event_id):
         return jsonify({"status": "ignored", "reason": "duplicate_event"}), 200
 
-    # Only handle checkout.session.completed for payment finalization
     if event_type == "checkout.session.completed":
-        session = event["data"]["object"]
-        metadata = session.get("metadata", {})
+        session_obj = event["data"]["object"]
+        metadata = session_obj.get("metadata", {})
         project_id_str = metadata.get("project_id")
-        amount_total = session.get("amount_total", 0)
-        currency = session.get("currency", "").upper()
-        payment_status = session.get("payment_status", "")
+        amount_total = session_obj.get("amount_total", 0)
+        currency = session_obj.get("currency", "").upper()
+        payment_status = session_obj.get("payment_status", "")
 
         project_id = int(project_id_str) if project_id_str else None
 
         if project_id and payment_status == "paid":
             project = Project.query.get(project_id)
             if project:
-                # State-safe transition: only move payable projects to Paid
                 if project.status in ("Payment Pending", "Pending Assignment"):
-                    # Find or create the payment record
                     payment = Payment.query.filter_by(
-                        stripe_session_id=session.get("id")
+                        stripe_session_id=session_obj.get("id")
                     ).first()
                     if payment is None:
                         payment = Payment()
                         payment.project_id = project.id
                         payment.customer_id = project.customer_id
-                        payment.stripe_session_id = session.get("id")
+                        payment.stripe_session_id = session_obj.get("id")
                         payment.gateway_type = "stripe"
                         payment.amount = Decimal(str(amount_total)) / 100
                         payment.currency = currency
                         payment.status = "Created"
                         db.session.add(payment)
 
-                    # Apply state transition
                     payment.status = "Paid"
-                    payment.gateway_payment_id = session.get("payment_intent")
+                    payment.gateway_payment_id = session_obj.get("payment_intent")
 
-                    # Create or update invoice
                     invoice = Invoice.query.filter_by(project_id=project.id).first()
                     if invoice is None:
                         tax_rate = calculate_tax_rate(
@@ -264,20 +260,18 @@ def stripe_webhook():
                     else:
                         invoice.status = "Paid"
 
-                    # Update project status
                     project.status = "Paid"
 
                     ActivityLog.log_event(
                         project.id,
                         "STRIPE_PAYMENT_RECEIVED",
-                        f"Stripe payment of {format_currency(payment.amount, currency)} received via Checkout session {session.get('id')}.",
+                        f"Stripe payment of {format_currency(payment.amount, currency)} received via Checkout session {session_obj.get('id')}.",
                         project.customer_id,
                         "success",
                     )
 
                     db.session.flush()
 
-                    # Mark the Stripe event as processed (idempotency)
                     StripeWebhookEvent.mark_processed(
                         event_id=event_id,
                         event_type=event_type,
@@ -290,10 +284,9 @@ def stripe_webhook():
                     logger.info(
                         "Stripe webhook: project #%s marked Paid via session %s",
                         project.id,
-                        session.get("id"),
+                        session_obj.get("id"),
                     )
                 else:
-                    # Project not in a payable state; mark event processed
                     StripeWebhookEvent.mark_processed(
                         event_id=event_id,
                         event_type=event_type,
@@ -302,7 +295,6 @@ def stripe_webhook():
                     )
                     db.session.commit()
             else:
-                # Project not found; mark event processed
                 StripeWebhookEvent.mark_processed(
                     event_id=event_id,
                     event_type=event_type,
@@ -311,7 +303,6 @@ def stripe_webhook():
                 )
                 db.session.commit()
         else:
-            # Non-paid session or no project; mark event processed
             StripeWebhookEvent.mark_processed(
                 event_id=event_id,
                 event_type=event_type,
@@ -321,7 +312,6 @@ def stripe_webhook():
             db.session.commit()
 
     else:
-        # Unhandled event type; mark as processed
         StripeWebhookEvent.mark_processed(
             event_id=event_id,
             event_type=event_type,
@@ -338,7 +328,7 @@ def stripe_webhook():
 # ---------------------------------------------------------------------------
 
 @stripe_bp.route("/payment/stripe/success", methods=["GET"])
-def stripe_success():
+def stripe_success() -> Any:
     """Stripe Checkout success redirect page."""
     session_id = request.args.get("session_id")
     return jsonify({
@@ -349,7 +339,7 @@ def stripe_success():
 
 
 @stripe_bp.route("/payment/stripe/cancel", methods=["GET"])
-def stripe_cancel():
+def stripe_cancel() -> Any:
     """Stripe Checkout cancel redirect page."""
     return jsonify({
         "status": "canceled",
@@ -357,5 +347,4 @@ def stripe_cancel():
     }), 200
 
 
-# Export the blueprint for registration
-__all__ = ["stripe_bp"]
+__all__ = ["stripe_bp"] 

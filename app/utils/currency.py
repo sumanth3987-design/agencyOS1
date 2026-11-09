@@ -15,7 +15,6 @@ PACKAGE_PRICES = {
     "Starter Retainer": 14999,
 }
 
-# Top-level keys formatted as currency codes to match test_international_package_prices
 INTERNATIONAL_PACKAGE_PRICES = {
     "USD": {
         "Basic Website": 699,
@@ -72,7 +71,7 @@ def calculate_tax_rate(currency: Any = "INR", *args: Any, **kwargs: Any) -> Deci
         clean_curr = sanitize_currency(curr_str)
     except ValueError:
         clean_curr = "INR"
-        
+
     if clean_curr == "INR":
         return Decimal("0.18")
     return Decimal("0.00")
@@ -87,7 +86,7 @@ def to_minor_units(amount: Any, currency: str = "INR") -> int:
         raise ValueError(f"Invalid numeric amount for conversion: {amount}")
     if dec < 0:
         raise ValueError(f"Amount cannot be negative: {amount}")
-    
+
     multiplied = dec * Decimal("100")
     if multiplied % Decimal("1") != 0:
         raise ValueError("Amount cannot have fractional minor units.")
@@ -104,15 +103,15 @@ def format_currency(amount: Any, currency: str = "INR") -> str:
         raise ValueError(f"Invalid numeric amount for formatting: {amount}")
     if dec < 0:
         raise ValueError(f"Amount cannot be negative: {amount}")
-    
+
     symbols = {
         "INR": "₹",
         "USD": "$",
         "EUR": "€",
-        "GBP": "£"
+        "GBP": "£",
     }
     symbol = symbols.get(clean_curr, clean_curr + " ")
-    
+
     if clean_curr == "INR":
         int_part, frac_part = f"{dec:.2f}".split(".")
         if len(int_part) > 3:
@@ -127,12 +126,16 @@ def format_currency(amount: Any, currency: str = "INR") -> str:
         else:
             formatted_int = int_part
         return f"{symbol}{formatted_int}.{frac_part}"
-    
+
     return f"{symbol}{dec:,.2f}"
 
 
-def compute_financial_split(gross_amount: Any, currency: str = "INR") -> tuple[Decimal, Decimal, Decimal]:
-    """Calculate the statutory split: 45% talent payout, 55% agency share."""
+def compute_financial_split(
+    gross_amount: Any,
+    currency: str = "INR",
+    talent_rate: Decimal = Decimal("0.45"),
+) -> tuple[Decimal, Decimal, Decimal]:
+    """Calculate statutory split: performance-based talent payout (default 45%) and agency share."""
     clean_curr = sanitize_currency(currency)
     try:
         gross = Decimal(str(gross_amount)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
@@ -141,27 +144,27 @@ def compute_financial_split(gross_amount: Any, currency: str = "INR") -> tuple[D
     if gross < 0:
         raise ValueError("Gross amount cannot be negative.")
 
-    talent_share = (gross * Decimal("0.45")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-    agency_share = (gross * Decimal("0.55")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-    
+    talent_share = (gross * talent_rate).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    agency_share = (gross - talent_share).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
     if clean_curr == "INR":
         tax_amount = (gross * Decimal("0.18") / Decimal("1.18")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
     else:
         tax_amount = Decimal("0.00")
-        
+
     return talent_share, agency_share, tax_amount
 
 
 def get_package_price(package: str, currency: str = "INR", package_prices: dict[str, Any] | None = None) -> Decimal:
     """Retrieve the price of a package in the selected currency."""
     clean_curr = sanitize_currency(currency)
-    
+
     if clean_curr in INTERNATIONAL_PACKAGE_PRICES and package in INTERNATIONAL_PACKAGE_PRICES[clean_curr]:
         return Decimal(str(INTERNATIONAL_PACKAGE_PRICES[clean_curr][package])).quantize(Decimal("0.01"))
-        
+
     if package_prices and package in package_prices:
         return Decimal(str(package_prices[package])).quantize(Decimal("0.01"))
-        
+
     if clean_curr == "INR" and package in PACKAGE_PRICES:
         return Decimal(str(PACKAGE_PRICES[package])).quantize(Decimal("0.01"))
 

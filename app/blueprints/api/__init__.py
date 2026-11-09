@@ -1,13 +1,14 @@
 """AgencyOS API Blueprint.
 
 Provides public services catalog, session identity resolution,
-lead audit capture, and JSON endpoints for projects, invoices, and milestones.
+lead audit capture, and JSON endpoints for projects, invoices, and milestones
+with full two-stage escrow releases and activity audit logging.
 """
 
-import os
+from decimal import Decimal
+import logging
 import secrets
 from typing import Any
-import razorpay
 
 from flask import Blueprint, flash, jsonify, redirect, request, session, url_for
 from flask.typing import ResponseReturnValue
@@ -15,17 +16,31 @@ from flask_login import current_user
 
 from app.extensions import db
 from app.models import (
+    ActivityLog,
     CustomerProfile,
     Invoice,
     Milestone,
+    Notification,
+    PACKAGE_PRICES,
     Payment,
+    ProfessionalProfile,
+    ProfessionalProjectApplication,
     Project,
     User,
+    WalletTransaction,
     get_ist_now,
     services,
 )
+from app.services.whatsapp import notify_project_completed
 from app.utils.auth import roles_required
+from app.utils.currency import (
+    compute_financial_split,
+    format_currency,
+    get_package_price,
+    sanitize_currency,
+)
 
+logger = logging.getLogger(__name__)
 api_bp = Blueprint("api", __name__, url_prefix="/api")
 
 
@@ -158,7 +173,7 @@ def onboard_client() -> ResponseReturnValue:
                 "full_name": new_client.full_name,
                 "business_name": profile.business_name,
                 "temporary_password": temp_password,
-            }
+            },
         }), 201
     except Exception as exc:
         db.session.rollback()
@@ -194,7 +209,7 @@ def get_projects() -> ResponseReturnValue:
                 "created_at": p.created_at.isoformat() if p.created_at else None,
             }
             for p in projects
-        ]
+        ],
     }), 200
 
 
@@ -238,8 +253,8 @@ def get_project_details(project_id: int) -> ResponseReturnValue:
                     "paid_at": pay.paid_at.isoformat() if pay.paid_at else None,
                 }
                 for pay in payments
-            ]
-        }
+            ],
+        },
     }), 200
 
 
@@ -272,7 +287,7 @@ def get_invoices() -> ResponseReturnValue:
                 "created_at": inv.created_at.isoformat() if inv.created_at else None,
             }
             for inv in invoices
-        ]
+        ],
     }), 200
 
 
@@ -296,12 +311,12 @@ def get_invoice_receipt(invoice_id: int) -> ResponseReturnValue:
             "payout_status": invoice.payout_status,
             "created_at": invoice.created_at.isoformat() if invoice.created_at else None,
             "razorpay_order_id": invoice.razorpay_order_id,
-        }
+        },
     }), 200
 
 
 # =========================================================
-# MILESTONES APPROVAL API
+# MILESTONES APPROVAL API (WITH ATOMIC ESCROW RELEASE)
 # =========================================================
 
 @api_bp.route("/milestones/<int:milestone_id>/approve", methods=["POST"])
@@ -309,21 +324,103 @@ def get_invoice_receipt(invoice_id: int) -> ResponseReturnValue:
 def approve_milestone(milestone_id: int) -> ResponseReturnValue:
     user = _resolve_authenticated_user()
     milestone = Milestone.query.get_or_404(milestone_id)
+    project = milestone.project
 
-    if not user or (user.role not in ["admin", "manager"] and getattr(milestone.project, "customer_id", None) != user.id):
+    if not user or (user.role not in ["admin", "manager"] and getattr(project, "customer_id", None) != user.id):
         return jsonify({"error": "Unauthorized to approve this milestone"}), 403
 
     if milestone.status == "released":
         return jsonify({"error": "Milestone already approved and released"}), 400
 
-    milestone.status = "released"
-    milestone.released_at = get_ist_now()
-    db.session.commit()
+    try:
+        milestone.status = "released"
+        milestone.released_at = get_ist_now()
 
-    return jsonify({
-        "success": True,
-        "message": "Milestone signed off and released successfully.",
-        "milestone_id": milestone.id,
-        "status": milestone.status,
-        "released_at": milestone.released_at.isoformat(),
-    }), 200
+        # Reconcile Two-Stage Escrow Release
+        assigned_app = ProfessionalProjectApplication.query.filter_by(
+            project_id=project.id, status="Assigned"
+        ).first()
+
+        specialist_id = project.assigned_professional_id or (assigned_app.professional_id if assigned_app else None)
+        specialist_profile = ProfessionalProfile.query.filter_by(user_id=specialist_id).first() if specialist_id else None
+
+        currency = sanitize_currency(project.currency)
+        gross = get_package_price(project.package, currency, PACKAGE_PRICES)
+        talent_share, _, _ = compute_financial_split(gross, currency)
+        total_talent_payout = Decimal(str(assigned_app.proposed_rate)) if (assigned_app and assigned_app.proposed_rate is not None) else talent_share
+
+        all_milestones = Milestone.query.filter_by(project_id=project.id).order_by(Milestone.id.asc()).all()
+        released_count = sum(1 for m in all_milestones if m.status == "released" or m.id == milestone.id)
+        total_milestones_count = len(all_milestones) or 3
+
+        if released_count < total_milestones_count:
+            project.status = "In Progress"
+            earned_amount = (total_talent_payout * Decimal("0.25") if released_count > 1 else total_talent_payout * Decimal("0.50")).quantize(Decimal("0.01"))
+        else:
+            project.status = "Completed"
+            curr_pend = Decimal(str(specialist_profile.pending_balance or 0)) if specialist_profile else Decimal("0.00")
+            earned_amount = curr_pend if curr_pend > Decimal("0.00") else (total_talent_payout * Decimal("0.25")).quantize(Decimal("0.01"))
+
+        if specialist_profile and specialist_id:
+            curr_pend = Decimal(str(specialist_profile.pending_balance or 0))
+            curr_avail = Decimal(str(specialist_profile.available_balance or 0))
+
+            specialist_profile.pending_balance = max(Decimal("0.00"), curr_pend - earned_amount)
+            specialist_profile.available_balance = curr_avail + earned_amount
+
+            tx = WalletTransaction()
+            tx.user_id = specialist_id
+            tx.amount = earned_amount
+            tx.currency = currency
+            tx.transaction_type = "ESCROW_RELEASED"
+            tx.reference_type = "PROJECT"
+            tx.reference_id = project.id
+            tx.description = f"Milestone #{milestone.id} approved via API. {format_currency(earned_amount, currency)} released to available balance."
+            tx.created_at = get_ist_now()
+            db.session.add(tx)
+
+            notif = Notification()
+            notif.user_id = specialist_id
+            notif.title = f"Milestone Released! {format_currency(earned_amount, currency)} Unlocked 💰"
+            notif.message = f"Milestone '{milestone.title}' was approved for Project #{project.id}."
+            notif.link = "/professional/dashboard"
+            notif.created_at = get_ist_now()
+            db.session.add(notif)
+
+        ActivityLog.log_event(
+            project_id=project.id,
+            action="MILESTONE_APPROVED",
+            description=f"Milestone '{milestone.title}' approved via API. Escrow released.",
+            user_id=user.id,
+            category="success",
+        )
+
+        if project.status == "Completed":
+            customer_profile = CustomerProfile.query.filter_by(user_id=project.customer_id).first()
+            client_phone = customer_profile.phone if customer_profile else None
+            try:
+                customer_user = db.session.get(User, project.customer_id)
+                notify_project_completed(
+                    project_id=project.id,
+                    service_name=project.service,
+                    client_phone=client_phone,
+                    client_name=customer_user.name if customer_user else "Client",
+                )
+            except Exception as w_err:
+                logger.warning("WhatsApp trigger notice failed: %s", w_err)
+
+        db.session.commit()
+
+        return jsonify({
+            "success": True,
+            "message": "Milestone signed off and escrow released successfully.",
+            "milestone_id": milestone.id,
+            "status": milestone.status,
+            "released_at": milestone.released_at.isoformat(),
+            "project_status": project.status,
+        }), 200
+
+    except Exception as exc:
+        db.session.rollback()
+        logger.error("API milestone approval failed: %s", str(exc), exc_info=True)
+        return jsonify({"success": False, "error": f"Failed to approve milestone: {str(exc)}"}), 500

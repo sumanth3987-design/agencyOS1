@@ -89,10 +89,9 @@
       <div class="flex flex-col lg:flex-row lg:items-end justify-between gap-6">
         <div>
           <span class="badge badge-indigo mb-2">STRUCTURED SOW ONBOARDING</span>
-          <!-- UPDATED HEADER TO MATCH TEST EXPECTATION -->
           <h1 class="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">Project kickoff intake</h1>
           <p class="text-xs font-mono text-zinc-400 mt-1 max-w-xl">
-            Configure technical scope, required specialist skill tags, and billing currency to initialize the statement of work.
+            Configure technical scope, add-on modules, and billing currency to initialize the statement of work.
           </p>
         </div>
 
@@ -119,7 +118,7 @@
             </button>
             <button type="button" class="step-btn p-2 rounded-lg border border-zinc-800 bg-zinc-950 text-left transition" data-step-nav="2" aria-current="false">
               <span class="text-[10px] text-zinc-500 block font-mono">STEP 03</span>
-              <span class="text-xs font-bold text-zinc-400 block truncate font-sans">Scope & Skills</span>
+              <span class="text-xs font-bold text-zinc-400 block truncate font-sans">Scope &amp; Add-ons</span>
             </button>
           </div>
         </div>
@@ -136,7 +135,7 @@
         <div class="border-b border-zinc-800 pb-4 mb-6 flex items-center justify-between font-mono text-xs">
           <div class="flex items-center gap-2">
             <span class="h-2 w-2 rounded-full bg-indigo-500"></span>
-            <h2 class="text-white font-bold uppercase tracking-wider">Gate 1: Service Package & Financial Currency</h2>
+            <h2 class="text-white font-bold uppercase tracking-wider">Gate 1: Service Package &amp; Financial Currency</h2>
           </div>
           <span class="text-zinc-500">[1/3]</span>
         </div>
@@ -157,8 +156,8 @@
             <label for="service" class="block text-zinc-400 mb-1">Service Category</label>
             <select id="service" name="service" class="form-control text-xs" required>
               {% set current_service = request.form.get('service') or ('Website Design & Development' if service_slug == 'website-development' else 'SEO' if service_slug == 'seo' else 'Custom Web Application') or 'Website Design & Development' %}
-              <option value="Website Design & Development" {% if current_service == 'Website Design & Development' %}selected{% endif %}>Website Design & Development</option>
-              <option value="SEO" {% if current_service == 'SEO' or current_service == 'seo' %}selected{% endif %}>SEO Engine & Architecture</option>
+              <option value="Website Design & Development" {% if current_service == 'Website Design & Development' %}selected{% endif %}>Website Design &amp; Development</option>
+              <option value="SEO" {% if current_service == 'SEO' or current_service == 'seo' %}selected{% endif %}>SEO Engine &amp; Architecture</option>
               <option value="Custom Web Application" {% if current_service == 'Custom Web Application' %}selected{% endif %}>Custom Web Application</option>
             </select>
           </div>
@@ -223,7 +222,7 @@
         <div class="border-b border-zinc-800 pb-4 mb-6 flex items-center justify-between font-mono text-xs">
           <div class="flex items-center gap-2">
             <span class="h-2 w-2 rounded-full bg-indigo-500"></span>
-            <h2 class="text-white font-bold uppercase tracking-wider">Gate 2: Brand Identity & Target Timeline</h2>
+            <h2 class="text-white font-bold uppercase tracking-wider">Gate 2: Brand Identity &amp; Target Timeline</h2>
           </div>
           <span class="text-zinc-500">[2/3]</span>
         </div>
@@ -301,12 +300,12 @@
         </div>
       </section>
 
-      <!-- STEP 3: SCOPE & FEATURE SELECTION -->
+      <!-- STEP 3: SCOPE, FEATURE ADD-ONS & LIVE INVESTMENT CALCULATOR -->
       <section class="step-section" data-step="2">
         <div class="border-b border-zinc-800 pb-4 mb-6 flex items-center justify-between font-mono text-xs">
           <div class="flex items-center gap-2">
             <span class="h-2 w-2 rounded-full bg-indigo-500"></span>
-            <h2 class="text-white font-bold uppercase tracking-wider">Gate 3: Scope, Skills & Technical Deliverables</h2>
+            <h2 class="text-white font-bold uppercase tracking-wider">Gate 3: Scope, Skills &amp; Technical Add-ons</h2>
           </div>
           <span class="text-zinc-500">[3/3]</span>
         </div>
@@ -315,7 +314,7 @@
         <div class="space-y-2 font-mono text-xs mb-6">
           <div class="flex items-center justify-between">
             <label for="required_skills" class="block text-indigo-400 font-bold uppercase tracking-wider text-[11px]">
-              Required Specialist Skills & Frameworks <span class="text-rose-400">*</span>
+              Required Specialist Skills &amp; Frameworks <span class="text-rose-400">*</span>
             </label>
             <span class="text-zinc-500 text-[10px]">Instant matching for enrolled specialists</span>
           </div>
@@ -328,7 +327,7 @@
             placeholder="e.g. Python, Flask, React, Tailwind CSS, PostgreSQL, UI/UX"
             value="{{ request.form.get('required_skills', '') }}"
           >
-          
+
           <!-- Quick Add Chips -->
           <div class="flex flex-wrap items-center gap-1.5 pt-1.5" id="skillChips">
             <span class="text-[10px] text-zinc-500 mr-1">Quick Add:</span>
@@ -342,34 +341,73 @@
           </div>
         </div>
 
-        <!-- Pre-Configured Architectural Modules Checklist -->
+        <!-- Architectural Modules Checklist with Live Pricing Badges -->
         <div class="space-y-3 font-mono text-xs">
-          <span class="block text-zinc-400 uppercase tracking-wider text-[11px]">Architectural Components Checklist</span>
+          <div class="flex justify-between items-center">
+            <span class="block text-zinc-400 uppercase tracking-wider text-[11px]">Architectural Scope Modules &amp; Add-ons</span>
+            <span class="text-zinc-500 text-[10px]">Select modules to customize scope</span>
+          </div>
+
           <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 text-zinc-300">
-            <label class="p-3 rounded-lg border border-zinc-800 bg-zinc-950 flex items-center gap-2.5 cursor-pointer hover:border-zinc-700 transition">
-              <input type="checkbox" name="features" value="Razorpay / UPI Payment Gateway" {% if 'Razorpay / UPI Payment Gateway' in selected_features %}checked{% endif %}>
-              <span>Razorpay / Multi-Currency</span>
+            <label class="p-3 rounded-lg border border-zinc-800 bg-zinc-950 flex items-center justify-between cursor-pointer hover:border-zinc-700 transition">
+              <div class="flex items-center gap-2.5">
+                <input type="checkbox" name="features" value="Razorpay / Multi-Currency Gateway" data-price="0" class="addon-checkbox" {% if 'Razorpay / Multi-Currency Gateway' in selected_features %}checked{% endif %}>
+                <span>Payment Gateway Rails</span>
+              </div>
+              <span class="text-[10px] text-emerald-400 font-bold">Included</span>
             </label>
-            <label class="p-3 rounded-lg border border-zinc-800 bg-zinc-950 flex items-center gap-2.5 cursor-pointer hover:border-zinc-700 transition">
-              <input type="checkbox" name="features" value="WhatsApp Click-to-Chat" {% if 'WhatsApp Click-to-Chat' in selected_features %}checked{% endif %}>
-              <span>WhatsApp Direct Dispatch</span>
+
+            <label class="p-3 rounded-lg border border-zinc-800 bg-zinc-950 flex items-center justify-between cursor-pointer hover:border-zinc-700 transition">
+              <div class="flex items-center gap-2.5">
+                <input type="checkbox" name="features" value="WhatsApp Direct Dispatch" data-price="0" class="addon-checkbox" {% if 'WhatsApp Direct Dispatch' in selected_features %}checked{% endif %}>
+                <span>WhatsApp Dispatch</span>
+              </div>
+              <span class="text-[10px] text-emerald-400 font-bold">Included</span>
             </label>
-            <label class="p-3 rounded-lg border border-zinc-800 bg-zinc-950 flex items-center gap-2.5 cursor-pointer hover:border-zinc-700 transition">
-              <input type="checkbox" name="features" value="Mobile-First Responsive UI" {% if 'Mobile-First Responsive UI' in selected_features %}checked{% endif %}>
-              <span>Mobile-First Responsive UI</span>
+
+            <label class="p-3 rounded-lg border border-zinc-800 bg-zinc-950 flex items-center justify-between cursor-pointer hover:border-zinc-700 transition">
+              <div class="flex items-center gap-2.5">
+                <input type="checkbox" name="features" value="Mobile-First Responsive UI" data-price="0" class="addon-checkbox" {% if 'Mobile-First Responsive UI' in selected_features %}checked{% endif %}>
+                <span>Responsive UI</span>
+              </div>
+              <span class="text-[10px] text-emerald-400 font-bold">Included</span>
             </label>
-            <label class="p-3 rounded-lg border border-zinc-800 bg-zinc-950 flex items-center gap-2.5 cursor-pointer hover:border-zinc-700 transition">
-              <input type="checkbox" name="features" value="SEO Schema & Meta Tags" {% if 'SEO Schema & Meta Tags' in selected_features %}checked{% endif %}>
-              <span>Structured Schema Markup</span>
+
+            <label class="p-3 rounded-lg border border-zinc-800 bg-zinc-950 flex items-center justify-between cursor-pointer hover:border-zinc-700 transition">
+              <div class="flex items-center gap-2.5">
+                <input type="checkbox" name="features" value="Structured Schema Markup" data-price="0" class="addon-checkbox" {% if 'Structured Schema Markup' in selected_features %}checked{% endif %}>
+                <span>Schema Markup</span>
+              </div>
+              <span class="text-[10px] text-emerald-400 font-bold">Included</span>
             </label>
-            <label class="p-3 rounded-lg border border-zinc-800 bg-zinc-950 flex items-center gap-2.5 cursor-pointer hover:border-zinc-700 transition">
-              <input type="checkbox" name="features" value="CMS / content management" {% if 'CMS / content management' in selected_features %}checked{% endif %}>
-              <span>Headless CMS Architecture</span>
+
+            <label class="p-3 rounded-lg border border-zinc-800 bg-zinc-950 flex items-center justify-between cursor-pointer hover:border-zinc-700 transition">
+              <div class="flex items-center gap-2.5">
+                <input type="checkbox" name="features" value="Headless CMS Architecture" data-price="0" class="addon-checkbox" {% if 'Headless CMS Architecture' in selected_features %}checked{% endif %}>
+                <span>Headless CMS</span>
+              </div>
+              <span class="text-[10px] text-emerald-400 font-bold">Included</span>
             </label>
-            <label class="p-3 rounded-lg border border-zinc-800 bg-zinc-950 flex items-center gap-2.5 cursor-pointer hover:border-zinc-700 transition">
-              <input type="checkbox" name="features" value="Lead capture forms" {% if 'Lead capture forms' in selected_features %}checked{% endif %}>
-              <span>Lead Capture & Webhooks</span>
+
+            <label class="p-3 rounded-lg border border-zinc-800 bg-zinc-950 flex items-center justify-between cursor-pointer hover:border-zinc-700 transition">
+              <div class="flex items-center gap-2.5">
+                <input type="checkbox" name="features" value="Lead Capture & Webhooks" data-price="0" class="addon-checkbox" {% if 'Lead Capture & Webhooks' in selected_features %}checked{% endif %}>
+                <span>Lead Webhooks</span>
+              </div>
+              <span class="text-[10px] text-emerald-400 font-bold">Included</span>
             </label>
+          </div>
+        </div>
+
+        <!-- COMPETITIVE FEATURE: LIVE DYNAMIC INVESTMENT SUMMARY -->
+        <div class="p-4 rounded-xl border border-zinc-800 bg-zinc-950 font-mono text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4 mt-6">
+          <div>
+            <span class="text-[10px] text-zinc-500 uppercase block tracking-wider">Estimated Total Scope Investment</span>
+            <div id="liveTotalDisplay" class="text-xl font-bold text-white mt-0.5">₹48,000.00</div>
+          </div>
+          <div class="text-left sm:text-right">
+            <span class="text-[10px] text-indigo-400 uppercase font-bold block tracking-wider">Milestone 1 Kickoff Deposit Due (50%)</span>
+            <div id="liveDepositDisplay" class="text-xl font-extrabold text-emerald-400 mt-0.5">₹24,000.00</div>
           </div>
         </div>
 
@@ -423,14 +461,14 @@
             Next →
           </button>
           <button type="submit" id="submitBtn" class="btn btn-primary text-xs h-9 px-6 font-semibold hidden cursor-pointer">
-            Submit Intake ⚡
+            Submit Intake &amp; Generate SOW ⚡
           </button>
         </div>
       </div>
     </form> 
   </main>
 
-  <!-- Complete Multi-Step Controller Script -->
+  <!-- Complete Multi-Step Controller & Live Calculation Script -->
   <script>
     document.addEventListener("DOMContentLoaded", function () {
       var form = document.getElementById("projectForm");
@@ -445,6 +483,8 @@
       var packageSelect = document.getElementById("package");
       var currencySelect = document.getElementById("currency");
       var skillsInput = document.getElementById("required_skills");
+      var liveTotalDisplay = document.getElementById("liveTotalDisplay");
+      var liveDepositDisplay = document.getElementById("liveDepositDisplay");
 
       var currencySymbols = { INR: "₹", USD: "$", EUR: "€", GBP: "£" };
       var currentStep = 0;
@@ -463,40 +503,51 @@
         });
       });
 
-      function updatePackagePrices() {
+      function updatePricing() {
         if (!packageSelect || !currencySelect) return;
         var selectedCurrency = currencySelect.value;
+        var symbol = currencySymbols[selectedCurrency] || (selectedCurrency + " ");
 
         if (packageSelect.value === "Starter Retainer" && selectedCurrency !== "INR") {
           currencySelect.value = "INR";
           selectedCurrency = "INR";
+          symbol = "₹";
           alert("Notice: Starter Retainer subscriptions are billed in INR only.");
         }
 
+        var basePrice = 0;
         Array.from(packageSelect.options).forEach(function (option) {
           if (option.value === "Starter Retainer") {
             option.textContent = "Starter Retainer · ₹14,999/mo (INR only)";
+            if (option.selected) basePrice = 14999;
             return;
           }
           var price = option.dataset[selectedCurrency.toLowerCase()];
           if (price) {
             var formattedPrice = Number(price).toLocaleString();
-            option.textContent = option.value + " · " + currencySymbols[selectedCurrency] + formattedPrice;
+            option.textContent = option.value + " · " + symbol + formattedPrice;
+            if (option.selected) basePrice = Number(price);
           }
         });
+
+        var deposit = Math.round(basePrice * 0.50);
+        if (liveTotalDisplay) {
+          liveTotalDisplay.textContent = symbol + basePrice.toLocaleString() + ".00";
+        }
+        if (liveDepositDisplay) {
+          liveDepositDisplay.textContent = symbol + deposit.toLocaleString() + ".00";
+        }
       }
 
-      if (packageSelect) packageSelect.addEventListener("change", updatePackagePrices);
-      if (currencySelect) currencySelect.addEventListener("change", updatePackagePrices);
-      updatePackagePrices();
+      if (packageSelect) packageSelect.addEventListener("change", updatePricing);
+      if (currencySelect) currencySelect.addEventListener("change", updatePricing);
+      updatePricing();
 
       function updateUI() {
-        // Toggle step containers
         steps.forEach(function (step, index) {
           step.classList.toggle("active", index === currentStep);
         });
 
-        // Update button visibility & states
         if (prevBtn) {
           prevBtn.disabled = (currentStep === 0);
         }
@@ -511,13 +562,11 @@
           }
         }
 
-        // Update progress bar
         var progress = ((currentStep + 1) / steps.length) * 100;
         if (progressFill) progressFill.style.width = progress + "%";
         if (progressText) progressText.textContent = "Gate " + (currentStep + 1) + " of " + steps.length;
         if (progressBar) progressBar.setAttribute("aria-valuenow", String(currentStep + 1));
 
-        // Update top stepper indicators
         indicators.forEach(function (indicator, index) {
           var isCurrent = (index === currentStep);
           indicator.setAttribute("aria-current", isCurrent ? "step" : "false");
@@ -553,7 +602,6 @@
         return true;
       }
 
-      // Step button clicks
       indicators.forEach(function (indicator) {
         indicator.addEventListener("click", function () {
           var target = Number(this.dataset.stepNav);
@@ -567,7 +615,6 @@
         });
       });
 
-      // Previous button
       if (prevBtn) {
         prevBtn.addEventListener("click", function () {
           if (currentStep > 0) {
@@ -577,7 +624,6 @@
         });
       }
 
-      // Next button
       if (nextBtn) {
         nextBtn.addEventListener("click", function () {
           if (validateCurrentStep() && currentStep < steps.length - 1) {
@@ -587,7 +633,6 @@
         });
       }
 
-      // Form submit validation
       if (form) {
         form.addEventListener("submit", function (e) {
           if (!validateCurrentStep()) {

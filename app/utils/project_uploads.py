@@ -23,7 +23,6 @@ def save_project_upload(file_storage, allowed_extensions: set[str]) -> str | Non
             f"Invalid file extension '.{ext}'. Allowed types: {', '.join(sorted(allowed_extensions))}."
         )
 
-    # Check file size (Max 10 MB limit)
     file_storage.seek(0, os.SEEK_END)
     size_bytes = file_storage.tell()
     file_storage.seek(0)
@@ -34,7 +33,6 @@ def save_project_upload(file_storage, allowed_extensions: set[str]) -> str | Non
     unique_prefix = secrets.token_hex(16)
     unique_filename = f"{unique_prefix}_{filename}"
 
-    # Check for Cloudflare R2 / S3 Configuration
     r2_access_key = os.getenv("R2_ACCESS_KEY_ID")
     r2_secret_key = os.getenv("R2_SECRET_ACCESS_KEY")
     r2_bucket = os.getenv("R2_BUCKET_NAME")
@@ -42,7 +40,7 @@ def save_project_upload(file_storage, allowed_extensions: set[str]) -> str | Non
 
     if r2_access_key and r2_secret_key and r2_bucket and r2_endpoint:
         try:
-            import boto3
+            import boto3  # pyright: ignore [reportMissingImports]
             session = boto3.Session()
             client = session.client(
                 "s3",
@@ -62,7 +60,6 @@ def save_project_upload(file_storage, allowed_extensions: set[str]) -> str | Non
         except Exception as exc:
             current_app.logger.warning("Cloudflare R2 upload failed; falling back to local storage: %s", exc)
 
-    # Fallback to Local Storage (Safely handling static_folder typing)
     static_folder = current_app.static_folder or os.path.abspath(
         os.path.join(current_app.root_path, "..", "static")
     )

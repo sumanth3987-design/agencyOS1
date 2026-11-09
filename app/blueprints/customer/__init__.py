@@ -51,6 +51,12 @@ from app.models import (
     get_latest_project_delivery,
 )
 from app.services.pdf_generator import extract_sow_signature, generate_sow_pdf
+from app.services.whatsapp import (
+    notify_deliverable_ready,
+    notify_payment_received,
+    notify_project_completed,
+    notify_revision_requested,
+)
 from app.utils.currency import (
     SUPPORTED_CURRENCIES,
     compute_financial_split,
@@ -548,7 +554,7 @@ def project_contract(project_id: int | str) -> Any:
 
 
 # =========================================================
-# SEQUENTIAL 3-GATE DELIVERABLE APPROVAL
+# SEQUENTIAL 3-GATE DELIVERABLE APPROVAL & NOTIFICATIONS
 # =========================================================
 
 @customer_bp.route("/project/<project_id>/approve", methods=["POST"])
@@ -588,6 +594,7 @@ def customer_approve_project(project_id: int | str) -> Any:
 
         specialist_id = project.assigned_professional_id or (assigned_app.professional_id if assigned_app else None)
         specialist_profile = ProfessionalProfile.query.filter_by(user_id=specialist_id).first() if specialist_id else None
+        specialist_user = db.session.get(User, specialist_id) if specialist_id else None
 
         currency = sanitize_currency(project.currency)
         gross = get_package_price(project.package, currency, PACKAGE_PRICES)
@@ -703,6 +710,19 @@ def customer_approve_project(project_id: int | str) -> Any:
                     m.status = "released"
                     m.released_at = get_ist_now()
 
+            # Autonomous Multi-Channel Trigger: Notify Client via WhatsApp
+            customer_profile = CustomerProfile.query.filter_by(user_id=current_user.id).first()
+            client_phone = customer_profile.phone if customer_profile else None
+            try:
+                notify_project_completed(
+                    project_id=project.id,
+                    service_name=project.service,
+                    client_phone=client_phone,
+                    client_name=current_user.name,
+                )
+            except Exception as w_err:
+                logger.warning("WhatsApp trigger notice failed: %s", w_err)
+
             flash_msg = "Final milestone approved! Project marked Completed and all remaining escrow funds released."
 
         ActivityLog.log_event(
@@ -725,7 +745,7 @@ def customer_approve_project(project_id: int | str) -> Any:
 
 
 # =========================================================
-# REVISION REQUEST GATE
+# REVISION REQUEST GATE & NOTIFICATION DISPATCH
 # =========================================================
 
 @customer_bp.route("/project/<project_id>/revision", methods=["POST"])
@@ -770,6 +790,7 @@ def customer_request_revision(project_id: int | str) -> Any:
 
         project.status = "Revision"
         project.revision_comment = comment
+
         ActivityLog.log_event(
             project_id=project.id,
             action="REVISION_REQUESTED",
@@ -777,8 +798,25 @@ def customer_request_revision(project_id: int | str) -> Any:
             user_id=current_user.id,
             category="warning",
         )
+
+        # Autonomous Multi-Channel Trigger: Notify Specialist on WhatsApp
+        specialist_user = db.session.get(User, project.assigned_professional_id) if project.assigned_professional_id else None
+        specialist_profile = specialist_user.professional_profile if specialist_user else None
+        if specialist_user and specialist_profile:
+            try:
+                notify_revision_requested(
+                    project_id=project.id,
+                    service_name=project.service,
+                    specialist_phone=specialist_profile.phone,
+                    specialist_name=specialist_user.name,
+                    comment=comment,
+                    round_num=revision_count + 1,
+                )
+            except Exception as w_err:
+                logger.warning("WhatsApp revision notice failed: %s", w_err)
+
         db.session.commit()
-        flash("Revision feedback logged. Your specialist has been notified.", "success")
+        flash("Revision feedback logged. Your specialist has been notified via WhatsApp & in-app stream.", "success")
     except Exception as e:
         db.session.rollback()
         logger.error("Error requesting revision: %s", str(e), exc_info=True)
@@ -980,7 +1018,7 @@ def customer_profile() -> Any:
         return redirect(url_for("professional.professional_dashboard"))
 
     profile = CustomerProfile.query.filter_by(user_id=current_user.id).first()
-    
+
     if not profile:
         try:
             profile = CustomerProfile(user_id=current_user.id)
@@ -1029,7 +1067,7 @@ def customer_profile() -> Any:
 
 
 # =========================================================
-# START PROJECT
+# START PROJECT (DYNAMIC SCOPE INTAKE & DIRECT SOW GENERATION)
 # =========================================================
 
 @customer_bp.route("/start-project/<service_slug>", methods=["GET", "POST"])
@@ -1051,7 +1089,6 @@ def start_project(service_slug: str = "website-development") -> Any:
             or "Basic Website"
         ).strip()
 
-        # Guard: Reject packages without configured price
         if package not in PACKAGE_PRICES:
             flash(f"Package '{package}' is not a supported tier.", "danger")
             return redirect(url_for("customer.start_project", service_slug=service_slug))
@@ -1063,12 +1100,10 @@ def start_project(service_slug: str = "website-development") -> Any:
             or "Standard project kickoff and milestone deliverables."
         ).strip()
 
-        # Guard: Reject brief if it attempts to inject signature audit markers
         if "[Signed by:" in brief:
             flash("Project brief contains invalid signature audit text.", "danger")
             return redirect(url_for("customer.start_project", service_slug=service_slug))
 
-        # Guard: Check for file uploads and validate before project creation
         upload_file = request.files.get("srs_document")
         attachment_url = None
         if upload_file and upload_file.filename:
@@ -1125,7 +1160,7 @@ def start_project(service_slug: str = "website-development") -> Any:
                 target_business_id = int(business_id_value)
             except ValueError:
                 target_business_id = None
-                
+
         if target_business_id is not None:
             verify_business = Business.query.filter_by(id=target_business_id, customer_id=current_user.id).first()
             if not verify_business:
@@ -1149,7 +1184,7 @@ def start_project(service_slug: str = "website-development") -> Any:
             ("Custom Features", request.form.get("custom_features", "").strip()),
             ("Detailed Project Scope", brief),
         ]
-        
+
         reqs = "\n".join(
             f"{label}: {value.replace('Injected feature', '').strip()}" 
             for label, value in sections 
@@ -1160,7 +1195,6 @@ def start_project(service_slug: str = "website-development") -> Any:
             reqs += f"\n\nAttached Client Document: {attachment_url}"
 
         try:
-            # Check existing draft
             existing_draft = (
                 Project.query.filter_by(
                     customer_id=current_user.id, status="Payment Pending"
@@ -1169,7 +1203,6 @@ def start_project(service_slug: str = "website-development") -> Any:
                 .first()
             )
 
-            # Guard: If an existing draft is already digitally signed, DO NOT replace it or create a new one!
             if existing_draft and extract_sow_signature(existing_draft.requirements):
                 flash("You have a signed statement of work pending payment.", "info")
                 return redirect(url_for("customer.project_details", project_id=existing_draft.id))
@@ -1239,7 +1272,7 @@ def start_project(service_slug: str = "website-development") -> Any:
                 user_id=current_user.id,
                 category="info",
             )
-            
+
             if attachment_url:
                 ActivityLog.log_event(
                     project_id=project.id,
@@ -1248,7 +1281,7 @@ def start_project(service_slug: str = "website-development") -> Any:
                     user_id=current_user.id,
                     category="info",
                 )
-                
+
             db.session.commit()
 
             flash("Milestone project created! Please review and sign the SOW Agreement.", "info")
@@ -1291,7 +1324,7 @@ def cancel_project(project_id: int | str) -> Any:
         db.session.execute(db.delete(Payment).where(Payment.project_id == project.id))
         db.session.execute(db.delete(Milestone).where(Milestone.project_id == project.id))
         db.session.delete(project)
-        
+
         db.session.commit()
         flash(f"Draft Project #{pid} cancelled.", "info")
     except Exception as e:
@@ -1333,7 +1366,7 @@ def raise_dispute(project_id: int | str) -> Any:
             project_id=project.id,
             raised_by_user_id=current_user.id,
             reason=reason,
-            status="OPEN"
+            status="OPEN",
         )
         db.session.add(dispute)
 
@@ -1350,7 +1383,7 @@ def raise_dispute(project_id: int | str) -> Any:
                 user_id=admin.id,
                 title=f"⚠️ Escrow Dispute Raised: Project #{project.id}",
                 message=f"{current_user.name} raised a dispute on Project #{project.id}. Admin arbitration required.",
-                link=url_for("admin.admin_disputes")
+                link=url_for("admin.admin_disputes"),
             )
             db.session.add(notif)
 
@@ -1372,13 +1405,13 @@ def api_get_messages(project_id: int) -> Any:
         return jsonify({"error": "Project not found"}), 404
     if project.customer_id != current_user.id and getattr(current_user, "role", "").lower() != "admin":
         return jsonify({"error": "Unauthorized"}), 403
-    
+
     messages = ChatMessage.query.filter_by(project_id=project.id).order_by(ChatMessage.created_at.asc()).all()
     data = [{
         "id": m.id,
         "sender_name": m.sender.name if m.sender else "Agency Team",
         "message": m.message,
         "time": m.created_at.strftime("%d %b %I:%M %p"),
-        "is_me": m.sender_id == current_user.id
+        "is_me": m.sender_id == current_user.id,
     } for m in messages]
     return jsonify({"success": True, "messages": data})

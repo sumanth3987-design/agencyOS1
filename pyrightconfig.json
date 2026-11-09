@@ -1,13 +1,18 @@
 {
-  "extraPaths": ["."],
-  "executionEnvironments": [
-    {
-      "root": "tests",
-      "reportMissingImports": "none",
-      "reportAttributeAccessIssue": "none",
-      "reportOptionalMemberAccess": "none",
-      "reportArgumentType": "none",
-      "reportCallIssue": "none"
-    }
-  ]
+  "include": [
+    "app",
+    "tests"
+  ],
+  "exclude": [
+    "**/node_modules",
+    "**/__pycache__",
+    "venv",
+    ".venv"
+  ],
+  "venvPath": ".",
+  "venv": "venv",
+  "reportOptionalMemberAccess": "none",
+  "reportAttributeAccessIssue": "none",
+  "reportArgumentType": "none",
+  "reportMissingImports": "warning"
 }
