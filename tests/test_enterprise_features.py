@@ -135,7 +135,6 @@ def test_stripe_subscription_invoice_payment_succeeded(client, app, monkeypatch)
         }
     }
 
-    # Bypass Stripe cryptographic signature in local test environment
     monkeypatch.setattr(
         "stripe.Webhook.construct_event",
         lambda payload, sig, secret: webhook_payload,

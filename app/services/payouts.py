@@ -1,4 +1,4 @@
-"""AgencyOS RazorpayX Payouts & Specialist Meritocracy Commission Engine."""
+"""AgencyOS RazorpayX Payouts, Meritocracy & Billable Time Aggregation Engine."""
 
 import base64
 import hashlib
@@ -10,9 +10,37 @@ from decimal import Decimal
 import urllib.request
 from typing import Any
 
-from app.models import ProfessionalProfile, User
+from app.models import ProfessionalProfile, ProjectTimeLog, User
 
 logger = logging.getLogger(__name__)
+
+
+def get_project_billable_hours_summary(project_id: int) -> dict[str, Any]:
+    """Aggregates all billable hours and financial values logged against a project."""
+    try:
+        logs = ProjectTimeLog.query.filter_by(project_id=project_id).all()
+        total_hours = sum(Decimal(str(l.hours)) for l in logs) if logs else Decimal("0.00")
+        total_billable = sum(Decimal(str(l.hours)) * Decimal(str(l.hourly_rate)) for l in logs) if logs else Decimal("0.00")
+        unbilled_logs = [l for l in logs if not l.is_billed]
+        unbilled_hours = sum(Decimal(str(l.hours)) for l in unbilled_logs) if unbilled_logs else Decimal("0.00")
+        unbilled_amount = sum(Decimal(str(l.hours)) * Decimal(str(l.hourly_rate)) for l in unbilled_logs) if unbilled_logs else Decimal("0.00")
+
+        return {
+            "total_hours": total_hours,
+            "total_billable_amount": total_billable,
+            "unbilled_hours": unbilled_hours,
+            "unbilled_amount": unbilled_amount,
+            "log_count": len(logs),
+        }
+    except Exception as exc:
+        logger.error("Error computing billable hours summary for project %s: %s", project_id, exc)
+        return {
+            "total_hours": Decimal("0.00"),
+            "total_billable_amount": Decimal("0.00"),
+            "unbilled_hours": Decimal("0.00"),
+            "unbilled_amount": Decimal("0.00"),
+            "log_count": 0,
+        }
 
 
 def calculate_meritocracy_rate(specialist_user: User) -> Decimal:

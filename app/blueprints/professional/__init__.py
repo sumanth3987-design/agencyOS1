@@ -1,11 +1,12 @@
 """AgencyOS Specialist (Professional) Talent Blueprint.
 
 Governs specialist delivery workspaces, milestone submissions, 45% earnings
-ledger tracking, skill-matched sprint applications, and out-of-band UPI / wire payout redemption requests.
+ledger tracking, skill-matched sprint applications, billable time-tracking logs,
+and out-of-band UPI / wire payout redemption requests.
 """
 
 from datetime import datetime
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 import json
 import logging
 from typing import Any
@@ -27,6 +28,7 @@ from app.models import (
     ProfessionalProjectApplication,
     Project,
     ProjectDelivery,
+    ProjectTimeLog,
     User,
     WalletTransaction,
     WithdrawalRequest,
@@ -420,7 +422,7 @@ def start_project_work(project_id: int) -> Any:
 
 
 # =========================================================
-# SPECIALIST DELIVERY WORKSPACE
+# SPECIALIST DELIVERY WORKSPACE & TIME TRACKING LOGS
 # =========================================================
 
 @professional_bp.route("/professional/project/<int:project_id>/workspace")
@@ -453,21 +455,108 @@ def professional_project_workspace(project_id: int) -> Any:
         .order_by(ChatMessage.created_at.asc())
         .all()
     )
+    time_logs = (
+        ProjectTimeLog.query.filter_by(project_id=project.id)
+        .order_by(ProjectTimeLog.logged_date.desc(), ProjectTimeLog.id.desc())
+        .all()
+    )
 
     currency = sanitize_currency(project.currency)
     gross = get_package_price(project.package, currency, PACKAGE_PRICES)
     specialist_share, _, _ = compute_financial_split(gross, currency)
     revision_count = ProjectDelivery.query.filter_by(project_id=project.id, status="Revision").count()
+    milestones = Milestone.query.filter_by(project_id=project.id).order_by(Milestone.id.asc()).all()
+
+    total_billable_hours = sum(Decimal(str(t.hours)) for t in time_logs) if time_logs else Decimal("0.00")
+    total_billable_value = sum(Decimal(str(t.hours)) * Decimal(str(t.hourly_rate)) for t in time_logs) if time_logs else Decimal("0.00")
 
     return render_template(
         "professional_project_workspace.html",
         project=project,
         deliveries=deliveries,
         messages=messages,
+        time_logs=time_logs,
+        milestones=milestones,
         specialist_share=specialist_share,
         currency=currency,
         revision_count=revision_count,
+        total_billable_hours=total_billable_hours,
+        total_billable_value=total_billable_value,
     )
+
+
+# =========================================================
+# LOG BILLABLE HOURS (ENTERPRISE TIME-TRACKING MODULE)
+# =========================================================
+
+@professional_bp.route("/professional/project/<int:project_id>/time-log", methods=["POST"])
+@login_required
+def log_billable_hours(project_id: int) -> Any:
+    project = db.session.get(Project, project_id)
+    if not project:
+        flash("Project not found.", "danger")
+        return redirect(url_for("professional.professional_dashboard"))
+
+    user_role = getattr(current_user, "role", "").lower()
+    is_assigned = bool(
+        ProfessionalProjectApplication.query.filter_by(
+            project_id=project.id, professional_id=current_user.id, status="Assigned"
+        ).first()
+    )
+    if not is_assigned and user_role != "admin":
+        flash("You are not assigned to this project workspace.", "danger")
+        return redirect(url_for("professional.professional_dashboard"))
+
+    raw_hours = request.form.get("hours", "").strip()
+    raw_rate = request.form.get("hourly_rate", "0").strip()
+    description = request.form.get("description", "").strip()
+    milestone_id_raw = request.form.get("milestone_id", "").strip()
+
+    try:
+        hours = Decimal(raw_hours)
+        hourly_rate = Decimal(raw_rate) if raw_rate else Decimal("0.00")
+    except (InvalidOperation, ValueError):
+        flash("Enter valid numeric values for hours and rate.", "warning")
+        return redirect(url_for("professional.professional_project_workspace", project_id=project.id))
+
+    if hours <= Decimal("0.00") or hours > Decimal("999.99"):
+        flash("Logged hours must be positive and under 1,000 hours.", "warning")
+        return redirect(url_for("professional.professional_project_workspace", project_id=project.id))
+
+    if not description:
+        flash("Please provide a description of the work completed.", "warning")
+        return redirect(url_for("professional.professional_project_workspace", project_id=project.id))
+
+    milestone_id = int(milestone_id_raw) if milestone_id_raw.isdigit() else None
+
+    try:
+        time_log = ProjectTimeLog(
+            project_id=project.id,
+            milestone_id=milestone_id,
+            professional_id=current_user.id,
+            hours=hours.quantize(Decimal("0.01")),
+            hourly_rate=hourly_rate.quantize(Decimal("0.01")),
+            description=description,
+            logged_date=get_ist_now(),
+            is_billed=False,
+        )
+        db.session.add(time_log)
+
+        ActivityLog.log_event(
+            project_id=project.id,
+            action="TIME_LOGGED",
+            description=f"Specialist {current_user.name} logged {hours} billable hours: {description[:60]}",
+            user_id=current_user.id,
+            category="info",
+        )
+        db.session.commit()
+        flash(f"Successfully logged {hours} hours against project #{project.id}.", "success")
+    except Exception as exc:
+        db.session.rollback()
+        logger.error("Failed to log billable hours for project %s: %s", project_id, exc, exc_info=True)
+        flash("Could not log billable hours. Please try again.", "danger")
+
+    return redirect(url_for("professional.professional_project_workspace", project_id=project.id))
 
 
 # =========================================================
@@ -727,7 +816,6 @@ def request_payout(invoice_id: int) -> Any:
         flash("Only the assigned specialist can request payout.", "danger")
         return redirect(url_for("professional.professional_dashboard"))
 
-    # Idempotency guard: Prevent duplicate payout notifications
     if invoice.payout_status == "Requested":
         flash(f"Payout has already been requested for invoice #{invoice.invoice_number}.", "info")
         return redirect(url_for("professional.professional_dashboard"))
@@ -862,6 +950,7 @@ def professional_profile() -> Any:
             flash("Failed to save profile changes. Please try again.", "danger")
 
     return render_template("professional_profile.html", profile=profile)
+
 
 @professional_bp.route("/professional/api/project/<int:project_id>/messages")
 @login_required

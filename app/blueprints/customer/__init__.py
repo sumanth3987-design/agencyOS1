@@ -1,11 +1,6 @@
-"""AgencyOS Customer & Client Portal Blueprint.
-
-Manages client workspace, project progression, digital SOW contracts,
-sequential 3-gate deliverable reviews (50/25/25), chat dispatch, automated escrow release, and GST-compliant invoicing.
-"""
-
 from datetime import datetime
 from decimal import Decimal
+import hashlib
 import json
 import logging
 import os
@@ -30,6 +25,7 @@ from app.models import (
     ActivityLog,
     Business,
     ChatMessage,
+    ContractSignature,
     CustomerProfile,
     Dispute,
     Invoice,
@@ -476,9 +472,10 @@ def invoices_list() -> Any:
 
 
 # =========================================================
-# DIGITAL SOW CONTRACT & E-SIGNATURE
+# DIGITAL SOW CONTRACT & E-SIGNATURE EXECUTION
 # =========================================================
 
+@customer_bp.route("/project/<project_id>/sign-contract", methods=["GET", "POST"])
 @customer_bp.route("/project/<project_id>/contract", methods=["GET", "POST"])
 @customer_bp.route("/project/<int:project_id>/contract", methods=["GET", "POST"])
 @login_required
@@ -496,7 +493,6 @@ def project_contract(project_id: int | str) -> Any:
         return redirect(url_for("customer.dashboard"))
 
     user_role = getattr(current_user, "role", "").lower()
-
     if user_role != "admin" and project.customer_id != current_user.id:
         flash("Unauthorized access to contract.", "danger")
         return redirect(url_for("customer.dashboard"))
@@ -515,12 +511,34 @@ def project_contract(project_id: int | str) -> Any:
 
         signer_name = request.form.get("signer_name", "").strip()
         signer_title = request.form.get("signer_title", "").strip()
+        signature_data = request.form.get("signature_data", "").strip() or None
+
         if not signer_name or not signer_title:
             flash("Enter the signer's full name and title before signing.", "warning")
             return redirect(url_for("customer.project_contract", project_id=project.id))
 
         try:
-            signature_entry = f" [Signed by: {signer_name} ({signer_title}) from IP: {request.remote_addr} on {get_ist_now().strftime('%d %b %Y %H:%M IST')}]"
+            timestamp_str = get_ist_now().strftime("%d %b %Y %H:%M IST")
+            ip_addr = request.remote_addr or "127.0.0.1"
+
+            # Cryptographic SHA-256 agreement verification hash
+            raw_audit_text = f"{project.id}:{signer_name}:{signer_title}:{ip_addr}:{timestamp_str}"
+            sig_hash = hashlib.sha256(raw_audit_text.encode("utf-8")).hexdigest()
+
+            # Persist digital ContractSignature model
+            contract_sig = ContractSignature(
+                project_id=project.id,
+                signer_name=signer_name,
+                signer_title=signer_title,
+                signature_hash=sig_hash,
+                signature_data=signature_data,
+                ip_address=ip_addr,
+                signed_at=get_ist_now(),
+            )
+            db.session.add(contract_sig)
+
+            # Append text audit coordinate for 100% backward compatibility
+            signature_entry = f" [Signed by: {signer_name} ({signer_title}) from IP: {ip_addr} on {timestamp_str}]"
             if not getattr(project, "requirements", ""):
                 project.requirements = signature_entry
             else:
@@ -531,7 +549,7 @@ def project_contract(project_id: int | str) -> Any:
             ActivityLog.log_event(
                 project_id=project.id,
                 action="SOW_SIGNED",
-                description=f"Statement of Work digitally signed by {signer_name} ({signer_title}).",
+                description=f"Statement of Work digitally executed by {signer_name} ({signer_title}). Hash: {sig_hash[:16]}...",
                 user_id=current_user.id,
                 category="success",
             )
@@ -546,7 +564,7 @@ def project_contract(project_id: int | str) -> Any:
             return redirect(url_for("customer.project_contract", project_id=project.id))
 
     return render_template(
-        "contract.html",
+        "sign_contract.html" if os.path.exists("templates/sign_contract.html") else "contract.html",
         project=project,
         customer=customer,
         business=business,
@@ -594,7 +612,6 @@ def customer_approve_project(project_id: int | str) -> Any:
 
         specialist_id = project.assigned_professional_id or (assigned_app.professional_id if assigned_app else None)
         specialist_profile = ProfessionalProfile.query.filter_by(user_id=specialist_id).first() if specialist_id else None
-        specialist_user = db.session.get(User, specialist_id) if specialist_id else None
 
         currency = sanitize_currency(project.currency)
         gross = get_package_price(project.package, currency, PACKAGE_PRICES)
@@ -710,7 +727,6 @@ def customer_approve_project(project_id: int | str) -> Any:
                     m.status = "released"
                     m.released_at = get_ist_now()
 
-            # Autonomous Multi-Channel Trigger: Notify Client via WhatsApp
             customer_profile = CustomerProfile.query.filter_by(user_id=current_user.id).first()
             client_phone = customer_profile.phone if customer_profile else None
             try:
@@ -794,12 +810,11 @@ def customer_request_revision(project_id: int | str) -> Any:
         ActivityLog.log_event(
             project_id=project.id,
             action="REVISION_REQUESTED",
-            description=f"Client requested a revision: {comment}",
+            description=f"Client requested a revision ({revision_count + 1}/2): {comment}",
             user_id=current_user.id,
             category="warning",
         )
 
-        # Autonomous Multi-Channel Trigger: Notify Specialist on WhatsApp
         specialist_user = db.session.get(User, project.assigned_professional_id) if project.assigned_professional_id else None
         specialist_profile = specialist_user.professional_profile if specialist_user else None
         if specialist_user and specialist_profile:
@@ -816,7 +831,7 @@ def customer_request_revision(project_id: int | str) -> Any:
                 logger.warning("WhatsApp revision notice failed: %s", w_err)
 
         db.session.commit()
-        flash("Revision feedback logged. Your specialist has been notified via WhatsApp & in-app stream.", "success")
+        flash(f"Revision feedback logged (Cycle {revision_count + 1} of 2 included in scope). Your specialist has been notified.", "success")
     except Exception as e:
         db.session.rollback()
         logger.error("Error requesting revision: %s", str(e), exc_info=True)
@@ -1067,7 +1082,7 @@ def customer_profile() -> Any:
 
 
 # =========================================================
-# START PROJECT (DYNAMIC SCOPE INTAKE & DIRECT SOW GENERATION)
+# START PROJECT
 # =========================================================
 
 @customer_bp.route("/start-project/<service_slug>", methods=["GET", "POST"])
