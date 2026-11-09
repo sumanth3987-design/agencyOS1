@@ -2,7 +2,8 @@
 
 Defines SQLAlchemy ORM models for users, multi-tenant businesses, professional profiles,
 customer profiles with direct contact & GST context, gated projects, cryptographic payment ledgers,
-invoice margin splits, two-stage escrow wallets, withdrawal requests, and activity audit trails.
+invoice margin splits, two-stage escrow wallets, withdrawal requests, activity audit trails,
+contract digital signatures, and billable time logs.
 """
 
 from datetime import datetime
@@ -385,6 +386,8 @@ class Project(db.Model):
     created_at: Any = db.Column(db.DateTime, server_default=db.func.now(), nullable=False)
 
     milestones = db.relationship("Milestone", backref="project", cascade="all, delete-orphan", lazy=True)
+    contract_signature = db.relationship("ContractSignature", backref="project", uselist=False, cascade="all, delete-orphan")
+    time_logs = db.relationship("ProjectTimeLog", backref="project", cascade="all, delete-orphan", lazy=True)
 
     def __init__(self, customer_id: int | None = None, service: str = "", package: str = "", requirements: str = "", status: str = "Pending Assignment", **kwargs: Any) -> None:
         super().__init__(**kwargs)
@@ -410,6 +413,76 @@ class Project(db.Model):
             pass
         tokens = re.split(r"[,|\n/]+", self.required_skills)
         return [t.strip().lower() for t in tokens if t.strip()]
+
+
+class ContractSignature(db.Model):
+    __tablename__ = "contract_signatures"
+
+    id: Any = db.Column(db.Integer, primary_key=True)
+    project_id: Any = db.Column(db.Integer, db.ForeignKey("project.id", ondelete="CASCADE"), nullable=False, unique=True, index=True)
+    signer_name: Any = db.Column(db.String(120), nullable=False)
+    signer_title: Any = db.Column(db.String(100), nullable=False)
+    signature_hash: Any = db.Column(db.String(64), nullable=False)
+    signature_data: Any = db.Column(db.Text, nullable=True)
+    ip_address: Any = db.Column(db.String(45), nullable=False, default="127.0.0.1")
+    signed_at: Any = db.Column(db.DateTime, default=get_ist_now, nullable=False)
+
+    def __init__(self, project_id: int | None = None, signer_name: str = "", signer_title: str = "", signature_hash: str = "", signature_data: str | None = None, ip_address: str = "127.0.0.1", signed_at: datetime | None = None, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        if project_id is not None:
+            self.project_id = project_id
+        if signer_name:
+            self.signer_name = signer_name
+        if signer_title:
+            self.signer_title = signer_title
+        if signature_hash:
+            self.signature_hash = signature_hash
+        if signature_data is not None:
+            self.signature_data = signature_data
+        if ip_address:
+            self.ip_address = ip_address
+        if signed_at is not None:
+            self.signed_at = signed_at
+
+
+class ProjectTimeLog(db.Model):
+    __tablename__ = "project_time_logs"
+
+    id: Any = db.Column(db.Integer, primary_key=True)
+    project_id: Any = db.Column(db.Integer, db.ForeignKey("project.id", ondelete="CASCADE"), nullable=False, index=True)
+    milestone_id: Any = db.Column(db.Integer, db.ForeignKey("milestones.id", ondelete="SET NULL"), nullable=True, index=True)
+    professional_id: Any = db.Column(db.Integer, db.ForeignKey("user.id", ondelete="CASCADE"), nullable=False, index=True)
+    hours: Any = db.Column(db.Numeric(6, 2), nullable=False)
+    hourly_rate: Any = db.Column(db.Numeric(10, 2), default=0.00, nullable=False)
+    description: Any = db.Column(db.Text, nullable=False)
+    logged_date: Any = db.Column(db.DateTime, default=get_ist_now, nullable=False)
+    is_billed: Any = db.Column(db.Boolean, default=False, nullable=False)
+    invoice_id: Any = db.Column(db.Integer, db.ForeignKey("invoice.id", ondelete="SET NULL"), nullable=True, index=True)
+    created_at: Any = db.Column(db.DateTime, default=get_ist_now, nullable=False)
+
+    milestone = db.relationship("Milestone", backref=db.backref("time_logs", lazy=True))
+    professional = db.relationship("User", foreign_keys=[professional_id])
+    invoice = db.relationship("Invoice", backref=db.backref("time_logs", lazy=True))
+
+    def __init__(self, project_id: int | None = None, milestone_id: int | None = None, professional_id: int | None = None, hours: Any = 0, hourly_rate: Any = 0, description: str = "", logged_date: datetime | None = None, is_billed: bool = False, invoice_id: int | None = None, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        if project_id is not None:
+            self.project_id = project_id
+        if milestone_id is not None:
+            self.milestone_id = milestone_id
+        if professional_id is not None:
+            self.professional_id = professional_id
+        if hours is not None:
+            self.hours = hours
+        if hourly_rate is not None:
+            self.hourly_rate = hourly_rate
+        if description:
+            self.description = description
+        if logged_date is not None:
+            self.logged_date = logged_date
+        self.is_billed = is_billed
+        if invoice_id is not None:
+            self.invoice_id = invoice_id
 
 
 class Payment(db.Model):

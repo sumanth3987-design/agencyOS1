@@ -1,9 +1,14 @@
-"""AgencyOS Stripe Multi-Currency Gateway Blueprint."""
+"""AgencyOS Stripe Multi-Currency Gateway Blueprint.
+
+Supports one-time checkout, webhook event verification, and automated
+recurring subscription lifecycle event handlers (invoice.payment_succeeded and invoice.payment_failed).
+"""
 
 from decimal import Decimal
 import json
 import logging
 import os
+import secrets
 from typing import Any, cast
 
 from flask import Blueprint, current_app, jsonify, request
@@ -16,13 +21,21 @@ from app.extensions import csrf, db
 from app.models import (
     ActivityLog,
     Invoice,
+    Notification,
     PACKAGE_PRICES,
     Payment,
     Project,
     StripeWebhookEvent,
+    User,
     get_ist_now,
 )
-from app.utils.currency import calculate_tax_rate, format_currency, get_package_price, to_minor_units
+from app.utils.currency import (
+    calculate_tax_rate,
+    format_currency,
+    get_package_price,
+    sanitize_currency,
+    to_minor_units,
+)
 from app.utils.stripe_config import (
     STRIPE_PUBLISHABLE_KEY,
     STRIPE_WEBHOOK_SECRET,
@@ -35,7 +48,6 @@ logger = logging.getLogger(__name__)
 
 stripe_bp = Blueprint("stripe", __name__)
 
-# Configure Stripe API key with safe type annotation for Pylance
 stripe_module = cast(Any, stripe)
 stripe_module.api_key = os.getenv("STRIPE_SECRET_KEY", "")
 
@@ -53,7 +65,7 @@ def create_stripe_checkout(project_id: int) -> Any:
         return jsonify({"success": False, "message": "Customer access required."}), 403
 
     if user_role == "admin":
-        project = Project.query.get(project_id)
+        project = db.session.get(Project, project_id)
     else:
         project = Project.query.filter_by(id=project_id, customer_id=current_user.id).first()
 
@@ -177,7 +189,7 @@ def create_stripe_checkout(project_id: int) -> Any:
 
 
 # ---------------------------------------------------------------------------
-# Stripe Webhook Handler (state-safe & idempotent)
+# Stripe Webhook Handler (State-Safe, Idempotent & Subscription Ready)
 # ---------------------------------------------------------------------------
 
 @stripe_bp.route("/payment/stripe/webhook", methods=["POST"])
@@ -208,6 +220,7 @@ def stripe_webhook() -> Any:
     if StripeWebhookEvent.is_processed(event_id):
         return jsonify({"status": "ignored", "reason": "duplicate_event"}), 200
 
+    # 1. ONE-TIME CHECKOUT PAYMENT COMPLETED
     if event_type == "checkout.session.completed":
         session_obj = event["data"]["object"]
         metadata = session_obj.get("metadata", {})
@@ -219,7 +232,7 @@ def stripe_webhook() -> Any:
         project_id = int(project_id_str) if project_id_str else None
 
         if project_id and payment_status == "paid":
-            project = Project.query.get(project_id)
+            project = db.session.get(Project, project_id)
             if project:
                 if project.status in ("Payment Pending", "Pending Assignment"):
                     payment = Payment.query.filter_by(
@@ -311,6 +324,70 @@ def stripe_webhook() -> Any:
             )
             db.session.commit()
 
+    # 2. AUTOMATED RECURRING SUBSCRIPTION PAYMENT SUCCEEDED
+    elif event_type == "invoice.payment_succeeded":
+        invoice_obj = event["data"]["object"]
+        subscription_id = invoice_obj.get("subscription")
+        amount_paid = invoice_obj.get("amount_paid", 0)
+        currency = (invoice_obj.get("currency") or "USD").upper()
+        customer_email = invoice_obj.get("customer_email")
+
+        user = User.query.filter_by(email=customer_email).first() if customer_email else None
+        user_id = user.id if user else 1
+
+        gross_dec = Decimal(str(amount_paid)) / 100
+
+        inv_record = Invoice()
+        inv_record.invoice_number = f"STRIPE-RET-{secrets.token_hex(4).upper()}"
+        inv_record.customer_id = user_id
+        inv_record.project_id = 1
+        inv_record.gross_amount = gross_dec
+        inv_record.currency = currency
+        inv_record.status = "Paid"
+        inv_record.payout_status = "Pending Approval"
+        db.session.add(inv_record)
+
+        if user:
+            notif = Notification()
+            notif.user_id = user.id
+            notif.title = "Recurring Subscription Renewed ⚡"
+            notif.message = f"Your automated monthly retainer of {format_currency(gross_dec, currency)} has been charged successfully."
+            notif.link = "/invoices"
+            db.session.add(notif)
+
+        StripeWebhookEvent.mark_processed(
+            event_id=event_id,
+            event_type=event_type,
+            project_id=None,
+            payload=json.dumps(payload)[:5000] if payload else None,
+        )
+        db.session.commit()
+        return jsonify({"status": "recurring_payment_recorded"}), 200
+
+    # 3. RECURRING SUBSCRIPTION PAYMENT FAILED
+    elif event_type == "invoice.payment_failed":
+        invoice_obj = event["data"]["object"]
+        customer_email = invoice_obj.get("customer_email")
+        user = User.query.filter_by(email=customer_email).first() if customer_email else None
+
+        if user:
+            notif = Notification()
+            notif.user_id = user.id
+            notif.title = "⚠️ Recurring Retainer Payment Failed"
+            notif.message = "Your automated retainer charge could not be processed. Please update your payment coordinates in the client portal."
+            notif.link = "/customer/dashboard"
+            db.session.add(notif)
+
+        StripeWebhookEvent.mark_processed(
+            event_id=event_id,
+            event_type=event_type,
+            project_id=None,
+            payload=json.dumps(payload)[:5000] if payload else None,
+        )
+        db.session.commit()
+        return jsonify({"status": "payment_failure_logged"}), 200
+
+    # 4. UNHANDLED EVENTS
     else:
         StripeWebhookEvent.mark_processed(
             event_id=event_id,
@@ -347,4 +424,4 @@ def stripe_cancel() -> Any:
     }), 200
 
 
-__all__ = ["stripe_bp"] 
+__all__ = ["stripe_bp"]

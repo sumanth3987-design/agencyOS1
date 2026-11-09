@@ -1,0 +1,266 @@
+<!-- Save this directly into: templates/sign_contract.html -->
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Digital E-Signature & Agreement Execution — Project #{{ project.id }} | {{ agency_settings.agency_name if agency_settings else 'AgencyOS' }}</title>
+
+  <!-- Typography: Plus Jakarta Sans & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="/static/style.css">
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace'],
+          },
+          colors: {
+            zinc: {
+              950: '#09090b',
+              900: '#101014',
+              850: '#18181b',
+              800: '#27272a',
+              700: '#3f3f46',
+            }
+          }
+        }
+      }
+    }
+  </script>
+</head>
+<body class="bg-zinc-950 text-zinc-100 min-h-screen selection:bg-zinc-100 selection:text-zinc-950 antialiased font-sans">
+
+  <!-- TOP HEADER -->
+  <header class="border-b border-zinc-800 bg-zinc-950/95 sticky top-0 z-50">
+    <div class="max-w-4xl mx-auto px-6 h-16 flex items-center justify-between">
+      <a href="{{ url_for('customer.project_details', project_id=project.id) }}" class="btn btn-secondary text-xs h-8">
+        ← Return to Workbench
+      </a>
+
+      <div class="flex items-center gap-2">
+        <span class="inline-block h-2 w-2 rounded-full bg-emerald-500"></span>
+        <span class="font-mono text-xs text-zinc-400 uppercase tracking-wider">IT Act 2000 Section 10A Compliant</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- MAIN SOW DOCUMENT -->
+  <main class="max-w-4xl mx-auto px-6 py-10 space-y-8">
+
+    <article class="border border-zinc-800 bg-zinc-900 rounded-xl overflow-hidden shadow-2xl">
+      
+      <!-- Contract Header -->
+      <div class="p-8 border-b border-zinc-800 bg-zinc-950">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <span class="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-indigo-950 text-indigo-400 border border-indigo-800 mb-2 inline-block">LEGALLY BINDING STATEMENT OF WORK</span>
+            <h1 class="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">Master Service SOW</h1>
+            <p class="text-xs font-mono text-zinc-400 mt-1">
+              Project Identifier: <strong class="text-white">#{{ project.id }}</strong> • Service Category: <strong class="text-white">{{ project.service }}</strong>
+            </p>
+          </div>
+
+          <div class="text-left sm:text-right font-mono text-xs text-zinc-400">
+            <strong class="text-white font-sans text-sm block">{{ agency_settings.agency_name if agency_settings else 'AgencyOS' }}</strong>
+            <span class="block mt-0.5">SAC Code: 998311</span>
+            <span class="text-emerald-400 block mt-0.5">● Sequential Escrow Gated</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Parties Declaration -->
+      <div class="p-8 border-b border-zinc-800 bg-zinc-950/60 grid grid-cols-1 sm:grid-cols-2 gap-6 text-xs font-mono">
+        <div class="border border-zinc-800 rounded-lg bg-zinc-950 p-4 space-y-1">
+          <span class="text-zinc-500 uppercase tracking-wider block text-[10px]">Service Provider (Agency):</span>
+          <strong class="text-white font-sans text-sm block">{{ agency_settings.agency_name if agency_settings else 'AgencyOS' }}</strong>
+          <p class="text-zinc-400">Operational Delivery Node: Bangalore &amp; Hyderabad, India</p>
+          <p class="text-zinc-500 text-[11px]">GSTIN / Export LUT Clearance Verified</p>
+        </div>
+
+        <div class="border border-zinc-800 rounded-lg bg-zinc-950 p-4 space-y-1">
+          <span class="text-zinc-500 uppercase tracking-wider block text-[10px]">Client (Recipient Entity):</span>
+          <strong class="text-white font-sans text-sm block">{{ customer.name if customer else 'Client Enterprise' }}</strong>
+          <p class="text-zinc-400">{{ business.name if business else 'Direct Business Account' }}</p>
+          <p class="text-zinc-500 text-[11px]">{{ customer.email if customer else '' }}</p>
+        </div>
+      </div>
+
+      <!-- Scope Deliverables Narrative -->
+      <div class="p-8 space-y-6 text-xs text-zinc-300 leading-relaxed font-mono">
+        <div>
+          <h2 class="text-white text-sm font-bold uppercase tracking-wider mb-2">1. Scope of Deliverables</h2>
+          <div class="border border-zinc-800 rounded-lg bg-zinc-950 p-4 text-zinc-300 whitespace-pre-wrap leading-relaxed font-sans text-xs">
+            {{ project.requirements or 'Standard digital milestone engineering, responsive UI styling, and organic search optimization as configured in the project intake form.' }}
+          </div>
+        </div>
+
+        <div>
+          <h2 class="text-white text-sm font-bold uppercase tracking-wider mb-3">2. 50/25/25 Milestone Gating Policy</h2>
+          <div class="grid grid-cols-1 sm:grid-cols-3 border-t border-l border-zinc-800 bg-zinc-950">
+            <div class="p-4 border-b border-r border-zinc-800 space-y-1">
+              <span class="text-zinc-500 block text-[10px]">GATE 1 (50%)</span>
+              <strong class="text-white font-sans text-xs block">Discovery &amp; Architecture</strong>
+              <p class="text-zinc-400 text-[11px] font-sans">Wireframes &amp; system setup. Activated upon advance escrow reservation.</p>
+            </div>
+            <div class="p-4 border-b border-r border-zinc-800 space-y-1">
+              <span class="text-zinc-500 block text-[10px]">GATE 2 (25%)</span>
+              <strong class="text-white font-sans text-xs block">Staging Execution</strong>
+              <p class="text-zinc-400 text-[11px] font-sans">Full functional prototype review and complimentary revision iterations.</p>
+            </div>
+            <div class="p-4 border-b border-r border-zinc-800 space-y-1">
+              <span class="text-zinc-500 block text-[10px]">GATE 3 (25%)</span>
+              <strong class="text-white font-sans text-xs block">Production &amp; Handover</strong>
+              <p class="text-zinc-400 text-[11px] font-sans">Final deployment, DNS cutover, and 100% intellectual property transfer.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- DIGITAL CANVAS SIGNATURE FORM -->
+      <form id="signatureForm" method="POST" action="{{ url_for('customer.project_contract', project_id=project.id) }}" class="p-8 border-t border-zinc-800 bg-zinc-950 space-y-6 text-xs font-mono">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" id="signatureDataInput" name="signature_data" value="">
+
+        <div class="flex items-center gap-2">
+          <span class="badge badge-emerald">CANVAS SIGNATURE</span>
+          <span class="text-white font-bold uppercase">Digital Execution Pad</span>
+        </div>
+
+        <!-- HTML5 Signature Canvas Pad -->
+        <div class="space-y-2">
+          <div class="flex justify-between items-center text-zinc-400">
+            <span>Draw your legal signature inside the boundary:</span>
+            <button type="button" id="clearCanvasBtn" class="text-zinc-400 hover:text-white underline cursor-pointer">
+              Clear Signature
+            </button>
+          </div>
+          <div class="border border-zinc-700 bg-zinc-900 rounded-lg overflow-hidden">
+            <canvas id="signatureCanvas" width="700" height="160" class="w-full h-40 cursor-crosshair block touch-none"></canvas>
+          </div>
+        </div>
+
+        <label class="flex items-start gap-3 p-4 rounded-lg border border-zinc-800 bg-zinc-900 cursor-pointer font-sans text-xs text-zinc-300">
+          <input type="checkbox" name="agreed_terms" required class="mt-0.5">
+          <span>
+            I acknowledge this Statement of Work, accept the 50/25/25 milestone gates, and confirm that my digital signature legally executes this agreement under Section 10A of the Information Technology Act, 2000.
+          </span>
+        </label>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-zinc-400 mb-1">Authorized Signer Full Legal Name <span class="text-rose-400">*</span></label>
+            <input
+              type="text"
+              name="signer_name"
+              value="{{ customer.name if customer else '' }}"
+              required
+              placeholder="e.g. Eleanor Vance"
+              class="form-control text-xs"
+            >
+          </div>
+
+          <div>
+            <label class="block text-zinc-400 mb-1">Corporate Title / Role <span class="text-rose-400">*</span></label>
+            <input
+              type="text"
+              name="signer_title"
+              value="Managing Director / CEO"
+              required
+              placeholder="e.g. Chief Executive Officer"
+              class="form-control text-xs"
+            >
+          </div>
+        </div>
+
+        <button type="submit" id="submitContractBtn" class="btn btn-primary w-full h-12 text-sm font-bold tracking-wide cursor-pointer shadow-xl">
+          Digitally Sign SOW &amp; Unlock Kickoff Deposit →
+        </button>
+      </form>
+
+    </article>
+  </main>
+
+  <script>
+    document.addEventListener("DOMContentLoaded", function () {
+      var canvas = document.getElementById("signatureCanvas");
+      var clearBtn = document.getElementById("clearCanvasBtn");
+      var form = document.getElementById("signatureForm");
+      var signatureInput = document.getElementById("signatureDataInput");
+
+      if (!canvas) return;
+      var ctx = canvas.getContext("2d");
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = 2.5;
+      ctx.lineCap = "round";
+
+      var isDrawing = false;
+      var hasDrawn = false;
+
+      function getPos(e) {
+        var rect = canvas.getBoundingClientRect();
+        var clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        var clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        return {
+          x: (clientX - rect.left) * (canvas.width / rect.width),
+          y: (clientY - rect.top) * (canvas.height / rect.height)
+        };
+      }
+
+      function startDraw(e) {
+        isDrawing = true;
+        var pos = getPos(e);
+        ctx.beginPath();
+        ctx.moveTo(pos.x, pos.y);
+        e.preventDefault();
+      }
+
+      function draw(e) {
+        if (!isDrawing) return;
+        hasDrawn = true;
+        var pos = getPos(e);
+        ctx.lineTo(pos.x, pos.y);
+        ctx.stroke();
+        e.preventDefault();
+      }
+
+      function endDraw() {
+        isDrawing = false;
+      }
+
+      canvas.addEventListener("mousedown", startDraw);
+      canvas.addEventListener("mousemove", draw);
+      canvas.addEventListener("mouseup", endDraw);
+      canvas.addEventListener("mouseleave", endDraw);
+
+      canvas.addEventListener("touchstart", startDraw, { passive: false });
+      canvas.addEventListener("touchmove", draw, { passive: false });
+      canvas.addEventListener("touchend", endDraw);
+
+      if (clearBtn) {
+        clearBtn.addEventListener("click", function () {
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          hasDrawn = false;
+          if (signatureInput) signatureInput.value = "";
+        });
+      }
+
+      if (form) {
+        form.addEventListener("submit", function () {
+          if (hasDrawn && signatureInput) {
+            signatureInput.value = canvas.toDataURL("image/png");
+          }
+        });
+      }
+    });
+  </script>
+</body>
+</html>
