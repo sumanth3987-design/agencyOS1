@@ -38,8 +38,12 @@
   </script>
   <style>
     :root {
-      --agency-primary: {{ agency_settings.primary_color }};
-      --agency-on-primary: {{ agency_settings.primary_contrast }};
+      --agency-primary: {{ agency_settings.primary_color if agency_settings else '#6366f1' }};
+      --agency-on-primary: {{ agency_settings.primary_contrast if agency_settings else '#ffffff' }};
+    }
+    input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-visible, a:focus-visible {
+      outline: 2px solid var(--agency-primary) !important;
+      outline-offset: 1px;
     }
   </style>
 </head>
@@ -96,9 +100,10 @@
           <div class="text-left sm:text-right font-mono text-xs text-zinc-400">
             {% if agency_settings and agency_settings.logo_url %}
             <img src="{{ agency_settings.logo_url }}" class="h-8 w-auto ml-auto mb-1 object-contain" alt="{{ agency_settings.agency_name }}" onerror="this.style.display='none'; this.nextElementSibling.classList.remove('hidden')">
-            <strong class="text-white font-sans text-sm block hidden">this.nextElementSibling.classList.remove('hidden')</strong>
-            {% endif %}
+            <strong class="text-white font-sans text-sm block hidden">{{ agency_settings.agency_name }}</strong>
+            {% else %}
             <strong class="text-white font-sans text-sm block">{{ agency_settings.agency_name if agency_settings else 'AgencyOS' }}</strong>
+            {% endif %}
             <span class="block mt-0.5">SAC Code: 998311</span>
             <span class="text-emerald-400 block mt-0.5">● Sequential Escrow Gated</span>
           </div>

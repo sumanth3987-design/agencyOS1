@@ -1,3 +1,9 @@
+"""AgencyOS Customer & Client Portal Blueprint.
+
+Manages client workspace, project progression, digital SOW contracts,
+sequential 3-gate deliverable reviews (50/25/25), chat dispatch, automated escrow release, and GST-compliant invoicing.
+"""
+
 from datetime import datetime
 from decimal import Decimal
 import hashlib
@@ -564,7 +570,7 @@ def project_contract(project_id: int | str) -> Any:
             return redirect(url_for("customer.project_contract", project_id=project.id))
 
     return render_template(
-        "sign_contract.html" if os.path.exists("templates/sign_contract.html") else "contract.html",
+        "sign_contract.html",
         project=project,
         customer=customer,
         business=business,
@@ -612,6 +618,7 @@ def customer_approve_project(project_id: int | str) -> Any:
 
         specialist_id = project.assigned_professional_id or (assigned_app.professional_id if assigned_app else None)
         specialist_profile = ProfessionalProfile.query.filter_by(user_id=specialist_id).first() if specialist_id else None
+        specialist_user = db.session.get(User, specialist_id) if specialist_id else None
 
         currency = sanitize_currency(project.currency)
         gross = get_package_price(project.package, currency, PACKAGE_PRICES)
@@ -1082,7 +1089,7 @@ def customer_profile() -> Any:
 
 
 # =========================================================
-# START PROJECT
+# START PROJECT (DYNAMIC SCOPE INTAKE & DIRECT SOW GENERATION)
 # =========================================================
 
 @customer_bp.route("/start-project/<service_slug>", methods=["GET", "POST"])

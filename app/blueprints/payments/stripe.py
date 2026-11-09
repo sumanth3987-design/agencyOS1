@@ -273,6 +273,7 @@ def stripe_webhook() -> Any:
                     else:
                         invoice.status = "Paid"
 
+                    # Contract rule: Transition status to 'Paid'
                     project.status = "Paid"
 
                     ActivityLog.log_event(
@@ -299,6 +300,7 @@ def stripe_webhook() -> Any:
                         project.id,
                         session_obj.get("id"),
                     )
+                    return jsonify({"status": "success"}), 200
                 else:
                     StripeWebhookEvent.mark_processed(
                         event_id=event_id,
