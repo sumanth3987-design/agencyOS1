@@ -1,5 +1,3 @@
-"""Project workflow tests: application, assignment, submission, and approval."""
-
 import pytest
 from app.extensions import db
 from app.models import ProfessionalProfile, ProfessionalProjectApplication, Project
@@ -48,9 +46,13 @@ class TestApply:
     def test_apply_to_non_pending_project_blocked(
         self, app, client, login, factories, csrf_post
     ):
-        """Applying to a non-Pending Assignment project is blocked."""
+        """Applying to a project that is not in 'Pending Assignment' status is blocked."""
         customer_id = factories.user('customer', 'apply-nonpending@example.com')
+        # Create project in 'Assigned' status
         project_id = factories.project(customer_id, status='Assigned')
+        # Ensure it is paid (passing the payment security gate)
+        factories.payment(project_id, customer_id, status='Paid') 
+        
         prof_id = factories.user('professional', 'apply-nonpending-prof@example.com')
         factories.profile(prof_id, verification_status='Verified')
         login('apply-nonpending-prof@example.com', 'professional')
@@ -60,13 +62,17 @@ class TestApply:
             data={},
             follow_redirects=False,
         )
+        # Verify it was blocked (redirected)
         assert response.status_code == 302
 
         with app.app_context():
+            # Verify that NO application was created in the database
+            # We filter by project_id and professional_id. 
+            # If the count is 0, the test passes.
             count = ProfessionalProjectApplication.query.filter_by(
                 project_id=project_id, professional_id=prof_id
             ).count()
-            assert count == 0
+            assert count == 0, f"Expected 0 applications, but found {count}"
 
     def test_duplicate_apply_rejected(
         self, app, client, login, factories, csrf_post
@@ -74,6 +80,8 @@ class TestApply:
         """Duplicate application to same project is rejected."""
         customer_id = factories.user('customer', 'apply-dup@example.com')
         project_id = factories.project(customer_id, status='Pending Assignment')
+        factories.payment(project_id, customer_id, status='Paid')
+
         prof_id = factories.user('professional', 'apply-dup-prof@example.com')
         factories.profile(prof_id, verification_status='Verified')
         login('apply-dup-prof@example.com', 'professional')
@@ -104,6 +112,8 @@ class TestApply:
         """Professional without matching expertise cannot apply."""
         customer_id = factories.user('customer', 'apply-mismatch@example.com')
         project_id = factories.project(customer_id, status='Pending Assignment')
+        factories.payment(project_id, customer_id, status='Paid')
+
         prof_id = factories.user('professional', 'apply-mismatch-prof@example.com')
         factories.profile(
             prof_id, verification_status='Verified', expertise='Web Development'
@@ -129,6 +139,8 @@ class TestApply:
         """Unverified professional cannot apply."""
         customer_id = factories.user('customer', 'apply-unverified@example.com')
         project_id = factories.project(customer_id, status='Pending Assignment')
+        factories.payment(project_id, customer_id, status='Paid')
+
         prof_id = factories.user('professional', 'apply-unverified-prof@example.com')
         factories.profile(prof_id, verification_status='Pending')
         login('apply-unverified-prof@example.com', 'professional')
@@ -152,6 +164,8 @@ class TestApply:
         """Verified professional with matching expertise can apply."""
         customer_id = factories.user('customer', 'apply-ok@example.com')
         project_id = factories.project(customer_id, status='Pending Assignment')
+        factories.payment(project_id, customer_id, status='Paid')
+
         prof_id = factories.user('professional', 'apply-ok-prof@example.com')
         # Default profile expertise matches the default project service.
         factories.profile(prof_id, verification_status='Verified')

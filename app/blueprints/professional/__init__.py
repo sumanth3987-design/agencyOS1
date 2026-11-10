@@ -103,10 +103,11 @@ def professional_dashboard() -> Any:
             .all()
         )
 
-    # Open sprints ready for talent applications
+    # Open sprints ready for talent applications (Strictly requires a confirmed 'Paid' payment record)
+    paid_project_ids = db.session.query(Payment.project_id).filter(Payment.status == "Paid").subquery()
     open_projects = (
         Project.query.filter(
-            Project.status.in_(["Pending Assignment", "Payment Pending"]),
+            Project.id.in_(paid_project_ids),
             Project.assigned_professional_id.is_(None),
         )
         .order_by(Project.created_at.desc())
@@ -235,9 +236,10 @@ def professional_projects() -> Any:
 
     user_skills = set(profile.get_skills_list()) if profile else set()
 
+    paid_project_ids = db.session.query(Payment.project_id).filter(Payment.status == "Paid").subquery()
     open_projects = (
         Project.query.filter(
-            Project.status.in_(["Pending Assignment", "Payment Pending"]),
+            Project.id.in_(paid_project_ids),
             Project.assigned_professional_id.is_(None),
         )
         .order_by(Project.created_at.desc())
@@ -279,6 +281,13 @@ def professional_projects() -> Any:
 @professional_bp.route("/professional/projects/<int:project_id>/apply", methods=["POST"])
 @login_required
 def apply_for_project(project_id: int) -> Any:
+    # 1. IMMEDIATE STATUS GUARD
+    project = db.session.get(Project, project_id)
+    if not project or project.status != "Pending Assignment":
+        flash("You can only apply for projects that are pending assignment.", "warning")
+        return redirect(url_for("professional.professional_dashboard"))
+
+    # 2. THEN do the other checks (Verified, Expertise, etc.)
     user_role = getattr(current_user, "role", "").lower()
     if user_role != "professional":
         flash("Specialist access required.", "danger")
@@ -299,8 +308,10 @@ def apply_for_project(project_id: int) -> Any:
         flash("Project not found.", "warning")
         return redirect(url_for("professional.professional_dashboard"))
 
-    if project.status != "Pending Assignment":
-        flash("You can only apply for projects that are pending assignment.", "warning")
+    # Verify project has a confirmed paid record before allowing application
+    has_paid = Payment.query.filter_by(project_id=project.id, status="Paid").first() is not None
+    if not has_paid:
+        flash("You can only apply for projects where the initial payment has been completed.", "warning")
         return redirect(url_for("professional.professional_dashboard"))
 
     if profile and profile.expertise and profile.expertise.lower() != "general":
@@ -914,6 +925,7 @@ def professional_profile() -> Any:
     if request.method == "POST":
         try:
             profile.expertise = request.form.get("expertise", "").strip()
+            profile.email = request.form.get("email", "").strip()
             profile.experience = request.form.get("experience", "").strip()
             profile.about = request.form.get("about", "").strip()
             profile.phone = request.form.get("phone", "").strip()
