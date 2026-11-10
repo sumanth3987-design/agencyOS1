@@ -121,6 +121,18 @@ def test_stripe_subscription_invoice_payment_succeeded(client, app, monkeypatch)
         db.session.add(customer)
         db.session.commit()
 
+        # Create a matching project so the invoice foreign key constraint is satisfied in PostgreSQL
+        project = Project(
+            customer_id=customer.id,
+            service="Monthly Retainer",
+            package="Standard Retainer",
+            currency="USD",
+            requirements="Monthly retainer subscription.",
+            status="Active",
+        )
+        db.session.add(project)
+        db.session.commit()
+
     webhook_payload = {
         "id": "evt_test_sub_success_001",
         "type": "invoice.payment_succeeded",
