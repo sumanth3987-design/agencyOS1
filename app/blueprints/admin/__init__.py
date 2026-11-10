@@ -66,6 +66,7 @@ from app.utils.currency import (
     get_package_price,
     sanitize_currency,
 )
+from app.services.whatsapp import send_whatsapp_alert
 
 logger = logging.getLogger(__name__)
 admin_bp = Blueprint("admin", __name__)
@@ -594,6 +595,12 @@ def assign_professional(application_id: int) -> Any:
         specialist_user = getattr(app_record, "professional", None) or db.session.get(User, app_record.professional_id)
         specialist_name = specialist_user.name if specialist_user else "Specialist"
 
+        # --- WhatsApp Notification Integration ---
+        if specialist_user and specialist_user.phone:
+            msg = f"🚀 Sprint #{project.id} Assigned! Check your workspace: https://yourdomain.com/professional/project/{project.id}/workspace"
+            send_whatsapp_alert(specialist_user.phone, msg)
+        # ----------------------------------------
+
         ActivityLog.log_event(
             project_id=project.id,
             action="SPECIALIST_ASSIGNED",
@@ -756,61 +763,71 @@ def approve_project(project_id: int) -> Any:
             latest_delivery.status = "Approved"
             latest_delivery.reviewed_at = get_ist_now()
 
-        project.status = "Completed"
-        project.revision_comment = None
+        milestones = Milestone.query.filter_by(project_id=project.id).order_by(Milestone.id.asc()).all()
+        current_milestone = next((m for m in milestones if m.status in ("funded", "in_progress")), None)
+        if current_milestone:
+            current_milestone.status = "completed"
+
+        all_milestones_done = all(m.status == "completed" for m in milestones) if milestones else True
 
         assigned_app = ProfessionalProjectApplication.query.filter_by(
             project_id=project.id, status="Assigned"
         ).first()
 
-        if assigned_app and assigned_app.professional_id:
-            specialist_id = assigned_app.professional_id
-            specialist_profile = ProfessionalProfile.query.filter_by(user_id=specialist_id).first()
+        if all_milestones_done:
+            project.status = "Completed"
+            project.revision_comment = None
 
-            currency = sanitize_currency(project.currency)
-            gross = get_package_price(project.package, currency, PACKAGE_PRICES)
-            talent_share, _, _ = compute_financial_split(gross, currency)
-            
-            earned_amount = Decimal(str(assigned_app.proposed_rate)) if assigned_app.proposed_rate is not None else talent_share
+            if assigned_app and assigned_app.professional_id:
+                specialist_id = assigned_app.professional_id
+                specialist_profile = ProfessionalProfile.query.filter_by(user_id=specialist_id).first()
 
-            if specialist_profile:
-                curr_pend = Decimal(str(specialist_profile.pending_balance or 0))
-                curr_avail = Decimal(str(specialist_profile.available_balance or 0))
+                currency = sanitize_currency(project.currency)
+                gross = get_package_price(project.package, currency, PACKAGE_PRICES)
+                talent_share, _, _ = compute_financial_split(gross, currency)
+                
+                earned_amount = Decimal(str(assigned_app.proposed_rate)) if assigned_app.proposed_rate is not None else talent_share
 
-                specialist_profile.pending_balance = max(Decimal("0.00"), curr_pend - earned_amount)
-                specialist_profile.available_balance = curr_avail + earned_amount
+                if specialist_profile:
+                    curr_pend = Decimal(str(specialist_profile.pending_balance or 0))
+                    curr_avail = Decimal(str(specialist_profile.available_balance or 0))
 
-            tx = WalletTransaction()
-            tx.user_id = specialist_id
-            tx.amount = earned_amount
-            tx.currency = currency
-            tx.transaction_type = "ESCROW_RELEASED"
-            tx.reference_type = "PROJECT"
-            tx.reference_id = project.id
-            tx.description = f"Project #{project.id} deliverables approved. ₹{earned_amount} released to available balance."
-            tx.created_at = get_ist_now()
-            db.session.add(tx)
+                    specialist_profile.pending_balance = max(Decimal("0.00"), curr_pend - earned_amount)
+                    specialist_profile.available_balance = curr_avail + earned_amount
 
-            notif = Notification()
-            notif.user_id = specialist_id
-            notif.title = f"Milestone Approved! ₹{earned_amount} Unlocked 💰"
-            notif.message = (
-                f"Deliverables for Project #{project.id} have been approved. ₹{earned_amount} has been released "
-                "to your available balance."
-            )
-            notif.link = "/professional/dashboard"
-            notif.created_at = get_ist_now()
-            db.session.add(notif)
+                tx = WalletTransaction()
+                tx.user_id = specialist_id
+                tx.amount = earned_amount
+                tx.currency = currency
+                tx.transaction_type = "ESCROW_RELEASED"
+                tx.reference_type = "PROJECT"
+                tx.reference_id = project.id
+                tx.description = f"Project #{project.id} fully completed and approved. ₹{earned_amount} released to available balance."
+                tx.created_at = get_ist_now()
+                db.session.add(tx)
+
+                notif = Notification(
+                    user_id=specialist_id,
+                    title=f"Project Completed! ₹{earned_amount} Unlocked 💰",
+                    message=f"Final deliverables for Project #{project.id} approved. ₹{earned_amount} released to your available balance.",
+                    link="/professional/dashboard",
+                    created_at=get_ist_now()
+                )
+                db.session.add(notif)
+
+            flash("Final project deliverable approved. Total escrow funds unlocked for withdrawal.", "success")
+        else:
+            project.status = "In Progress"
+            flash("Milestone approved successfully. Funds remain securely locked in escrow until final project completion.", "info")
 
         ActivityLog.log_event(
             project_id=project.id,
             action="MILESTONE_APPROVED",
-            description="Agency approved the milestone deliverable.",
+            description=f"Agency approved a milestone deliverable. All milestones completed: {all_milestones_done}",
             user_id=current_user.id,
             category="success",
         )
         db.session.commit()
-        flash("Project deliverable approved. Funds unlocked and moved to specialist's available balance.", "success")
         
     except Exception as e:
         db.session.rollback()

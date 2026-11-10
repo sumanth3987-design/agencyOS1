@@ -43,6 +43,7 @@ from app.utils.stripe_config import (
     build_checkout_session_params,
     get_stripe_price_id,
 )
+from app.services.whatsapp import notify_payment_received
 
 logger = logging.getLogger(__name__)
 
@@ -224,6 +225,24 @@ def stripe_webhook() -> Any:
     if event_type == "checkout.session.completed":
         session_obj = event["data"]["object"]
         metadata = session_obj.get("metadata", {})
+        project_id = metadata.get("project_id") if metadata else None
+        
+        if project_id:
+            project = db.session.get(Project, int(project_id))
+            if project:
+                project.status = "Pending Assignment"
+                
+                # --- ADD WHATSAPP NOTIFICATION ---
+                customer = User.query.get(project.customer_id)
+                if customer:
+                    notify_payment_received(
+                        project_id=project.id,
+                        service_name=project.service,
+                        amount=session_obj.get("amount_total", 0) / 100,
+                        client_phone=customer.phone or os.getenv("DEFAULT_ADMIN_PHONE"),
+                        client_name=customer.name
+                    )
+                # -----------------------------------
         project_id_str = metadata.get("project_id")
         amount_total = session_obj.get("amount_total", 0)
         currency = session_obj.get("currency", "").upper()
@@ -273,13 +292,13 @@ def stripe_webhook() -> Any:
                     else:
                         invoice.status = "Paid"
 
-                    # Contract rule: Transition status to 'Paid'
-                    project.status = "Paid"
+                    # 50% Initial deposit paid -> Transition status to 'Pending Assignment' for professionals
+                    project.status = "Pending Assignment"
 
                     ActivityLog.log_event(
                         project.id,
                         "STRIPE_PAYMENT_RECEIVED",
-                        f"Stripe payment of {format_currency(payment.amount, currency)} received via Checkout session {session_obj.get('id')}.",
+                        f"Stripe initial 50% deposit of {format_currency(payment.amount, currency)} received via Checkout session {session_obj.get('id')}.",
                         project.customer_id,
                         "success",
                     )

@@ -12,16 +12,19 @@ WHATSAPP_API_URL = "https://graph.facebook.com/v19.0"
 
 
 def _format_phone(phone: str | None) -> str | None:
-    """Normalize phone numbers to international E.164 format (e.g. 919876543210)."""
+    """Normalize phone numbers to international E.164 format."""
     if not phone:
         return None
+    # Strip non-digits
     cleaned = "".join(filter(str.isdigit, str(phone)))
+    
+    # If it's your 10-digit number, prepend 91
     if len(cleaned) == 10:
         return f"91{cleaned}"
+    # If it already has 91, return it
     if len(cleaned) == 12 and cleaned.startswith("91"):
         return cleaned
     return cleaned
-
 
 def send_whatsapp_alert(to_phone: str | None, message_text: str) -> bool:
     """Dispatch WhatsApp message via Meta Cloud API or log safely if in development."""

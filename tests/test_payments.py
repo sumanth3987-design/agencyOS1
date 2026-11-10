@@ -78,11 +78,14 @@ class TestCreateOrder:
         with app.app_context():
             assert Payment.query.count() == 0
 
-    def test_already_paid_project_rejected(self, app, client, login, factories, csrf_token):
-        """A project that already has a Paid payment cannot create a new order."""
+    def test_fully_paid_project_rejected(self, app, client, login, factories, csrf_token):
+        """A project that already has 3 Paid payments cannot create a new order."""
         customer_id = factories.user("customer", "paid@example.com")
         project_id = factories.project(customer_id)
-        factories.payment(project_id, customer_id, status="Paid")
+        # Mock 3 completed milestone payments
+        factories.payment(project_id, customer_id, razorpay_order_id="o1", status="Paid")
+        factories.payment(project_id, customer_id, razorpay_order_id="o2", status="Paid")
+        factories.payment(project_id, customer_id, razorpay_order_id="o3", status="Paid")
         login("paid@example.com", "customer")
 
         response = client.post(
@@ -92,50 +95,55 @@ class TestCreateOrder:
         assert response.status_code == 400
         data = json.loads(response.data)
         assert data["success"] is False
+        assert data["message"] == "All milestone payments for this project have already been completed."
 
-    def test_non_payable_assigned_project_rejected(
+    def test_payable_assigned_project_succeeds(
         self, app, client, login, factories, csrf_token
     ):
-        """A project already assigned is not payable."""
+        """A project already assigned is payable for the next milestone."""
         customer_id = factories.user("customer", "assigned@example.com")
         project_id = factories.project(customer_id, status="Assigned")
         login("assigned@example.com", "customer")
 
+        fake_order = _make_razorpay_order(order_id="order_assigned")
+
         with patch(
             "app.blueprints.payments.razorpay_client.order.create",
-        ) as mock_create:
+            return_value=fake_order,
+        ):
             response = client.post(
                 f"/payment/create-order/{project_id}",
                 data={"csrf_token": csrf_token}, follow_redirects=False,
             )
 
-        assert response.status_code == 400
+        assert response.status_code == 200
         data = json.loads(response.data)
-        assert data["success"] is False
-        assert data["message"] == "Project is not in a payable state."
-        mock_create.assert_not_called()
+        assert data["success"] is True
+        assert data["order_id"] == "order_assigned"
 
-    def test_non_payable_in_progress_project_rejected(
+    def test_payable_in_progress_project_succeeds(
         self, app, client, login, factories, csrf_token
     ):
-        """A project in progress is not payable."""
+        """A project in progress is payable for the next milestone."""
         customer_id = factories.user("customer", "inprogress@example.com")
         project_id = factories.project(customer_id, status="In Progress")
         login("inprogress@example.com", "customer")
 
+        fake_order = _make_razorpay_order(order_id="order_inprogress")
+
         with patch(
             "app.blueprints.payments.razorpay_client.order.create",
-        ) as mock_create:
+            return_value=fake_order,
+        ):
             response = client.post(
                 f"/payment/create-order/{project_id}",
                 data={"csrf_token": csrf_token}, follow_redirects=False,
             )
 
-        assert response.status_code == 400
+        assert response.status_code == 200
         data = json.loads(response.data)
-        assert data["success"] is False
-        assert data["message"] == "Project is not in a payable state."
-        mock_create.assert_not_called()
+        assert data["success"] is True
+        assert data["order_id"] == "order_inprogress"
 
     def test_non_payable_completed_project_rejected(
         self, app, client, login, factories, csrf_token
@@ -156,7 +164,7 @@ class TestCreateOrder:
         assert response.status_code == 400
         data = json.loads(response.data)
         assert data["success"] is False
-        assert data["message"] == "Project is not in a payable state."
+        assert data["message"] == "Project is completed and no longer payable."
         mock_create.assert_not_called()
 
     def test_payable_pending_assignment_creates_order(

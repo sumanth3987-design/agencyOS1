@@ -171,10 +171,11 @@ def _next_month_start_at() -> datetime:
 
 
 def _ensure_starter_retainer_plan() -> RazorpaySubscriptionPlan:
-    plan = (
+    plan = cast(
+        RazorpaySubscriptionPlan | None,
         RazorpaySubscriptionPlan.query.filter_by(code=STARTER_RETAINER_CODE)
         .with_for_update()
-        .first()
+        .first(),
     )
     if plan is None:
         plan = RazorpaySubscriptionPlan()
@@ -187,13 +188,19 @@ def _ensure_starter_retainer_plan() -> RazorpaySubscriptionPlan:
             db.session.flush()
         except IntegrityError:
             db.session.rollback()
-            plan = (
+            plan = cast(
+                RazorpaySubscriptionPlan | None,
                 RazorpaySubscriptionPlan.query.filter_by(code=STARTER_RETAINER_CODE)
                 .with_for_update()
-                .first()
+                .first(),
             )
             if plan is None:
                 raise
+    
+    # Ensure plan is not None before proceeding
+    if plan is None:
+        raise RuntimeError("Failed to retrieve or create Starter Retainer plan.")
+
     if plan.amount != STARTER_RETAINER_AMOUNT or plan.currency != "INR":
         raise ValueError("Stored Starter Retainer plan terms do not match.")
 
@@ -221,7 +228,6 @@ def _ensure_starter_retainer_plan() -> RazorpaySubscriptionPlan:
     plan.razorpay_plan_id = gateway_plan_id
     db.session.commit()
     return plan
-
 
 def _subscription_checkout_response(subscription: RazorpaySubscription):
     settings = db.session.get(AgencySetting, 1)
@@ -447,13 +453,15 @@ def create_payment_order(project_id: int) -> Any:
             "message": "Starter Retainer must be billed through recurring mandate checkout."
         }), 400
 
-    # Project Payable State Guards
-    has_paid = Payment.query.filter_by(project_id=project.id, status="Paid", addon_id=None).first()
-    if has_paid or project.status == "Paid":
-        return jsonify({"success": False, "message": "Project has already been paid."}), 400
+    # Project Payable State Guards (Multi-Milestone 50/25/25 Support)
+    paid_payments = Payment.query.filter_by(project_id=project.id, status="Paid", addon_id=None).all()
+    paid_count = len(paid_payments)
 
-    if project.status in ("Assigned", "In Progress", "Completed"):
-        return jsonify({"success": False, "message": "Project is not in a payable state."}), 400
+    if paid_count >= 3 or project.status == "Paid":
+        return jsonify({"success": False, "message": "All milestone payments for this project have already been completed."}), 400
+
+    if project.status == "Completed":
+        return jsonify({"success": False, "message": "Project is completed and no longer payable."}), 400
 
     # Service Unavailable Check (503 if client is None and not running simulated key)
     if razorpay_client is None:

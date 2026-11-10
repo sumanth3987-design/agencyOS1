@@ -124,7 +124,7 @@
             </td>
 
             <td class="p-4 text-right">
-              {% if app.status == 'Applied' and project and project.status in ['Pending Assignment', 'Payment Pending', 'Draft', 'Paid'] %}
+              {% if app.status == 'Applied' and project and project.status == 'Pending Assignment' %}
                 <form method="POST" action="{{ url_for('admin.assign_professional', application_id=app.id) }}" class="inline">
                   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                   <button type="submit" 

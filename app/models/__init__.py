@@ -100,6 +100,7 @@ class User(db.Model, UserMixin):
     password: Any = db.Column(db.String(255), nullable=False)
     role: Any = db.Column(db.String(30), default="customer", nullable=False)
     is_active: Any = db.Column(db.Boolean, default=True, nullable=False)
+    phone: Any = db.Column(db.String(20), nullable=True)
 
     is_verified: Any = db.Column(db.Boolean, default=False, nullable=False)
     verification_status: Any = db.Column(db.String(30), default="Pending", nullable=False)

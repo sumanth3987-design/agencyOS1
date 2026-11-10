@@ -1,8 +1,3 @@
-"""Stripe integration tests: checkout session creation and webhook handling.
-
-Stripe API calls are mocked; no real payments are made.
-"""
-
 import json
 from decimal import Decimal
 from unittest.mock import patch, MagicMock
@@ -348,7 +343,7 @@ class TestStripeWebhook:
         assert data["status"] == "ignored"
         assert data["reason"] == "duplicate_event"
 
-    def test_webhook_marks_project_paid(
+    def test_webhook_marks_project_pending_assignment(
         self, app, client, factories
     ):
         customer_id = factories.user("customer", "webhook-paid@example.com")
@@ -386,7 +381,8 @@ class TestStripeWebhook:
         with app.app_context():
             from app.models import Project as P
             project = P.query.get(project_id)
-            assert project.status == "Paid"
+            # Confirms 50% deposit moves the project to pending assignment
+            assert project.status == "Pending Assignment"
 
             payment = Payment.query.filter_by(
                 stripe_session_id="cs_test_123"
@@ -425,6 +421,6 @@ class TestStripeWebhook:
         with app.app_context():
             from app.models import Project as P
             project = P.query.get(project_id)
-            assert project.status == "Assigned"
+            assert project.status == "Pending Assignment"
 
-            assert StripeWebhookEvent.is_processed("evt_nonpay")
+            assert StripeWebhookEvent.is_processed("evt_nonpay") is True

@@ -325,12 +325,22 @@ def test_specialist_dashboard_groups_allocations_by_currency(
         currency="USD",
         status="Completed",
     )
-    factories.project(
+    gbp_project_id = factories.project(
         customer_id,
         package="SEO Starter",
         currency="GBP",
         status="Pending Assignment",
     )
+    
+    # Needs a paid record to be visible on the new strictly-secured marketplace
+    factories.payment(
+        gbp_project_id,
+        customer_id,
+        amount=Decimal("390.00"),
+        currency="GBP",
+        status="Paid"
+    )
+    
     factories.application(project_id, professional_id, status="Assigned")
     login("currency-specialist@example.com", "professional")
 
