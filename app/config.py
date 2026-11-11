@@ -191,6 +191,13 @@ class Config:
     if SQLALCHEMY_DATABASE_URI.startswith("postgres://"):
         SQLALCHEMY_DATABASE_URI = SQLALCHEMY_DATABASE_URI.replace("postgres://", "postgresql://", 1)
     SQLALCHEMY_TRACK_MODIFICATIONS = False
+    
+    # Production Database Connection Pooling & Reconnect Resilience
+    SQLALCHEMY_ENGINE_OPTIONS = {
+        "pool_pre_ping": True,
+        "pool_recycle": 1800,
+        "connect_args": {"connect_timeout": 10}, 
+    }
 
     WIRE_BANK_NAME = os.getenv("WIRE_BANK_NAME", "HDFC Bank / Global Business Account")
     WIRE_ACCOUNT_NAME = os.getenv("WIRE_ACCOUNT_NAME", "Agency OS Technologies")

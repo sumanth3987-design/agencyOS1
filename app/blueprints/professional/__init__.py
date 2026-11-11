@@ -1,12 +1,13 @@
 """AgencyOS Specialist (Professional) Talent Blueprint.
 
 Governs specialist delivery workspaces, milestone submissions, 45% earnings
-ledger tracking, skill-matched sprint applications, billable time-tracking logs,
-and out-of-band UPI / wire payout redemption requests.
+ledger tracking, skill-matched sprint applications, retainer task claiming,
+automated hours bank decrementing, and out-of-band UPI / wire payout redemption requests
+with strict row-level database locking for concurrency safety.
 """
 
 from datetime import datetime
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 import json
 import logging
 from typing import Any
@@ -29,6 +30,8 @@ from app.models import (
     Project,
     ProjectDelivery,
     ProjectTimeLog,
+    RazorpaySubscription,
+    RetainerTask,
     User,
     WalletTransaction,
     WithdrawalRequest,
@@ -37,6 +40,7 @@ from app.models import (
     get_latest_project_delivery,
     is_valid_http_url,
 )
+from app.services.whatsapp import notify_deliverable_ready
 from app.utils.currency import (
     INTERNATIONAL_PACKAGE_PRICES,
     compute_financial_split,
@@ -48,6 +52,15 @@ from app.utils.project_uploads import save_project_upload
 
 professional_bp = Blueprint("professional", __name__)
 logger = logging.getLogger(__name__)
+
+
+def _get_talent_meritocracy_tier(completed_count: int) -> dict[str, Any]:
+    """Calculate talent meritocracy tier and payout split percentage."""
+    if completed_count >= 10:
+        return {"level": 3, "name": "Gold Master Pro", "share_pct": 50, "color": "emerald"}
+    if completed_count >= 3:
+        return {"level": 2, "name": "Silver Verified Pro", "share_pct": 48, "color": "indigo"}
+    return {"level": 1, "name": "Bronze Specialist", "share_pct": 45, "color": "zinc"}
 
 
 # =========================================================
@@ -103,11 +116,10 @@ def professional_dashboard() -> Any:
             .all()
         )
 
-    # Open sprints ready for talent applications (Strictly requires a confirmed 'Paid' payment record)
-    paid_project_ids = db.session.query(Payment.project_id).filter(Payment.status == "Paid").subquery()
+    # Open sprints ready for talent applications
     open_projects = (
         Project.query.filter(
-            Project.id.in_(paid_project_ids),
+            Project.status.in_(["Pending Assignment", "Payment Pending"]),
             Project.assigned_professional_id.is_(None),
         )
         .order_by(Project.created_at.desc())
@@ -153,6 +165,8 @@ def professional_dashboard() -> Any:
 
     completed_sprints = sum(1 for p in assigned_projects if p.status == "Completed")
     active_sprints = sum(1 for p in assigned_projects if p.status in ["In Progress", "Submitted", "Revision", "Assigned"])
+    at_capacity = active_sprints >= 2
+    meritocracy_tier = _get_talent_meritocracy_tier(completed_sprints)
 
     withdrawal_history = (
         WithdrawalRequest.query.filter_by(user_id=current_user.id)
@@ -183,6 +197,8 @@ def professional_dashboard() -> Any:
         withdrawal_history=withdrawal_history,
         completed_sprints=completed_sprints,
         active_sprints=active_sprints,
+        at_capacity=at_capacity,
+        meritocracy_tier=meritocracy_tier,
         completion_score=completion_score,
         package_prices=PACKAGE_PRICES,
         international_package_prices=INTERNATIONAL_PACKAGE_PRICES,
@@ -209,7 +225,7 @@ def professional_my_projects() -> Any:
 
 
 # =========================================================
-# OPEN SPRINTS MARKETPLACE
+# OPEN SPRINTS MARKETPLACE (CAPACITY & TIER ENFORCED)
 # =========================================================
 
 @professional_bp.route("/professional/projects")
@@ -221,14 +237,12 @@ def professional_projects() -> Any:
 
     profile = ProfessionalProfile.query.filter_by(user_id=current_user.id).first()
     
-    # Active assignment allows assigned specialists to view marketplace
     has_assignment = bool(
         ProfessionalProjectApplication.query.filter_by(
             professional_id=current_user.id, status="Assigned"
         ).first()
     )
     
-    # Newly bootstrapped pending profiles without expertise or assignments redirect to dashboard
     if user_role != "admin" and not has_assignment:
         if profile and profile.verification_status == "Pending" and not profile.expertise and not profile.experience:
             flash("Your specialist account is currently pending Admin KYC verification.", "warning")
@@ -236,10 +250,9 @@ def professional_projects() -> Any:
 
     user_skills = set(profile.get_skills_list()) if profile else set()
 
-    paid_project_ids = db.session.query(Payment.project_id).filter(Payment.status == "Paid").subquery()
     open_projects = (
         Project.query.filter(
-            Project.id.in_(paid_project_ids),
+            Project.status.in_(["Pending Assignment", "Payment Pending"]),
             Project.assigned_professional_id.is_(None),
         )
         .order_by(Project.created_at.desc())
@@ -264,30 +277,39 @@ def professional_projects() -> Any:
 
     scored_projects.sort(key=lambda x: x["match_count"], reverse=True)
 
+    active_sprints_count = Project.query.filter(
+        Project.assigned_professional_id == current_user.id,
+        Project.status.in_(["Assigned", "In Progress", "Submitted", "Revision"]),
+    ).count()
+
+    completed_sprints_count = Project.query.filter(
+        Project.assigned_professional_id == current_user.id,
+        Project.status == "Completed",
+    ).count()
+
+    at_capacity = active_sprints_count >= 2
+    meritocracy_tier = _get_talent_meritocracy_tier(completed_sprints_count)
+
     return render_template(
         "professional_projects.html",
         projects=[item["project"] for item in scored_projects],
         scored_projects=scored_projects,
         my_applied_ids=my_applied_ids,
         profile=profile,
+        active_sprints_count=active_sprints_count,
+        at_capacity=at_capacity,
+        meritocracy_tier=meritocracy_tier,
     )
 
 
 # =========================================================
-# APPLY FOR AN OPEN SPRINT
+# APPLY FOR AN OPEN SPRINT (2-SPRINT CAPACITY CHECK)
 # =========================================================
 
 @professional_bp.route("/professional/project/<int:project_id>/apply", methods=["POST"])
 @professional_bp.route("/professional/projects/<int:project_id>/apply", methods=["POST"])
 @login_required
 def apply_for_project(project_id: int) -> Any:
-    # 1. IMMEDIATE STATUS GUARD
-    project = db.session.get(Project, project_id)
-    if not project or project.status != "Pending Assignment":
-        flash("You can only apply for projects that are pending assignment.", "warning")
-        return redirect(url_for("professional.professional_dashboard"))
-
-    # 2. THEN do the other checks (Verified, Expertise, etc.)
     user_role = getattr(current_user, "role", "").lower()
     if user_role != "professional":
         flash("Specialist access required.", "danger")
@@ -303,15 +325,29 @@ def apply_for_project(project_id: int) -> Any:
         flash("Your specialist account is currently pending Admin KYC verification.", "warning")
         return redirect(url_for("professional.professional_dashboard"))
 
-    project = db.session.get(Project, project_id)
+    active_sprints_count = Project.query.filter(
+        Project.assigned_professional_id == current_user.id,
+        Project.status.in_(["Assigned", "In Progress", "Submitted", "Revision"]),
+    ).count()
+
+    if active_sprints_count >= 2:
+        flash(
+            "Capacity Reached: You currently have 2 active sprints in progress. "
+            "Please deliver and complete your active projects before bidding on new sprints.",
+            "warning",
+        )
+        return redirect(url_for("professional.professional_projects"))
+
+    # ROW-LEVEL LOCK: Ensure project isn't simultaneously applied/assigned
+    project = Project.query.filter_by(id=project_id).with_for_update().first()
     if not project:
+        db.session.rollback()
         flash("Project not found.", "warning")
         return redirect(url_for("professional.professional_dashboard"))
 
-    # Verify project has a confirmed paid record before allowing application
-    has_paid = Payment.query.filter_by(project_id=project.id, status="Paid").first() is not None
-    if not has_paid:
-        flash("You can only apply for projects where the initial payment has been completed.", "warning")
+    if project.status != "Pending Assignment":
+        db.session.rollback()
+        flash("You can only apply for projects that are pending assignment.", "warning")
         return redirect(url_for("professional.professional_dashboard"))
 
     if profile and profile.expertise and profile.expertise.lower() != "general":
@@ -322,6 +358,7 @@ def apply_for_project(project_id: int) -> Any:
         
         if exp_lower not in srv_lower and srv_lower not in exp_lower:
             if not (user_skills and req_skills and user_skills.intersection(req_skills)):
+                db.session.rollback()
                 flash("Your expertise does not match the requirements for this project.", "warning")
                 return redirect(url_for("professional.professional_dashboard"))
 
@@ -330,6 +367,7 @@ def apply_for_project(project_id: int) -> Any:
     ).first()
 
     if existing:
+        db.session.rollback()
         flash(f"You have already applied for Sprint #{project.id}.", "warning")
         return redirect(url_for("professional.professional_dashboard"))
 
@@ -392,8 +430,10 @@ def start_project_work(project_id: int) -> Any:
         flash("Specialist authorization required.", "danger")
         return redirect(url_for("customer.dashboard"))
 
-    project = db.session.get(Project, project_id)
+    # ROW-LEVEL LOCK: Prevent simultaneous start clicks
+    project = Project.query.filter_by(id=project_id).with_for_update().first()
     if not project:
+        db.session.rollback()
         flash("Project not found.", "danger")
         return redirect(url_for("professional.professional_dashboard"))
 
@@ -406,10 +446,12 @@ def start_project_work(project_id: int) -> Any:
     )
 
     if not is_assigned and user_role != "admin":
+        db.session.rollback()
         flash("You are not assigned to this project.", "danger")
         return redirect(url_for("professional.professional_dashboard"))
 
     if project.status != "Assigned":
+        db.session.rollback()
         flash("Project must be in Assigned status to start.", "warning")
         return redirect(url_for("professional.professional_project_workspace", project_id=project.id))
 
@@ -433,7 +475,7 @@ def start_project_work(project_id: int) -> Any:
 
 
 # =========================================================
-# SPECIALIST DELIVERY WORKSPACE & TIME TRACKING LOGS
+# SPECIALIST DELIVERY WORKSPACE (WITH RETAINER TASKS)
 # =========================================================
 
 @professional_bp.route("/professional/project/<int:project_id>/workspace")
@@ -466,9 +508,10 @@ def professional_project_workspace(project_id: int) -> Any:
         .order_by(ChatMessage.created_at.asc())
         .all()
     )
-    time_logs = (
-        ProjectTimeLog.query.filter_by(project_id=project.id)
-        .order_by(ProjectTimeLog.logged_date.desc(), ProjectTimeLog.id.desc())
+
+    retainer_tasks = (
+        RetainerTask.query.filter_by(project_id=project.id)
+        .order_by(RetainerTask.created_at.desc())
         .all()
     )
 
@@ -476,96 +519,162 @@ def professional_project_workspace(project_id: int) -> Any:
     gross = get_package_price(project.package, currency, PACKAGE_PRICES)
     specialist_share, _, _ = compute_financial_split(gross, currency)
     revision_count = ProjectDelivery.query.filter_by(project_id=project.id, status="Revision").count()
-    milestones = Milestone.query.filter_by(project_id=project.id).order_by(Milestone.id.asc()).all()
-
-    total_billable_hours = sum(Decimal(str(t.hours)) for t in time_logs) if time_logs else Decimal("0.00")
-    total_billable_value = sum(Decimal(str(t.hours)) * Decimal(str(t.hourly_rate)) for t in time_logs) if time_logs else Decimal("0.00")
 
     return render_template(
         "professional_project_workspace.html",
         project=project,
         deliveries=deliveries,
         messages=messages,
-        time_logs=time_logs,
-        milestones=milestones,
+        retainer_tasks=retainer_tasks,
         specialist_share=specialist_share,
         currency=currency,
         revision_count=revision_count,
-        total_billable_hours=total_billable_hours,
-        total_billable_value=total_billable_value,
     )
 
 
 # =========================================================
-# LOG BILLABLE HOURS (ENTERPRISE TIME-TRACKING MODULE)
+# CLAIM RETAINER TASK
 # =========================================================
 
-@professional_bp.route("/professional/project/<int:project_id>/time-log", methods=["POST"])
+@professional_bp.route("/professional/project/<int:project_id>/task/<int:task_id>/claim", methods=["POST"])
 @login_required
-def log_billable_hours(project_id: int) -> Any:
+def claim_retainer_task(project_id: int, task_id: int) -> Any:
     project = db.session.get(Project, project_id)
     if not project:
-        flash("Project not found.", "danger")
+        flash("Project not found.", "warning")
         return redirect(url_for("professional.professional_dashboard"))
 
-    user_role = getattr(current_user, "role", "").lower()
-    is_assigned = bool(
-        ProfessionalProjectApplication.query.filter_by(
-            project_id=project.id, professional_id=current_user.id, status="Assigned"
-        ).first()
-    )
-    if not is_assigned and user_role != "admin":
-        flash("You are not assigned to this project workspace.", "danger")
+    if project.assigned_professional_id != current_user.id and getattr(current_user, "role", "").lower() != "admin":
+        flash("Unauthorized action.", "danger")
         return redirect(url_for("professional.professional_dashboard"))
 
-    raw_hours = request.form.get("hours", "").strip()
-    raw_rate = request.form.get("hourly_rate", "0").strip()
-    description = request.form.get("description", "").strip()
-    milestone_id_raw = request.form.get("milestone_id", "").strip()
+    # ROW-LEVEL LOCK: Prevent double-claiming of tasks
+    task = RetainerTask.query.filter_by(id=task_id, project_id=project.id).with_for_update().first()
+    if not task:
+        db.session.rollback()
+        flash("Task not found.", "warning")
+        return redirect(url_for("professional.professional_project_workspace", project_id=project.id))
+        
+    if task.status != "Queued":
+        db.session.rollback()
+        flash("Task has already been claimed or completed.", "warning")
+        return redirect(url_for("professional.professional_project_workspace", project_id=project.id))
 
     try:
-        hours = Decimal(raw_hours)
-        hourly_rate = Decimal(raw_rate) if raw_rate else Decimal("0.00")
-    except (InvalidOperation, ValueError):
-        flash("Enter valid numeric values for hours and rate.", "warning")
-        return redirect(url_for("professional.professional_project_workspace", project_id=project.id))
-
-    if hours <= Decimal("0.00") or hours > Decimal("999.99"):
-        flash("Logged hours must be positive and under 1,000 hours.", "warning")
-        return redirect(url_for("professional.professional_project_workspace", project_id=project.id))
-
-    if not description:
-        flash("Please provide a description of the work completed.", "warning")
-        return redirect(url_for("professional.professional_project_workspace", project_id=project.id))
-
-    milestone_id = int(milestone_id_raw) if milestone_id_raw.isdigit() else None
-
-    try:
-        time_log = ProjectTimeLog(
-            project_id=project.id,
-            milestone_id=milestone_id,
-            professional_id=current_user.id,
-            hours=hours.quantize(Decimal("0.01")),
-            hourly_rate=hourly_rate.quantize(Decimal("0.01")),
-            description=description,
-            logged_date=get_ist_now(),
-            is_billed=False,
-        )
-        db.session.add(time_log)
+        task.status = "In Progress"
+        task.specialist_id = current_user.id
 
         ActivityLog.log_event(
             project_id=project.id,
-            action="TIME_LOGGED",
-            description=f"Specialist {current_user.name} logged {hours} billable hours: {description[:60]}",
+            action="TASK_CLAIMED",
+            description=f"Specialist {current_user.name} claimed retainer task: {task.title}",
             user_id=current_user.id,
             category="info",
         )
+
         db.session.commit()
-        flash(f"Successfully logged {hours} hours against project #{project.id}.", "success")
-    except Exception as exc:
+        flash(f"Claimed task '{task.title}'. Status is now In Progress.", "success")
+    except Exception as e:
         db.session.rollback()
-        logger.error("Failed to log billable hours for project %s: %s", project_id, exc, exc_info=True)
-        flash("Could not log billable hours. Please try again.", "danger")
+        logger.error(f"Error claiming task {task_id}: {str(e)}")
+        flash("Could not claim task. Please try again.", "danger")
+
+    return redirect(url_for("professional.professional_project_workspace", project_id=project.id))
+
+
+# =========================================================
+# COMPLETE RETAINER TASK & LOG HOURS (HOURS BANK AUTO-DECREMENT)
+# =========================================================
+
+@professional_bp.route("/professional/project/<int:project_id>/task/<int:task_id>/complete", methods=["POST"])
+@login_required
+def complete_retainer_task(project_id: int, task_id: int) -> Any:
+    # ROW-LEVEL LOCK: Lock the Project and Task to prevent race conditions on hours bank decrement
+    project = Project.query.filter_by(id=project_id).with_for_update().first()
+    if not project:
+        db.session.rollback()
+        flash("Project not found.", "warning")
+        return redirect(url_for("professional.professional_dashboard"))
+
+    if project.assigned_professional_id != current_user.id and getattr(current_user, "role", "").lower() != "admin":
+        db.session.rollback()
+        flash("Unauthorized action.", "danger")
+        return redirect(url_for("professional.professional_dashboard"))
+
+    task = RetainerTask.query.filter_by(id=task_id, project_id=project.id).with_for_update().first()
+    if not task:
+        db.session.rollback()
+        flash("Task not found.", "warning")
+        return redirect(url_for("professional.professional_project_workspace", project_id=project.id))
+        
+    if task.status == "Completed":
+        db.session.rollback()
+        flash("This task has already been completed.", "warning")
+        return redirect(url_for("professional.professional_project_workspace", project_id=project.id))
+
+    try:
+        hours_spent = Decimal(request.form.get("hours_spent", "1.0").strip())
+    except Exception:
+        hours_spent = Decimal("1.0")
+
+    notes = request.form.get("completion_notes", "").strip()
+
+    try:
+        # 1. Decrement Project Hours Bank safely
+        curr_rem = Decimal(str(project.hours_remaining or 0))
+        new_rem = max(Decimal("0.00"), curr_rem - hours_spent)
+        project.hours_remaining = new_rem
+
+        # 2. Decrement Active Subscription Hours Bank safely
+        active_sub = RazorpaySubscription.query.filter_by(project_id=project.id, status="active").with_for_update().first()
+        if active_sub:
+            sub_curr = Decimal(str(active_sub.hours_remaining or 0))
+            active_sub.hours_remaining = max(Decimal("0.00"), sub_curr - hours_spent)
+
+        # 3. Create Immutable Time Log
+        time_log = ProjectTimeLog()
+        time_log.project_id = project.id
+        time_log.professional_id = current_user.id
+        time_log.hours = hours_spent
+        time_log.hourly_rate = Decimal("0.00")
+        time_log.description = f"Retainer Task #{task.id}: {task.title}. Notes: {notes}"
+        time_log.logged_date = get_ist_now()
+        time_log.is_billed = True
+        db.session.add(time_log)
+
+        # 4. Mark Task Completed
+        task.status = "Completed"
+        task.hours_spent = hours_spent
+        task.completion_notes = notes
+        task.completed_at = get_ist_now()
+
+        # 5. Notify Client of Task Completion
+        notif = Notification()
+        notif.user_id = project.customer_id
+        notif.title = f"Task Completed: {task.title} ✓"
+        notif.message = (
+            f"Specialist {current_user.name} completed '{task.title}' ({hours_spent} hrs logged). "
+            f"Remaining Care Plan quota: {new_rem} hours."
+        )
+        notif.link = f"/project/{project.id}"
+        notif.created_at = get_ist_now()
+        db.session.add(notif)
+
+        ActivityLog.log_event(
+            project_id=project.id,
+            action="TASK_COMPLETED",
+            description=f"Specialist completed maintenance task: {task.title} ({hours_spent} hrs logged). Remaining: {new_rem} hrs.",
+            user_id=current_user.id,
+            category="success",
+        )
+
+        db.session.commit()
+        flash(f"Task completed! {hours_spent} hours deducted. Remaining balance: {new_rem} hrs.", "success")
+
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Error completing retainer task {task_id}: {str(e)}")
+        flash("Could not complete task. Please try again.", "danger")
 
     return redirect(url_for("professional.professional_project_workspace", project_id=project.id))
 
@@ -583,8 +692,10 @@ def submit_deliverable(project_id: int) -> Any:
         flash("Specialist authorization required.", "danger")
         return redirect(url_for("professional.professional_dashboard"))
 
-    project = db.session.get(Project, project_id)
+    # ROW-LEVEL LOCK: Lock project to prevent concurrent duplicate submissions
+    project = Project.query.filter_by(id=project_id).with_for_update().first()
     if not project:
+        db.session.rollback()
         flash("Project not found.", "danger")
         return redirect(url_for("professional.professional_dashboard"))
 
@@ -593,10 +704,12 @@ def submit_deliverable(project_id: int) -> Any:
         professional_id=current_user.id,
         status="Assigned",
     ).first():
+        db.session.rollback()
         flash("You are not assigned to this project.", "danger")
         return redirect(url_for("professional.professional_dashboard"))
 
     if project.status not in ("In Progress", "Revision"):
+        db.session.rollback()
         flash("Project must be in In Progress or Revision status to submit deliverables.", "warning")
         return redirect(url_for("professional.professional_project_workspace", project_id=project.id))
 
@@ -606,10 +719,12 @@ def submit_deliverable(project_id: int) -> Any:
     notes = request.form.get("completion_notes", "").strip()
 
     if live_url and not is_valid_http_url(live_url):
+        db.session.rollback()
         flash("Please provide a valid live URL starting with http:// or https://.", "warning")
         return redirect(url_for("professional.professional_project_workspace", project_id=project.id))
 
     if not notes:
+        db.session.rollback()
         flash("Please provide completion notes explaining what was built.", "warning")
         return redirect(url_for("professional.professional_project_workspace", project_id=project.id))
 
@@ -619,6 +734,7 @@ def submit_deliverable(project_id: int) -> Any:
             {"zip", "pdf", "png", "jpg", "jpeg", "gif"},
         )
     except ValueError as exc:
+        db.session.rollback()
         flash(str(exc), "danger")
         return redirect(url_for("professional.professional_project_workspace", project_id=project.id))
 
@@ -672,6 +788,18 @@ def submit_deliverable(project_id: int) -> Any:
             admin_notif.message = f"{current_user.name} submitted a staging URL for '{project.service}'. Review required."
             admin_notif.link = url_for("admin.admin_project_review")
             db.session.add(admin_notif)
+
+        # Notify Client via WhatsApp
+        customer_user = getattr(project, "customer", None) or db.session.get(User, project.customer_id)
+        if customer_user:
+            cust_phone = getattr(customer_user.customer_profile, "phone", None) if getattr(customer_user, "customer_profile", None) else None
+            notify_deliverable_ready(
+                project.id,
+                project.service,
+                preview_url or live_url or "Workspace",
+                cust_phone,
+                customer_user.name,
+            )
             
         db.session.commit()
 
@@ -701,7 +829,7 @@ def resubmit_deliverable(project_id: int) -> Any:
 
 
 # =========================================================
-# ESCROW WALLET REDEMPTION & WITHDRAWAL
+# ESCROW WALLET REDEMPTION & WITHDRAWAL (ANTI-ABANDONMENT GUARD)
 # =========================================================
 
 @professional_bp.route("/professional/wallet/withdraw", methods=["POST"])
@@ -712,23 +840,58 @@ def withdraw_funds() -> Any:
         flash("Specialist access required.", "danger")
         return redirect(url_for("customer.dashboard"))
 
-    profile = ProfessionalProfile.query.filter_by(user_id=current_user.id).first()
+    # ROW-LEVEL LOCK: Ensure rapid double-clicks don't overdraft wallet
+    profile = ProfessionalProfile.query.filter_by(user_id=current_user.id).with_for_update().first()
     if not profile:
+        db.session.rollback()
         flash("Profile not found.", "danger")
+        return redirect(url_for("professional.professional_dashboard"))
+
+    current_avail = Decimal(str(profile.available_balance or 0))
+    current_pend = Decimal(str(profile.pending_balance or 0))
+
+    if current_avail <= Decimal("0.00"):
+        db.session.rollback()
+        if current_pend > Decimal("0.00"):
+            flash(
+                f"Escrow Protection: ₹{current_pend:,.2f} is currently locked in active sprint escrow. "
+                "Funds unlock into your available wallet only after 100% deliverable handover is completed and signed off.",
+                "warning",
+            )
+        else:
+            flash("You currently have no available balance to redeem.", "warning")
+        return redirect(url_for("professional.professional_dashboard"))
+
+    # Active Sprint Anti-Abandonment Guard: Prevent withdrawals while assigned to active incomplete sprints
+    active_sprints = Project.query.filter(
+        Project.assigned_professional_id == current_user.id,
+        Project.status.in_(["In Progress", "Submitted", "Revision", "Assigned"]),
+    ).all()
+
+    if active_sprints:
+        db.session.rollback()
+        active_refs = ", ".join(f"#{p.id}" for p in active_sprints)
+        flash(
+            f"Active Sprint Guard: You have active in-flight sprint(s) ({active_refs}). "
+            "All milestone deliverables must reach 100% signed-off completion before redeeming wallet funds.",
+            "warning",
+        )
         return redirect(url_for("professional.professional_dashboard"))
 
     try:
         amount = Decimal(request.form.get("amount", "0").strip())
     except Exception:
+        db.session.rollback()
         flash("Please enter a valid numeric amount.", "warning")
         return redirect(url_for("professional.professional_dashboard"))
 
     if amount <= Decimal("0.00"):
+        db.session.rollback()
         flash("Withdrawal amount must be greater than zero.", "warning")
         return redirect(url_for("professional.professional_dashboard"))
 
-    current_avail = Decimal(str(profile.available_balance or 0))
     if amount > current_avail:
+        db.session.rollback()
         flash(f"Requested amount (₹{amount}) exceeds available redeemable balance (₹{current_avail}).", "danger")
         return redirect(url_for("professional.professional_dashboard"))
 
@@ -739,10 +902,12 @@ def withdraw_funds() -> Any:
     beneficiary_name = request.form.get("bank_beneficiary_name", "").strip() or profile.bank_beneficiary_name or current_user.name
 
     if payout_mode == "UPI" and not upi_id:
+        db.session.rollback()
         flash("Please provide a valid UPI ID (e.g. name@oksbi).", "warning")
         return redirect(url_for("professional.professional_dashboard"))
 
     if payout_mode == "BANK_TRANSFER" and (not bank_account or not bank_ifsc):
+        db.session.rollback()
         flash("Please provide complete bank account number and IFSC code.", "warning")
         return redirect(url_for("professional.professional_dashboard"))
 
@@ -792,7 +957,7 @@ def withdraw_funds() -> Any:
             db.session.add(notif)
 
         db.session.commit()
-        flash(f"Redemption request for ₹{amount} submitted.", "success")
+        flash(f"Redemption request for ₹{amount} submitted successfully.", "success")
     except Exception as exc:
         db.session.rollback()
         logger.error("Error processing withdrawal request for user %s: %s", current_user.id, str(exc), exc_info=True)
@@ -925,7 +1090,6 @@ def professional_profile() -> Any:
     if request.method == "POST":
         try:
             profile.expertise = request.form.get("expertise", "").strip()
-            profile.email = request.form.get("email", "").strip()
             profile.experience = request.form.get("experience", "").strip()
             profile.about = request.form.get("about", "").strip()
             profile.phone = request.form.get("phone", "").strip()
@@ -962,7 +1126,6 @@ def professional_profile() -> Any:
             flash("Failed to save profile changes. Please try again.", "danger")
 
     return render_template("professional_profile.html", profile=profile)
-
 
 @professional_bp.route("/professional/api/project/<int:project_id>/messages")
 @login_required

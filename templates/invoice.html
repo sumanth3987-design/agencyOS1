@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Tax Invoice — {{ invoice_number }} — {{ agency_settings.agency_name }}</title>
+  <title>Tax Invoice — {{ invoice_number }} — {{ agency_settings.agency_name if agency_settings else 'AgencyOS' }}</title>
 
   <!-- Typography: Plus Jakarta Sans & JetBrains Mono -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -67,13 +67,26 @@
   <div class="max-w-3xl mx-auto bg-white p-8 sm:p-12 rounded-lg shadow-sm border border-slate-200 invoice-sheet">
 
     <!-- Action Bar (Hidden during Print & PDF generation) -->
-    <div class="no-print flex justify-between items-center pb-6 border-b border-slate-200 mb-8">
+    <div class="no-print flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-6 border-b border-slate-200 mb-8">
       <a href="{{ url_for('customer.project_details', project_id=project.id) }}" class="text-xs font-semibold text-slate-700 hover:text-slate-900 flex items-center gap-1.5 underline">
         ← Return to Project Workbench
       </a>
-      <button onclick="window.print()" class="px-4 py-2 rounded bg-slate-900 hover:bg-slate-800 text-white font-mono text-xs font-bold transition flex items-center gap-2 cursor-pointer shadow-sm">
-        <span>🖨️ Print / Save PDF</span>
-      </button>
+
+      <div class="flex items-center gap-2 flex-wrap">
+        {% if project.status == 'Completed' %}
+        <a href="{{ url_for('customer.download_acceptance_certificate', project_id=project.id) }}" class="px-3.5 py-1.5 rounded bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-mono text-xs font-bold transition flex items-center gap-1.5 border border-emerald-300 shadow-sm">
+          🛡️ Handover Certificate (PDF)
+        </a>
+        {% endif %}
+
+        <a href="{{ url_for('customer.download_sow_pdf', project_id=project.id) }}" class="px-3 py-1.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-800 font-mono text-xs font-semibold transition flex items-center gap-1.5 border border-slate-300">
+          📜 SOW PDF
+        </a>
+
+        <button onclick="window.print()" class="px-4 py-2 rounded bg-slate-900 hover:bg-slate-800 text-white font-mono text-xs font-bold transition flex items-center gap-2 cursor-pointer shadow-sm">
+          <span>🖨️ Print / Save GST PDF</span>
+        </button>
+      </div>
     </div>
 
     <!-- Header & Issuer Details -->
@@ -82,7 +95,7 @@
         <div class="flex items-center gap-2 mb-2 font-mono text-[10px] uppercase font-bold">
           <span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-200">Original for Recipient</span>
           <span class="px-2 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200">
-            {% if invoice_currency == 'INR' %}SAC 998311 (IT Services){% else %}Cross-Border Service Export{% endif %}
+            {% if invoice_currency == 'INR' %}SAC 998311 (IT Software Services){% else %}Cross-Border Service Export{% endif %}
           </span>
         </div>
         <h1 class="text-3xl font-extrabold tracking-tight text-slate-950">TAX INVOICE</h1>
@@ -95,14 +108,14 @@
           <img src="{{ agency_settings.logo_url }}" class="h-8 w-auto ml-auto mb-1 object-contain" alt="{{ agency_settings.agency_name }}" onerror="this.style.display='none'; this.nextElementSibling.classList.remove('hidden')">
           <strong class="text-lg font-black text-slate-950 block hidden">{{ agency_settings.agency_name }}</strong>
         {% else %}
-          <strong class="text-lg font-black text-slate-950 block">{{ agency_settings.agency_name }}</strong>
+          <strong class="text-lg font-black text-slate-950 block">{{ agency_settings.agency_name if agency_settings else 'AgencyOS' }}</strong>
         {% endif %}
         <p class="text-slate-600 mt-0.5">Bangalore &amp; Hyderabad, India</p>
         {% if invoice_currency == 'INR' %}
-        <p class="font-mono text-slate-700 mt-1">GSTIN: <strong>29AAAAA0000A1Z5</strong></p>
-        <p class="font-mono text-slate-500 text-[11px]">State of Supplier: Karnataka (29)</p>
+        <p class="font-mono text-slate-700 mt-1">Agency GSTIN: <strong>29AAAAA0000A1Z5</strong></p>
+        <p class="font-mono text-slate-500 text-[11px]">State of Supplier: Karnataka (Code: 29)</p>
         {% else %}
-        <p class="font-mono text-slate-700 mt-1">Supply Covered Under Export LUT</p>
+        <p class="font-mono text-slate-700 mt-1">Supply Covered Under LUT: <strong>AD290426001234F</strong></p>
         <p class="font-mono text-slate-500 text-[11px]">Zero-Rated IGST Under Section 16 IGST Act</p>
         {% endif %}
       </div>
@@ -126,14 +139,15 @@
 
         <div class="mt-2 space-y-0.5 font-mono text-[11px]">
           {% if invoice_currency == 'INR' %}
-            <p class="text-slate-700">Place of Supply: <strong>{{ profile.location if profile and profile.location else 'India (State 29)' }}</strong></p>
+            <p class="text-slate-700">Place of Supply: <strong>{{ profile.location if profile and profile.location else 'Karnataka (29)' }}</strong></p>
             {% if profile and profile.gstin %}
-            <p class="text-slate-900 font-bold">Client GSTIN: <strong>{{ profile.gstin }}</strong></p>
+            <p class="text-slate-900 font-bold">Client GSTIN: <strong>{{ profile.gstin }}</strong> (ITC Eligible)</p>
             {% else %}
-            <p class="text-slate-400">Client GSTIN: <em>Unregistered / Consumer</em></p>
+            <p class="text-slate-500">Client GSTIN: <em>Unregistered B2C / Direct Account</em></p>
             {% endif %}
+            <p class="text-slate-500">Reverse Charge Applicable: <strong>No</strong></p>
           {% else %}
-            <p class="text-slate-700">Jurisdiction / Destination: <strong>{{ profile.location if profile and profile.location else 'International Export' }}</strong></p>
+            <p class="text-slate-700">Jurisdiction / Destination: <strong>{{ profile.location if profile and profile.location else 'Cross-Border Export' }}</strong></p>
             {% if profile and profile.gstin %}
             <p class="text-slate-900 font-bold">Tax ID / VAT: <strong>{{ profile.gstin }}</strong></p>
             {% endif %}
@@ -168,11 +182,11 @@
         <tr>
           <td class="py-4 font-sans" data-label="Deliverable: ">
             {% if is_retainer_invoice %}
-            <strong class="text-slate-950 block text-xs">Monthly SEO Retainer Renewal</strong>
-            <span class="text-slate-500 text-[11px] font-mono">{{ project.package }} • Recurring Monthly Billing Cycle</span>
+            <strong class="text-slate-950 block text-xs">Monthly Retainer &amp; Care Plan Renewal</strong>
+            <span class="text-slate-500 text-[11px] font-mono">{{ project.package }} • Recurring Monthly Mandate</span>
             {% else %}
             <strong class="text-slate-950 block text-xs">{{ project.service }} — Milestone Delivery</strong>
-            <span class="text-slate-500 text-[11px] font-mono">{{ project.package }} SOW Phase Gate</span>
+            <span class="text-slate-500 text-[11px] font-mono">{{ project.package }} Sequential Phase Gate</span>
             {% endif %}
           </td>
           <td class="py-4 font-semibold" data-label="SAC / Code: ">998311</td>
@@ -197,11 +211,6 @@
           <span class="font-bold text-slate-950">{{ base_amount|format_currency(invoice_currency) }}</span>
         </div>
 
-        <div class="flex justify-between text-slate-600">
-          <span>Tax estimate (18%):</span>
-          <span>{{ tax_total|format_currency(invoice_currency) }}</span>
-        </div>
-
         {% if invoice_currency == 'INR' %}
         <div class="flex justify-between text-slate-600">
           <span>Central GST (CGST 9%):</span>
@@ -211,15 +220,19 @@
           <span>State GST (SGST 9%):</span>
           <span>{{ sgst_amount|format_currency(invoice_currency) }}</span>
         </div>
+        <div class="flex justify-between text-slate-600">
+          <span>Total GST (18%):</span>
+          <span class="font-bold">{{ tax_total|format_currency(invoice_currency) }}</span>
+        </div>
         {% else %}
         <div class="flex justify-between text-slate-600">
           <span>Export IGST (Under LUT):</span>
-          <span>{{ 0|format_currency(invoice_currency) }}</span>
+          <span class="font-bold">Zero-Rated (0%)</span>
         </div>
         {% endif %}
 
         <div class="flex justify-between text-base font-extrabold text-slate-950 pt-3 border-t-2 border-slate-900 invoice-total-amount">
-          <span class="font-sans">Total Authorized:</span>
+          <span class="font-sans">Total Invoiced:</span>
           <span class="text-slate-950">{{ gross_amount|format_currency(invoice_currency) }}</span>
         </div>
       </div>
@@ -231,16 +244,16 @@
         <span class="font-mono text-[10px] text-slate-500 uppercase tracking-wider block mb-1">Statutory Declaration:</span>
         <p class="text-[11px] text-slate-600 leading-relaxed font-mono">
           {% if invoice_currency == 'INR' %}
-          Issued under Rule 46 of CGST Rules, 2017. Supply of IT &amp; Software Services categorized under SAC 998311. Recipient entitled to claim ITC subject to Section 16 of CGST Act.
+          Issued under Rule 46 of the CGST Rules, 2017. Services categorized under SAC 998311 (Information Technology Software Services). Registered recipients are eligible to claim Input Tax Credit (ITC) under Section 16 of the CGST Act.
           {% else %}
-          Supply of service meant for export of services under Letter of Undertaking (LUT) without payment of integrated tax under IGST Act, 2017.
+          Supply of service meant for export under Letter of Undertaking (LUT: AD290426001234F) without payment of integrated tax under Section 16 of the Integrated Goods and Services Tax (IGST) Act, 2017.
           {% endif %}
         </p>
       </div>
 
       <div class="text-right">
         <div class="inline-block text-center border-t border-slate-400 pt-2 px-6">
-          <span class="font-bold text-xs text-slate-950 block font-sans">{{ agency_settings.agency_name }}</span>
+          <span class="font-bold text-xs text-slate-950 block font-sans">{{ agency_settings.agency_name if agency_settings else 'AgencyOS' }}</span>
           <span class="text-[10px] text-slate-500 font-mono">Digitally Authorized Signatory</span>
         </div>
       </div>

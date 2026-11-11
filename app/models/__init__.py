@@ -2,11 +2,12 @@
 
 Defines SQLAlchemy ORM models for users, multi-tenant businesses, professional profiles,
 customer profiles with direct contact & GST context, gated projects, cryptographic payment ledgers,
-invoice margin splits, two-stage escrow wallets, withdrawal requests, activity audit trails,
-contract digital signatures, and billable time logs.
+invoice margin splits, two-stage escrow wallets, withdrawal requests with statutory Section 194-O TDS,
+activity audit trails, contract digital signatures, retainer hours bank, micro-tasks, and billable time logs.
 """
 
 from datetime import datetime
+from decimal import Decimal
 import json
 import re
 import secrets
@@ -384,11 +385,17 @@ class Project(db.Model):
     assigned_professional_id: Any = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True, index=True)
     revision_comment: Any = db.Column(db.Text, nullable=True)
     payment_reminder_sent_at: Any = db.Column(db.DateTime, nullable=True)
+
+    # Monthly Retainer Hours Bank
+    hours_allocated: Any = db.Column(db.Integer, default=0, nullable=False, server_default="0")
+    hours_remaining: Any = db.Column(db.Numeric(5, 2), default=0.00, nullable=False, server_default="0.00")
+
     created_at: Any = db.Column(db.DateTime, server_default=db.func.now(), nullable=False)
 
     milestones = db.relationship("Milestone", backref="project", cascade="all, delete-orphan", lazy=True)
     contract_signature = db.relationship("ContractSignature", backref="project", uselist=False, cascade="all, delete-orphan")
     time_logs = db.relationship("ProjectTimeLog", backref="project", cascade="all, delete-orphan", lazy=True)
+    retainer_tasks = db.relationship("RetainerTask", backref="project", cascade="all, delete-orphan", lazy=True, order_by="RetainerTask.created_at.desc()")
 
     def __init__(self, customer_id: int | None = None, service: str = "", package: str = "", requirements: str = "", status: str = "Pending Assignment", **kwargs: Any) -> None:
         super().__init__(**kwargs)
@@ -402,6 +409,9 @@ class Project(db.Model):
             self.requirements = requirements
         if status:
             self.status = status
+        if package == "Starter Retainer":
+            self.hours_allocated = 5
+            self.hours_remaining = Decimal("5.00")
 
     def get_required_skills_list(self) -> list[str]:
         if not self.required_skills:
@@ -414,6 +424,44 @@ class Project(db.Model):
             pass
         tokens = re.split(r"[,|\n/]+", self.required_skills)
         return [t.strip().lower() for t in tokens if t.strip()]
+
+
+class RetainerTask(db.Model):
+    """Client maintenance and tweak tasks under active retainer subscriptions."""
+    __tablename__ = "retainer_tasks"
+
+    id: Any = db.Column(db.Integer, primary_key=True)
+    project_id: Any = db.Column(db.Integer, db.ForeignKey("project.id", ondelete="CASCADE"), nullable=False, index=True)
+    customer_id: Any = db.Column(db.Integer, db.ForeignKey("user.id", ondelete="CASCADE"), nullable=False, index=True)
+    specialist_id: Any = db.Column(db.Integer, db.ForeignKey("user.id", ondelete="SET NULL"), nullable=True, index=True)
+    title: Any = db.Column(db.String(200), nullable=False)
+    description: Any = db.Column(db.Text, nullable=False)
+    asset_url: Any = db.Column(db.String(500), nullable=True)
+    status: Any = db.Column(db.String(30), default="Queued", nullable=False)  # Queued, In Progress, Completed, Rejected
+    hours_spent: Any = db.Column(db.Numeric(5, 2), default=0.00, nullable=False, server_default="0.00")
+    completion_notes: Any = db.Column(db.Text, nullable=True)
+    created_at: Any = db.Column(db.DateTime, default=get_ist_now, nullable=False)
+    completed_at: Any = db.Column(db.DateTime, nullable=True)
+
+    customer = db.relationship("User", foreign_keys=[customer_id], backref="customer_retainer_tasks")
+    specialist = db.relationship("User", foreign_keys=[specialist_id], backref="assigned_retainer_tasks")
+
+    def __init__(self, project_id: int | None = None, customer_id: int | None = None, title: str = "", description: str = "", specialist_id: int | None = None, status: str = "Queued", asset_url: str | None = None, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        if project_id is not None:
+            self.project_id = project_id
+        if customer_id is not None:
+            self.customer_id = customer_id
+        if title:
+            self.title = title
+        if description:
+            self.description = description
+        if specialist_id is not None:
+            self.specialist_id = specialist_id
+        if status:
+            self.status = status
+        if asset_url is not None:
+            self.asset_url = asset_url
 
 
 class ContractSignature(db.Model):
@@ -671,6 +719,13 @@ class WithdrawalRequest(db.Model):
     status: Any = db.Column(db.String(30), default="Pending", nullable=False)
     utr_reference: Any = db.Column(db.String(100), nullable=True)
     admin_notes: Any = db.Column(db.Text, nullable=True)
+
+    # Statutory Section 194-O / 194C TDS Audit Tracking
+    pan_number: Any = db.Column(db.String(20), nullable=True)
+    tds_rate: Any = db.Column(db.Numeric(4, 2), default=0.01, nullable=False, server_default="0.01")
+    tds_amount: Any = db.Column(db.Numeric(12, 2), default=0.00, nullable=False, server_default="0.00")
+    net_amount: Any = db.Column(db.Numeric(12, 2), default=0.00, nullable=False, server_default="0.00")
+
     requested_at: Any = db.Column(db.DateTime, default=get_ist_now, nullable=False)
     processed_at: Any = db.Column(db.DateTime, nullable=True)
 
@@ -813,14 +868,18 @@ class RazorpaySubscription(db.Model):
     currency: Any = db.Column(db.String(10), nullable=False, default="INR")
     status: Any = db.Column(db.String(30), nullable=False, default="created")
     start_at: Any = db.Column(db.DateTime, nullable=False)
+
+    # Monthly Hours Bank Quota on Subscription
+    hours_allocated: Any = db.Column(db.Integer, default=5, nullable=False, server_default="5")
+    hours_remaining: Any = db.Column(db.Numeric(5, 2), default=5.00, nullable=False, server_default="5.00")
+
     created_at: Any = db.Column(db.DateTime, nullable=False, default=get_ist_now)
     updated_at: Any = db.Column(db.DateTime, nullable=False, default=get_ist_now, onupdate=get_ist_now)
 
     project = db.relationship("Project", backref=db.backref("retainer_subscriptions", lazy=True))
     customer = db.relationship("User", backref=db.backref("retainer_subscriptions", lazy=True), foreign_keys=[customer_id])
     plan = db.relationship("RazorpaySubscriptionPlan")
-    charges = db.relationship("SubscriptionCharge", back_populates="subscription", lazy=True)
-
+    subscription_charges = db.relationship("SubscriptionCharge", back_populates="subscription", lazy=True)
     def __init__(self, project_id: int | None = None, customer_id: int | None = None, plan_id: int | None = None, razorpay_subscription_id: str | None = None, amount: int = 0, currency: str = "INR", status: str = "created", start_at: datetime | None = None, **kwargs: Any) -> None:
         super().__init__(**kwargs)
         if project_id is not None:
@@ -839,6 +898,8 @@ class RazorpaySubscription(db.Model):
             self.status = status
         if start_at is not None:
             self.start_at = start_at
+        self.hours_allocated = 5
+        self.hours_remaining = Decimal("5.00")
 
 
 class SubscriptionCharge(db.Model):
@@ -854,7 +915,7 @@ class SubscriptionCharge(db.Model):
     currency: Any = db.Column(db.String(10), nullable=False, default="INR")
     charged_at: Any = db.Column(db.DateTime, nullable=False, default=get_ist_now)
 
-    subscription = db.relationship("RazorpaySubscription", back_populates="charges")
+    subscription = db.relationship("RazorpaySubscription", back_populates="subscription_charges")
     payment = db.relationship("Payment")
     invoice = db.relationship("Invoice")
 
@@ -1075,3 +1136,19 @@ class Dispute(db.Model):
             self.reason = reason
         if status:
             self.status = status
+
+class WebhookFailureLog(db.Model):
+    __tablename__ = "webhook_failure_log"
+    
+    id: Any = db.Column(db.Integer, primary_key=True)
+    gateway: Any = db.Column(db.String(50), nullable=False, index=True) # "Stripe" or "Razorpay"
+    payload: Any = db.Column(db.Text, nullable=False)
+    error_message: Any = db.Column(db.Text, nullable=False)
+    created_at: Any = db.Column(db.DateTime, default=get_ist_now, nullable=False)
+    is_resolved: Any = db.Column(db.Boolean, default=False, nullable=False)
+
+    def __init__(self, gateway: str, payload: str, error_message: str, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        self.gateway = gateway
+        self.payload = payload
+        self.error_message = error_message

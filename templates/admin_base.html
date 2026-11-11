@@ -16,7 +16,23 @@
   <script>
     tailwind.config = { darkMode: 'class', theme: { extend: { fontFamily: { sans: ['"Plus Jakarta Sans"', 'sans-serif'], mono: ['"JetBrains Mono"', 'monospace'], }, colors: { zinc: { 950: '#09090b', 900: '#101014', 850: '#18181b', 800: '#27272a', 700: '#3f3f46', } } } } }
   </script>
-  <style>.no-scrollbar::-webkit-scrollbar { display: none; }</style>
+  <style>
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .nav-pulse {
+      position: relative;
+    }
+    .nav-pulse::after {
+      content: '';
+      position: absolute;
+      top: 6px;
+      right: 6px;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background-color: #f59e0b;
+      box-shadow: 0 0 8px rgba(245, 158, 11, 0.8);
+    }
+  </style>
   {% block extra_css %}{% endblock %}
 </head>
 <body class="bg-zinc-950 text-zinc-100 font-sans antialiased overflow-hidden">
@@ -40,14 +56,61 @@
         </a>
         <nav class="flex flex-col gap-2">
           <a href="{{ url_for('admin.admin_dashboard') }}" class="p-2.5 rounded border border-transparent {% if request.endpoint == 'admin.admin_dashboard' %}border-zinc-700 bg-zinc-900 text-white{% else %}text-zinc-400 hover:text-white hover:bg-zinc-900{% endif %} transition" title="Executive Dashboard"><span class="font-mono text-sm leading-none block">✓</span></a>
-          <a href="{{ url_for('admin.admin_project_management') }}" class="p-2.5 rounded border border-transparent {% if request.endpoint == 'admin.admin_project_management' %}border-zinc-700 bg-zinc-900 text-white{% else %}text-zinc-400 hover:text-white hover:bg-zinc-900{% endif %} transition" title="Pipelines &amp; Kanban"><i data-lucide="kanban" class="w-4 h-4"></i></a>
-          <a href="{{ url_for('admin.admin_project_review') }}" class="p-2.5 rounded border border-transparent {% if request.endpoint == 'admin.admin_project_review' %}border-zinc-700 bg-zinc-900 text-white{% else %}text-zinc-400 hover:text-white hover:bg-zinc-900{% endif %} transition" title="Quality Review Gate"><i data-lucide="check-circle-2" class="w-4 h-4"></i></a>
-          <a href="{{ url_for('admin.admin_applications') }}" class="p-2.5 rounded border border-transparent {% if request.endpoint == 'admin.admin_applications' %}border-zinc-700 bg-zinc-900 text-white{% else %}text-zinc-400 hover:text-white hover:bg-zinc-900{% endif %} transition" title="Talent Applications"><i data-lucide="user-check" class="w-4 h-4"></i></a>
-          <a href="{{ url_for('admin.admin_customers') }}" class="p-2.5 rounded border border-transparent {% if request.endpoint == 'admin.admin_customers' %}border-zinc-700 bg-zinc-900 text-white{% else %}text-zinc-400 hover:text-white hover:bg-zinc-900{% endif %} transition" title="Client CRM"><i data-lucide="users" class="w-4 h-4"></i></a>
-          <a href="{{ url_for('admin.admin_professionals') }}" class="p-2.5 rounded border border-transparent {% if 'professional' in request.path %}border-zinc-700 bg-zinc-900 text-white{% else %}text-zinc-400 hover:text-white hover:bg-zinc-900{% endif %} transition" title="Specialists Management"><i data-lucide="briefcase" class="w-4 h-4"></i></a>
-          <a href="{{ url_for('admin.admin_transactions') }}" class="p-2.5 rounded border border-transparent {% if 'transaction' in request.path %}border-zinc-700 bg-zinc-900 text-white{% else %}text-zinc-400 hover:text-white hover:bg-zinc-900{% endif %} transition" title="Payments &amp; Ledger"><i data-lucide="receipt" class="w-4 h-4"></i></a>
-          <a href="{{ url_for('admin.admin_disputes') }}" class="p-2.5 rounded border border-transparent {% if 'dispute' in request.path %}border-zinc-700 bg-zinc-900 text-white{% else %}text-zinc-400 hover:text-white hover:bg-zinc-900{% endif %} transition" title="Arbitration &amp; Disputes"><i data-lucide="scale" class="w-4 h-4"></i></a>
-          <a href="{{ url_for('admin.agency_settings') }}" class="p-2.5 rounded border border-transparent {% if request.endpoint == 'admin.agency_settings' %}border-zinc-700 bg-zinc-900 text-white{% else %}text-zinc-400 hover:text-white hover:bg-zinc-900{% endif %} transition" title="Agency Settings"><i data-lucide="settings-2" class="w-4 h-4"></i></a>
+          
+          <a href="{{ url_for('admin.admin_project_management') }}" class="relative p-2.5 rounded border border-transparent {% if request.endpoint == 'admin.admin_project_management' %}border-zinc-700 bg-zinc-900 text-white{% else %}text-zinc-400 hover:text-white hover:bg-zinc-900{% endif %} transition" title="Pipelines &amp; Kanban">
+            <i data-lucide="kanban" class="w-4 h-4"></i>
+            {% if admin_counts and admin_counts.active_sprints > 0 %}
+            <span class="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-indigo-500"></span>
+            {% endif %}
+          </a>
+
+          <a href="{{ url_for('admin.admin_project_review') }}" class="relative p-2.5 rounded border border-transparent {% if request.endpoint == 'admin.admin_project_review' %}border-zinc-700 bg-zinc-900 text-white{% else %}text-zinc-400 hover:text-white hover:bg-zinc-900{% endif %} transition" title="Quality Review Gate">
+            <i data-lucide="check-circle-2" class="w-4 h-4"></i>
+            {% if admin_counts and admin_counts.review_gate > 0 %}
+            <span class="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-amber-400 animate-ping"></span>
+            <span class="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-amber-400"></span>
+            {% endif %}
+          </a>
+
+          <a href="{{ url_for('admin.admin_applications') }}" class="relative p-2.5 rounded border border-transparent {% if request.endpoint == 'admin.admin_applications' %}border-zinc-700 bg-zinc-900 text-white{% else %}text-zinc-400 hover:text-white hover:bg-zinc-900{% endif %} transition" title="Talent Applications">
+            <i data-lucide="user-check" class="w-4 h-4"></i>
+            {% if admin_counts and admin_counts.applications > 0 %}
+            <span class="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-indigo-400"></span>
+            {% endif %}
+          </a>
+
+          <a href="{{ url_for('admin.admin_customers') }}" class="relative p-2.5 rounded border border-transparent {% if request.endpoint == 'admin.admin_customers' %}border-zinc-700 bg-zinc-900 text-white{% else %}text-zinc-400 hover:text-white hover:bg-zinc-900{% endif %} transition" title="Client CRM">
+            <i data-lucide="users" class="w-4 h-4"></i>
+            {% if admin_counts and admin_counts.unverified_clients > 0 %}
+            <span class="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-amber-500"></span>
+            {% endif %}
+          </a>
+
+          <a href="{{ url_for('admin.admin_professionals') }}" class="relative p-2.5 rounded border border-transparent {% if 'professional' in request.path %}border-zinc-700 bg-zinc-900 text-white{% else %}text-zinc-400 hover:text-white hover:bg-zinc-900{% endif %} transition" title="Specialists Management">
+            <i data-lucide="briefcase" class="w-4 h-4"></i>
+            {% if admin_counts and admin_counts.unverified_specialists > 0 %}
+            <span class="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-amber-400"></span>
+            {% endif %}
+          </a>
+
+          <a href="{{ url_for('admin.admin_transactions') }}" class="relative p-2.5 rounded border border-transparent {% if 'transaction' in request.path %}border-zinc-700 bg-zinc-900 text-white{% else %}text-zinc-400 hover:text-white hover:bg-zinc-900{% endif %} transition" title="Payments &amp; Ledger">
+            <i data-lucide="receipt" class="w-4 h-4"></i>
+            {% if admin_counts and admin_counts.withdrawals > 0 %}
+            <span class="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+            {% endif %}
+          </a>
+
+          <a href="{{ url_for('admin.admin_disputes') }}" class="relative p-2.5 rounded border border-transparent {% if 'dispute' in request.path %}border-zinc-700 bg-zinc-900 text-white{% else %}text-zinc-400 hover:text-white hover:bg-zinc-900{% endif %} transition text-amber-400" title="Arbitration &amp; Disputes">
+            <i data-lucide="scale" class="w-4 h-4"></i>
+            {% if admin_counts and admin_counts.disputes > 0 %}
+            <span class="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-red-500 animate-ping"></span>
+            <span class="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-red-500"></span>
+            {% endif %}
+          </a>
+
+          <a href="{{ url_for('admin.agency_settings') }}" class="p-2.5 rounded border border-transparent {% if request.endpoint == 'admin.agency_settings' %}border-zinc-700 bg-zinc-900 text-white{% else %}text-zinc-400 hover:text-white hover:bg-zinc-900{% endif %} transition" title="Agency Settings">
+            <i data-lucide="settings-2" class="w-4 h-4"></i>
+          </a>
         </nav>
       </div>
       <form method="POST" action="{{ url_for('auth.logout') }}">
@@ -66,21 +129,81 @@
           <span class="text-zinc-500 uppercase tracking-wider">Node Status:</span>
           <span class="text-zinc-300">Sequential milestone gates active • SAC 998311</span>
         </div>
+        {% if admin_counts and admin_counts.review_gate > 0 %}
+        <a href="{{ url_for('admin.admin_project_review') }}" class="hidden sm:inline-flex items-center gap-1.5 text-amber-400 hover:text-amber-300 transition text-[11px]">
+          <span class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping"></span>
+          {{ admin_counts.review_gate }} deliverable(s) awaiting QA sign-off →
+        </a>
+        {% endif %}
       </div>
 
-      <!-- STICKY NAVBAR -->
+      <!-- STICKY NAVBAR WITH NOTIFICATION BADGES -->
       <header class="shrink-0 h-16 border-b border-zinc-800 bg-zinc-950/95 sticky top-0 z-40 px-6 sm:px-8 flex items-center justify-between w-full">
         <div class="flex items-center gap-6 overflow-x-auto no-scrollbar py-2">
-          <nav class="flex items-center gap-1 font-mono text-xs">
-            <a href="{{ url_for('admin.admin_dashboard') }}" class="px-3 py-1.5 rounded border {% if request.endpoint == 'admin.admin_dashboard' %}border-white bg-white text-zinc-950 font-bold{% else %}border-transparent text-zinc-400 hover:text-white hover:bg-zinc-900{% endif %} transition"><span class="font-mono mr-1">✓</span>Overview</a>
-            <a href="{{ url_for('admin.admin_project_management') }}" class="px-3 py-1.5 rounded border {% if request.endpoint == 'admin.admin_project_management' %}border-white bg-white text-zinc-950 font-bold{% else %}border-transparent text-zinc-400 hover:text-white hover:bg-zinc-900{% endif %} transition">Pipelines</a>
-            <a href="{{ url_for('admin.admin_project_review') }}" class="px-3 py-1.5 rounded border {% if request.endpoint == 'admin.admin_project_review' %}border-white bg-white text-zinc-950 font-bold{% else %}border-transparent text-zinc-400 hover:text-white hover:bg-zinc-900{% endif %} transition">Review Gate</a>
-            <a href="{{ url_for('admin.admin_applications') }}" class="px-3 py-1.5 rounded border {% if request.endpoint == 'admin.admin_applications' %}border-white bg-white text-zinc-950 font-bold{% else %}border-transparent text-zinc-400 hover:text-white hover:bg-zinc-900{% endif %} transition">Applications</a>
-            <a href="{{ url_for('admin.admin_transactions') }}" class="px-3 py-1.5 rounded border {% if 'transaction' in request.path %}border-white bg-white text-zinc-950 font-bold{% else %}border-transparent text-zinc-400 hover:text-white hover:bg-zinc-900{% endif %} transition">Ledger</a>
-            <a href="{{ url_for('admin.admin_disputes') }}" class="px-3 py-1.5 rounded border {% if 'dispute' in request.path %}border-white bg-white text-zinc-950 font-bold{% else %}border-transparent text-zinc-400 hover:text-white hover:bg-zinc-900{% endif %} transition text-amber-400">Disputes</a>
-            <a href="{{ url_for('admin.admin_customers') }}" class="px-3 py-1.5 rounded border {% if request.endpoint == 'admin.admin_customers' %}border-white bg-white text-zinc-950 font-bold{% else %}border-transparent text-zinc-400 hover:text-white hover:bg-zinc-900{% endif %} transition">Clients</a>
-            <a href="{{ url_for('admin.admin_professionals') }}" class="px-3 py-1.5 rounded border {% if 'professional' in request.path %}border-white bg-white text-zinc-950 font-bold{% else %}border-transparent text-zinc-400 hover:text-white hover:bg-zinc-900{% endif %} transition">Specialists</a>
-            <a href="{{ url_for('admin.agency_settings') }}" class="px-3 py-1.5 rounded border {% if request.endpoint == 'admin.agency_settings' %}border-white bg-white text-zinc-950 font-bold{% else %}border-transparent text-zinc-400 hover:text-white hover:bg-zinc-900{% endif %} transition">Settings</a>
+          <nav class="flex items-center gap-1 font-mono text-xs whitespace-nowrap">
+            
+            <a href="{{ url_for('admin.admin_dashboard') }}" class="px-3 py-1.5 rounded border {% if request.endpoint == 'admin.admin_dashboard' %}border-white bg-white text-zinc-950 font-bold{% else %}border-transparent text-zinc-400 hover:text-white hover:bg-zinc-900{% endif %} transition">
+              <span class="font-mono mr-1">✓</span>Overview
+            </a>
+
+            <a href="{{ url_for('admin.admin_project_management') }}" class="px-3 py-1.5 rounded border inline-flex items-center gap-1.5 {% if request.endpoint == 'admin.admin_project_management' %}border-white bg-white text-zinc-950 font-bold{% else %}border-transparent text-zinc-400 hover:text-white hover:bg-zinc-900{% endif %} transition">
+              Pipelines
+              {% if admin_counts and admin_counts.active_sprints > 0 %}
+              <span class="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-zinc-800 text-indigo-300">{{ admin_counts.active_sprints }}</span>
+              {% endif %}
+            </a>
+
+            <a href="{{ url_for('admin.admin_project_review') }}" class="px-3 py-1.5 rounded border inline-flex items-center gap-1.5 {% if request.endpoint == 'admin.admin_project_review' %}border-white bg-white text-zinc-950 font-bold{% else %}border-transparent text-zinc-400 hover:text-white hover:bg-zinc-900{% endif %} transition">
+              Review Gate
+              {% if admin_counts and admin_counts.review_gate > 0 %}
+              <span class="flex items-center gap-1 px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                <span class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span>
+                {{ admin_counts.review_gate }}
+              </span>
+              {% endif %}
+            </a>
+
+            <a href="{{ url_for('admin.admin_applications') }}" class="px-3 py-1.5 rounded border inline-flex items-center gap-1.5 {% if request.endpoint == 'admin.admin_applications' %}border-white bg-white text-zinc-950 font-bold{% else %}border-transparent text-zinc-400 hover:text-white hover:bg-zinc-900{% endif %} transition">
+              Applications
+              {% if admin_counts and admin_counts.applications > 0 %}
+              <span class="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">{{ admin_counts.applications }}</span>
+              {% endif %}
+            </a>
+
+            <a href="{{ url_for('admin.admin_transactions') }}" class="px-3 py-1.5 rounded border inline-flex items-center gap-1.5 {% if 'transaction' in request.path %}border-white bg-white text-zinc-950 font-bold{% else %}border-transparent text-zinc-400 hover:text-white hover:bg-zinc-900{% endif %} transition">
+              Ledger
+              {% if admin_counts and admin_counts.withdrawals > 0 %}
+              <span class="flex items-center gap-1 px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                <span class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping"></span>
+                {{ admin_counts.withdrawals }}
+              </span>
+              {% endif %}
+            </a>
+
+            <a href="{{ url_for('admin.admin_disputes') }}" class="px-3 py-1.5 rounded border inline-flex items-center gap-1.5 {% if 'dispute' in request.path %}border-white bg-white text-zinc-950 font-bold{% else %}border-transparent text-zinc-400 hover:text-white hover:bg-zinc-900{% endif %} transition text-amber-400">
+              Disputes
+              {% if admin_counts and admin_counts.disputes > 0 %}
+              <span class="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-red-500/20 text-red-300 border border-red-500/40">{{ admin_counts.disputes }}</span>
+              {% endif %}
+            </a>
+
+            <a href="{{ url_for('admin.admin_customers') }}" class="px-3 py-1.5 rounded border inline-flex items-center gap-1.5 {% if request.endpoint == 'admin.admin_customers' %}border-white bg-white text-zinc-950 font-bold{% else %}border-transparent text-zinc-400 hover:text-white hover:bg-zinc-900{% endif %} transition">
+              Clients
+              {% if admin_counts and admin_counts.unverified_clients > 0 %}
+              <span class="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300">{{ admin_counts.unverified_clients }}</span>
+              {% endif %}
+            </a>
+
+            <a href="{{ url_for('admin.admin_professionals') }}" class="px-3 py-1.5 rounded border inline-flex items-center gap-1.5 {% if 'professional' in request.path %}border-white bg-white text-zinc-950 font-bold{% else %}border-transparent text-zinc-400 hover:text-white hover:bg-zinc-900{% endif %} transition">
+              Specialists
+              {% if admin_counts and admin_counts.unverified_specialists > 0 %}
+              <span class="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300">{{ admin_counts.unverified_specialists }}</span>
+              {% endif %}
+            </a>
+
+            <a href="{{ url_for('admin.agency_settings') }}" class="px-3 py-1.5 rounded border {% if request.endpoint == 'admin.agency_settings' %}border-white bg-white text-zinc-950 font-bold{% else %}border-transparent text-zinc-400 hover:text-white hover:bg-zinc-900{% endif %} transition">
+              Settings
+            </a>
           </nav>
         </div>
 

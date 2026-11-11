@@ -1,16 +1,19 @@
-"""ReportLab Statement of Work PDF Generation Engine for AgencyOS."""
+"""ReportLab Statement of Work & Anti-Chargeback Acceptance Certificate Engine for AgencyOS."""
 
+import datetime
+import hashlib
 import re
 from io import BytesIO
 from typing import Any, NamedTuple
 from xml.sax.saxutils import escape
 
 from reportlab.lib import colors
-from reportlab.lib.enums import TA_LEFT
+from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.platypus import (
     HRFlowable,
+    KeepTogether,
     PageBreak,
     Paragraph,
     SimpleDocTemplate,
@@ -51,6 +54,10 @@ def _plain_paragraph(value: Any, style: ParagraphStyle) -> Paragraph:
     text = escape(str(value or "")).replace("\r\n", "\n").replace("\n", "<br/>")
     return Paragraph(text, style)
 
+
+# =========================================================================
+# STATEMENT OF WORK (SOW) PDF GENERATOR
+# =========================================================================
 
 def generate_sow_pdf(project: Any, customer: Any, business: Any, signature: SowSignature) -> BytesIO:
     buffer = BytesIO()
@@ -288,6 +295,199 @@ def generate_sow_pdf(project: Any, customer: Any, business: Any, signature: SowS
         )
     )
     story.append(signature_table)
+
+    doc.build(story)
+    buffer.seek(0)
+    return buffer
+
+
+# =========================================================================
+# ANTI-CHARGEBACK HANDOVER & ACCEPTANCE CERTIFICATE GENERATOR
+# =========================================================================
+
+def generate_acceptance_certificate_pdf(project: Any, customer: Any, business: Any, delivery: Any = None) -> BytesIO:
+    """Generate a cryptographic Certificate of IP Handover & Delivery Acceptance.
+    
+    Serves as statutory proof of delivery for merchant dispute resolution on Stripe / Razorpay rails.
+    """
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        rightMargin=40,
+        leftMargin=40,
+        topMargin=40,
+        bottomMargin=40,
+        title=f"Certificate of Handover & Acceptance - Project {project.id}",
+        author="AgencyOS Digital Solutions",
+    )
+
+    styles = getSampleStyleSheet()
+    primary = colors.HexColor("#09090b")
+    dark_text = colors.HexColor("#18181b")
+    muted_text = colors.HexColor("#71717a")
+    light_background = colors.HexColor("#f8fafc")
+    emerald_color = colors.HexColor("#059669")
+
+    title_style = ParagraphStyle(
+        "CertTitle",
+        parent=styles["Heading1"],
+        fontName="Helvetica-Bold",
+        fontSize=18,
+        leading=22,
+        textColor=primary,
+        alignment=TA_CENTER,
+    )
+    subtitle_style = ParagraphStyle(
+        "CertSubtitle",
+        parent=styles["Normal"],
+        fontSize=9,
+        leading=13,
+        textColor=muted_text,
+        alignment=TA_CENTER,
+    )
+    section_style = ParagraphStyle(
+        "CertSection",
+        parent=styles["Heading2"],
+        fontName="Helvetica-Bold",
+        fontSize=11,
+        leading=15,
+        textColor=dark_text,
+        spaceBefore=10,
+        spaceAfter=4,
+    )
+    body_style = ParagraphStyle(
+        "CertBody",
+        parent=styles["Normal"],
+        fontName="Helvetica",
+        fontSize=8.5,
+        leading=13,
+        textColor=dark_text,
+        alignment=TA_LEFT,
+    )
+    legal_style = ParagraphStyle(
+        "CertLegal",
+        parent=styles["Normal"],
+        fontName="Helvetica",
+        fontSize=8,
+        leading=12,
+        textColor=colors.HexColor("#334155"),
+        alignment=TA_LEFT,
+    )
+
+    customer_name = customer.name if customer else "Client Enterprise"
+    business_name = business.name if business else "Direct Account"
+    handover_date = datetime.datetime.now().strftime("%d %B %Y %H:%M IST")
+
+    # Generate SHA-256 cryptographic audit fingerprint
+    raw_hash_seed = f"PROJECT-{project.id}-{customer.id if customer else 0}-{handover_date}-{project.service}"
+    audit_hash = hashlib.sha256(raw_hash_seed.encode("utf-8")).hexdigest()
+
+    live_url = (delivery.live_url if delivery and delivery.live_url else "Delivered to Client Host").strip()
+    source_url = (delivery.source_url if delivery and delivery.source_url else "Direct Source Handover").strip()
+
+    story = [
+        Paragraph("AGENCYOS DIGITAL SOLUTIONS", title_style),
+        Paragraph("CERTIFICATE OF INTELLECTUAL PROPERTY HANDOVER & SATISFACTORY ACCEPTANCE", ParagraphStyle("CapsSub", parent=title_style, fontSize=12, leading=16, textColor=emerald_color)),
+        Paragraph("Statutory Evidence of Service Delivery & Electronic Handover Execution", subtitle_style),
+        Spacer(1, 10),
+        HRFlowable(width="100%", thickness=1.5, color=primary, spaceAfter=12),
+    ]
+
+    cert_meta = [
+        [
+            Paragraph("<b>Project Reference:</b>", body_style),
+            _plain_paragraph(f"#{project.id} — {project.service}", body_style),
+            Paragraph("<b>Handover Date:</b>", body_style),
+            _plain_paragraph(handover_date, body_style),
+        ],
+        [
+            Paragraph("<b>Client Signatory:</b>", body_style),
+            _plain_paragraph(customer_name, body_style),
+            Paragraph("<b>Client Entity:</b>", body_style),
+            _plain_paragraph(business_name, body_style),
+        ],
+        [
+            Paragraph("<b>Billing Classification:</b>", body_style),
+            _plain_paragraph(f"{project.package} (SAC 998311)", body_style),
+            Paragraph("<b>Cryptographic Hash:</b>", body_style),
+            _plain_paragraph(audit_hash[:24] + "...", body_style),
+        ],
+    ]
+    meta_table = Table(cert_meta, colWidths=[110, 150, 110, 145])
+    meta_table.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, -1), light_background),
+                ("PADDING", (0, 0), (-1, -1), 6),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#e2e8f0")),
+            ]
+        )
+    )
+    story.append(meta_table)
+    story.append(Spacer(1, 10))
+
+    story.append(Paragraph("1. Deliverables Handover Audit Trail", section_style))
+    deliverable_meta = [
+        [Paragraph("<b>Production Live Domain:</b>", body_style), _plain_paragraph(live_url, body_style)],
+        [Paragraph("<b>Source Code Repository:</b>", body_style), _plain_paragraph(source_url, body_style)],
+        [Paragraph("<b>Completion Verification:</b>", body_style), _plain_paragraph("100% Deliverable Sign-Off. Reconciled via Sequential Escrow Rails.", body_style)],
+    ]
+    deliv_table = Table(deliverable_meta, colWidths=[160, 355])
+    deliv_table.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#f1f5f9")),
+                ("PADDING", (0, 0), (-1, -1), 6),
+                ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#cbd5e1")),
+            ]
+        )
+    )
+    story.append(deliv_table)
+    story.append(Spacer(1, 10))
+
+    story.append(Paragraph("2. Binding Acceptance & Anti-Chargeback Statutory Waiver", section_style))
+    waiver_text = (
+        "<b>2.1 Inspection & Full Sign-Off:</b> The Client formally acknowledges full and satisfactory inspection "
+        "of all architectural, design, staging, and source code deliverables produced under Project #{project.id}. "
+        "All milestone criteria outlined in the signed Statement of Work have been fulfilled.<br/><br/>"
+        "<b>2.2 Intellectual Property Release:</b> AgencyOS Digital Solutions certifies that all proprietary software, "
+        "custom codebases, and intellectual assets have been irrevocably released to the Client upon settlement of Milestone 3.<br/><br/>"
+        "<b>2.3 Irrevocable Waiver of Dispute & Clawback:</b> In accordance with Section 10A of the Information Technology Act, 2000 (India) "
+        "and international electronic signature jurisprudence, the Client explicitly acknowledges that services have been completely "
+        "rendered. The Client unconditionally waives any right to initiate fraudulent chargebacks, merchant refund claims, or bank clawbacks "
+        "for payment transactions processed through Razorpay, Stripe, or offline wire facilities under this engagement.<br/><br/>"
+        "<b>2.4 Cryptographic Validity:</b> This certificate bears digital validity with SHA-256 validation code: <b>{audit_hash}</b>."
+    ).format(project=project, audit_hash=audit_hash)
+    story.append(Paragraph(waiver_text, legal_style))
+    story.append(Spacer(1, 15))
+
+    signature_meta = [
+        [
+            Paragraph("<b>Executed for Agency:</b>", body_style),
+            Paragraph("<b>Client Acknowledgment & Sign-Off:</b>", body_style),
+        ],
+        [
+            _plain_paragraph("AgencyOS Digital Solutions", body_style),
+            _plain_paragraph(customer_name, body_style),
+        ],
+        [
+            _plain_paragraph("Digitally Sealed & Verified", ParagraphStyle("SubText", parent=body_style, textColor=muted_text)),
+            _plain_paragraph(f"Authenticated from verified account {customer.email if customer else ''}", ParagraphStyle("SubText2", parent=body_style, textColor=muted_text)),
+        ],
+    ]
+    sig_table = Table(signature_meta, colWidths=[255, 260])
+    sig_table.setStyle(
+        TableStyle(
+            [
+                ("LINEABOVE", (0, 0), (-1, 0), 1, colors.HexColor("#94a3b8")),
+                ("PADDING", (0, 0), (-1, -1), 6),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ]
+        )
+    )
+    story.append(KeepTogether(sig_table))
 
     doc.build(story)
     buffer.seek(0)

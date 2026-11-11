@@ -13,7 +13,7 @@
         <span class="text-zinc-400">Escrow &amp; RazorpayX Payout Rails</span>
       </div>
       <h1 class="text-2xl font-extrabold text-white tracking-tight">Payments &amp; Escrow Ledger</h1>
-      <p class="text-xs font-mono text-zinc-400 mt-1">Live reconciliation of gateway deposits, statutory GST/LUT allocations, and automated RazorpayX payouts.</p>
+      <p class="text-xs font-mono text-zinc-400 mt-1">Live reconciliation of gateway deposits, statutory Section 194-O TDS deductions, and automated RazorpayX payouts.</p>
     </div>
 
     <div class="flex items-center gap-3">
@@ -51,22 +51,22 @@
 
     <div class="p-6 border-b border-r border-zinc-800">
       <span class="text-zinc-500 uppercase block mb-1">Tax Regime Classification</span>
-      <div class="mt-2 text-2xl font-bold text-white">SAC 998311</div>
-      <span class="mt-2 block text-[11px] text-zinc-500">INR: 18% GST (Rule 46) • Intl: 0% LUT Export</span>
+      <div class="mt-2 text-2xl font-bold text-white">SAC 998311 &bull; 194-O</div>
+      <span class="mt-2 block text-[11px] text-zinc-500">GST: 18% Rule 46 • Payout TDS: 1% with PAN / 20% Non-PAN</span>
     </div>
   </div>
 
-  <!-- SPECIALIST WALLET WITHDRAWAL REQUESTS QUEUE (RAZORPAYX 1-CLICK DISBURSE) -->
+  <!-- SPECIALIST WALLET WITHDRAWAL REQUESTS QUEUE (RAZORPAYX + STATUTORY TDS WITHHOLDING) -->
   <section class="space-y-4">
     <div class="flex items-center justify-between">
       <div>
         <h2 class="text-lg font-bold text-white flex items-center gap-2">
-          <span>⚡</span> Specialist Wallet Redemption Queue (RazorpayX)
+          <span>⚡</span> Specialist Wallet Redemption Queue &amp; TDS Ledger
         </h2>
-        <p class="text-xs font-mono text-zinc-400">Payout requests submitted by verified specialists ready for 1-click API disbursement.</p>
+        <p class="text-xs font-mono text-zinc-400">Payout requests with automated Section 194-O statutory tax withholding and 1-click RazorpayX disbursement.</p>
       </div>
       <span class="badge badge-neutral font-mono text-xs">
-        {{ withdrawal_requests|length if withdrawal_requests else 0 }} Total Requests
+        {{ enriched_withdrawals|length if enriched_withdrawals else 0 }} Total Requests
       </span>
     </div>
 
@@ -77,14 +77,16 @@
             <tr>
               <th class="p-4">Request Ref</th>
               <th class="p-4">Specialist Talent</th>
-              <th class="p-4">Redeem Amount</th>
+              <th class="p-4">PAN / Tax Status</th>
+              <th class="p-4">Gross &bull; TDS &bull; Net</th>
               <th class="p-4">Payout Route / Coordinates</th>
               <th class="p-4">State</th>
               <th class="p-4 text-right">RazorpayX Action</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-zinc-800/60 text-zinc-300">
-            {% for req in withdrawal_requests %}
+            {% for item in enriched_withdrawals %}
+            {% set req = item.request %}
             <tr class="hover:bg-zinc-800/40 transition-colors">
               <td class="p-4 font-bold text-zinc-400">
                 #WTH-{{ req.id }}
@@ -96,9 +98,35 @@
                 <span class="text-zinc-500 text-[11px] block">{{ req.specialist.email if req.specialist else '' }}</span>
               </td>
 
+              <!-- PAN Status -->
               <td class="p-4">
-                <span class="font-extrabold text-emerald-400 text-sm">₹{{ "%.2f"|format(req.amount|float) }}</span>
-                <span class="text-[10px] text-zinc-500 block">INR</span>
+                {% if item.has_valid_pan %}
+                  <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-950 text-emerald-400 border border-emerald-800">
+                    ✓ {{ item.pan }}
+                  </span>
+                  <span class="text-[10px] text-zinc-500 block mt-0.5">1% TDS Rate</span>
+                {% else %}
+                  <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-950 text-rose-300 border border-rose-800">
+                    ⚠️ No PAN (20% TDS)
+                  </span>
+                  <span class="text-[10px] text-zinc-500 block mt-0.5">Statutory 20% Max Rate</span>
+                {% endif %}
+              </td>
+
+              <!-- Gross, TDS, and Net Disbursable Breakdown -->
+              <td class="p-4 space-y-0.5">
+                <div class="flex justify-between gap-3 text-[11px]">
+                  <span class="text-zinc-400">Gross:</span>
+                  <span class="font-bold text-zinc-200">₹{{ "%.2f"|format(req.amount|float) }}</span>
+                </div>
+                <div class="flex justify-between gap-3 text-[11px]">
+                  <span class="text-amber-400">TDS:</span>
+                  <span class="font-bold text-amber-400">-₹{{ "%.2f"|format(item.tds_amount|float) }}</span>
+                </div>
+                <div class="flex justify-between gap-3 text-xs pt-1 border-t border-zinc-800">
+                  <span class="text-emerald-400 font-bold">Net Payout:</span>
+                  <span class="font-extrabold text-emerald-400">₹{{ "%.2f"|format(item.net_disbursable|float) }}</span>
+                </div>
               </td>
 
               <td class="p-4">
@@ -145,10 +173,10 @@
               <td class="p-4 text-right">
                 {% if req.status == 'Pending' %}
                   <div class="flex items-center justify-end gap-2">
-                    <form method="POST" action="{{ url_for('admin.approve_withdrawal', request_id=req.id) }}" class="inline" onsubmit="return confirm('Disburse ₹{{ req.amount }} instantly via RazorpayX?');">
+                    <form method="POST" action="{{ url_for('admin.approve_withdrawal', request_id=req.id) }}" class="inline" onsubmit="return confirm('Disburse ₹{{ item.net_disbursable }} Net (after ₹{{ item.tds_amount }} TDS under Sec 194-O) via RazorpayX?');">
                       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                       <button type="submit" class="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-xs font-semibold cursor-pointer shadow-md transition-colors">
-                        Disburse via RazorpayX ⚡
+                        Disburse Net ₹{{ "%.2f"|format(item.net_disbursable|float) }} ⚡
                       </button>
                     </form>
 
@@ -168,7 +196,7 @@
             </tr>
             {% else %}
             <tr>
-              <td colspan="6" class="p-12 text-center text-zinc-500 font-mono text-xs">
+              <td colspan="7" class="p-12 text-center text-zinc-500 font-mono text-xs">
                 No specialist wallet redemption requests currently pending.
               </td>
             </tr>

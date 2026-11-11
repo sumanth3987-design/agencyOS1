@@ -115,6 +115,20 @@
         </div>
       </div>
 
+      <!-- ADDED: Password Confirmation for E2E Test Compliance -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-zinc-400 mb-1">Confirm Password *</label>
+          <input
+            type="password"
+            name="password_confirm"
+            required
+            placeholder="••••••••"
+            class="form-control text-xs"
+          >
+        </div>
+      </div>
+
       <!-- Client Organization Specific Fields -->
       <div id="clientFields" class="space-y-4">
         <div>
@@ -164,8 +178,8 @@
               type="url"
               name="portfolio"
               placeholder="https://github.com/..."
-              class="form-control text-xs"
-            >
+              class="form-control text-xs
+            ">
           </div>
         </div>
       </div>

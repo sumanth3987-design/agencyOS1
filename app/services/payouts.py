@@ -71,7 +71,7 @@ def calculate_meritocracy_rate(specialist_user: User) -> Decimal:
 
 
 def disburse_payout(withdrawal_req: Any) -> tuple[bool, str, str]:
-    """Disburse funds via RazorpayX Payouts API or fallback to sandbox simulation.
+    """Disburse funds via RazorpayX Payouts API enforcing statutory Section 194-O TDS deductions.
     
     Returns: (success: bool, utr_or_reference: str, message: str)
     """
@@ -82,22 +82,33 @@ def disburse_payout(withdrawal_req: Any) -> tuple[bool, str, str]:
     is_sandbox = not key_id or "placeholder" in key_id.lower() or "test" in key_id.lower()
 
     specialist = withdrawal_req.specialist
-    amount_paise = int(round(float(withdrawal_req.amount) * 100))
+
+    # Enforce Statutory TDS: Disburse NET amount (Gross - TDS) to prevent agency tax loss
+    disbursable_amount = getattr(withdrawal_req, "net_amount", None)
+    if not disbursable_amount or Decimal(str(disbursable_amount)) <= Decimal("0.00"):
+        tds_amt = getattr(withdrawal_req, "tds_amount", None)
+        if tds_amt and Decimal(str(tds_amt)) > Decimal("0.00"):
+            disbursable_amount = Decimal(str(withdrawal_req.amount)) - Decimal(str(tds_amt))
+        else:
+            disbursable_amount = Decimal(str(withdrawal_req.amount))
+
+    amount_paise = int(round(float(disbursable_amount) * 100))
     ref_id = f"wth_{withdrawal_req.id}_{secrets.token_hex(4)}"
 
     # Generate immutable cryptographic checksum for audit ledger
-    checksum_raw = f"{withdrawal_req.id}:{withdrawal_req.amount}:{withdrawal_req.payout_mode}:{specialist.email}"
+    checksum_raw = f"{withdrawal_req.id}:{disbursable_amount}:{withdrawal_req.payout_mode}:{specialist.email}"
     audit_hash = hashlib.sha256(checksum_raw.encode("utf-8")).hexdigest()[:16].upper()
 
     # Sandbox Simulation Fallback
     if is_sandbox:
         simulated_utr = f"UTR_SIM_{audit_hash}"
         logger.info(
-            "Sandbox Mode: Simulated payout of ₹%s disbursed successfully. UTR: %s",
+            "Sandbox Mode: Simulated payout of Net ₹%s (Gross: ₹%s) disbursed successfully. UTR: %s",
+            disbursable_amount,
             withdrawal_req.amount,
             simulated_utr,
         )
-        return True, simulated_utr, "Sandbox payout simulated successfully with verified audit hash."
+        return True, simulated_utr, f"Sandbox payout of Net ₹{disbursable_amount} simulated successfully with verified audit hash."
 
     # Live RazorpayX API Payload
     fund_account_payload = {
@@ -157,7 +168,7 @@ def disburse_payout(withdrawal_req: Any) -> tuple[bool, str, str]:
             res_data = json.loads(response.read().decode("utf-8"))
             payout_id = res_data.get("id", "POUT_UNKNOWN")
             utr = res_data.get("utr") or res_data.get("reference_id") or payout_id
-            return True, str(utr), f"Disbursed via RazorpayX (ID: {payout_id}, Audit: {audit_hash})"
+            return True, str(utr), f"Disbursed Net ₹{disbursable_amount} via RazorpayX (ID: {payout_id}, Audit: {audit_hash})"
     except Exception as exc:
         logger.exception("RazorpayX Payout API error: %s", exc)
         return False, "", str(exc)

@@ -1,22 +1,25 @@
+"""Security, IDOR, and Authorization Test Suite for AgencyOS."""
+
+import json
 import os
 import runpy
 import secrets
+from datetime import timedelta
 
 import pytest
 
 from app import create_app
-from app.config import resolve_flask_env, validate_production_secret_key, validate_secret_key, InsecureSecretKeyError
 from app.config import (
+    InsecureSecretKeyError,
     resolve_app_base_url,
+    resolve_flask_env,
     resolve_mail_port,
-    resolve_rate_limit_storage_url,
     resolve_rate_limit_in_memory_opt_in,
+    resolve_rate_limit_storage_url,
+    resolve_session_lifetime_hours,
+    validate_production_secret_key,
+    validate_secret_key,
 )
-
-from datetime import timedelta
-
-from app.config import resolve_session_lifetime_hours
-
 
 
 def test_missing_env_defaults_to_production(monkeypatch):
@@ -104,21 +107,26 @@ def test_modular_app_does_not_execute_legacy():
     import app  # noqa: F401
     assert "app_legacy" not in sys.modules
 
+
 def test_validate_secret_key_rejects_missing():
     for value in (None, "", "   "):
         with pytest.raises(InsecureSecretKeyError):
             validate_secret_key(value, production=False)
 
+
 def test_validate_secret_key_rejects_non_string():
     with pytest.raises(InsecureSecretKeyError):
         validate_secret_key(123, production=False)
+
 
 def test_validate_secret_key_rejects_short():
     with pytest.raises(InsecureSecretKeyError):
         validate_secret_key("short", production=False)
 
+
 def test_validate_secret_key_accepts_strong():
     validate_secret_key(secrets.token_urlsafe(32), production=False)
+
 
 def test_production_config_has_secure_cookies():
     strong = secrets.token_urlsafe(32)
@@ -130,6 +138,7 @@ def test_production_config_has_secure_cookies():
     assert app.config["REMEMBER_COOKIE_SECURE"] is True
     assert app.config["SESSION_COOKIE_HTTPONLY"] is True
     assert app.config["SESSION_COOKIE_SAMESITE"] == "Lax"
+
 
 def test_development_config_allows_insecure_cookies():
     strong = secrets.token_urlsafe(32)
@@ -175,6 +184,8 @@ def test_create_app_production_accepts_strong_secret():
                                     "RATELIMIT_ALLOW_IN_MEMORY_STORAGE": True,
                                     "APP_BASE_URL": "https://example.com"})
     assert app is not None
+
+
 def test_session_lifetime_defaults_to_twelve_hours(monkeypatch):
     monkeypatch.delenv("SESSION_LIFETIME_HOURS", raising=False)
     assert resolve_session_lifetime_hours() == 12
@@ -202,6 +213,8 @@ def test_session_refresh_each_request_enabled():
                                        "RATELIMIT_ALLOW_IN_MEMORY_STORAGE": True,
                                      "APP_BASE_URL": "https://example.com"})
         assert app.config["SESSION_REFRESH_EACH_REQUEST"] is True
+
+
 def test_rate_limit_storage_url_defaults_to_memory():
     assert resolve_rate_limit_storage_url() == "memory://"
 
@@ -267,6 +280,8 @@ def test_production_rejects_invalid_in_memory_opt_in():
                 "RATELIMIT_ALLOW_IN_MEMORY_STORAGE": "maybe",
             },
         )
+
+
 class TestSafeErrorHandlers:
 
     def test_not_found_browser_response(self, app, client):
@@ -331,6 +346,7 @@ class TestSafeErrorHandlers:
         }
         assert b"secret internal detail" not in response.data
 
+
 def test_app_base_url_normalizes_origin():
     assert resolve_app_base_url("https://Example.com:8443/") == "https://Example.com:8443"
 
@@ -394,3 +410,36 @@ def test_mail_port_rejects_invalid_values():
 def test_mail_port_rejects_boolean():
     with pytest.raises(ValueError):
         resolve_mail_port(True)
+
+
+# =========================================================================
+# NEW IDOR & SECURITY AUDIT TESTS
+# =========================================================================
+
+def test_idor_project_message_access_blocked(app, client, login, factories):
+    """A customer cannot query discussion messages for another customer's project (403)."""
+    owner_id = factories.customer("owner-secure@example.com")
+    foreign_project_id = factories.project(owner_id, service="Secret Project")
+
+    factories.customer("intruder-secure@example.com")
+    login("intruder-secure@example.com", "customer")
+
+    response = client.get(f"/api/project/{foreign_project_id}/messages")
+    assert response.status_code == 403
+    data = json.loads(response.data)
+    assert data["success"] is False
+
+
+def test_admin_api_scope_generator_requires_admin(app, client, login, factories, csrf_token):
+    """Non-admin users cannot access the Gemini AI SOW proxy endpoint (403)."""
+    factories.customer("regular-user-ai@example.com")
+    login("regular-user-ai@example.com", "customer")
+
+    response = client.post(
+        "/api/ai/generate-scope",
+        data={"client_name": "Test", "notes": "Build a SaaS"},
+        headers={"X-CSRFToken": csrf_token},
+    )
+    assert response.status_code == 403
+    data = json.loads(response.data)
+    assert data["success"] is False

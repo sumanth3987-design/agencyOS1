@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Open Sprints Marketplace — {{ agency_settings.agency_name }}</title>
+  <title>Open Sprints Marketplace — {{ agency_settings.agency_name if agency_settings else 'AgencyOS' }}</title>
 
   <!-- Typography: Plus Jakarta Sans & JetBrains Mono -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -39,12 +39,12 @@
 
   <style>
     :root {
-      --agency-primary: {{ agency_settings.primary_color }};
-      --agency-on-primary: {{ agency_settings.primary_contrast }};
+      --agency-primary: {{ agency_settings.primary_color if agency_settings else '#6366f1' }};
+      --agency-on-primary: {{ agency_settings.primary_contrast if agency_settings else '#ffffff' }};
     }
   </style>
 </head>
-<body class="bg-zinc-950 text-zinc-100 min-h-screen selection:bg-zinc-100 selection:text-zinc-950 antialiased font-sans" style="--agency-primary: {{ agency_settings.primary_color }}; --agency-on-primary: {{ agency_settings.primary_contrast }};">
+<body class="bg-zinc-950 text-zinc-100 min-h-screen selection:bg-zinc-100 selection:text-zinc-950 antialiased font-sans" style="--agency-primary: {{ agency_settings.primary_color if agency_settings else '#6366f1' }}; --agency-on-primary: {{ agency_settings.primary_contrast if agency_settings else '#ffffff' }};">
 
   <!-- TOP NAVIGATION BAR -->
   <header class="border-b border-zinc-800 bg-zinc-950/95 sticky top-0 z-40">
@@ -59,7 +59,7 @@
             </span>
           {% else %}
             <span class="w-7 h-7 rounded bg-indigo-600 text-white flex items-center justify-center font-black text-xs">A</span>
-            <span>{{ agency_settings.agency_name }}</span>
+            <span>{{ agency_settings.agency_name if agency_settings else 'AgencyOS' }}</span>
           {% endif %}
         </a>
         <span class="hidden sm:inline-flex items-center px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-indigo-950 text-indigo-300 border border-indigo-800">
@@ -79,21 +79,63 @@
   <!-- MAIN CONTENT -->
   <main class="max-w-7xl mx-auto px-6 py-8 w-full flex-1 space-y-8">
 
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="space-y-2">
+          {% for category, message in messages %}
+            <div class="system-alert {{ 'system-alert-success' if category == 'success' else 'system-alert-error' }}">
+              <span class="font-mono text-xs">{{ message }}</span>
+              <button onclick="this.parentElement.remove()" class="text-zinc-400 hover:text-white ml-auto cursor-pointer">&times;</button>
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
     <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-6 border-b border-zinc-800 gap-4">
       <div>
         <div class="flex items-center gap-2 mb-1 font-mono text-xs">
           <span class="badge badge-emerald">FUNDED SPRINT MARKETPLACE</span>
           <span class="text-zinc-600">•</span>
-          <span class="text-zinc-400">50% Advance Deposited</span>
+          <span class="text-zinc-400">Escrow Backed Rails</span>
+          
+          {% if meritocracy_tier %}
+          <span class="text-zinc-600">•</span>
+          <span class="badge {% if meritocracy_tier.level == 3 %}badge-emerald{% elif meritocracy_tier.level == 2 %}badge-indigo{% else %}badge-neutral{% endif %}">
+            {{ meritocracy_tier.name }} ({{ meritocracy_tier.share_pct }}% Share)
+          </span>
+          {% endif %}
         </div>
         <h1 class="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">Open Opportunities Feed</h1>
-        <p class="text-xs font-mono text-zinc-400 mt-1">Browse verified client projects where Milestone 1 escrow deposit is fully funded.</p>
+        <p class="text-xs font-mono text-zinc-400 mt-1">Browse verified client projects with advance escrow funded by clients.</p>
       </div>
 
-      <span class="badge badge-neutral font-mono text-xs px-3 py-1">
-        {{ scored_projects|length if scored_projects else 0 }} Funded Sprints Available
-      </span>
+      <div class="flex items-center gap-3">
+        <!-- Live Capacity Indicator -->
+        <span class="badge {% if at_capacity %}badge-amber{% else %}badge-indigo{% endif %} font-mono text-xs px-3 py-1">
+          Active Sprints: {{ active_sprints_count|default(0) }} / 2 Max
+        </span>
+
+        <span class="badge badge-neutral font-mono text-xs px-3 py-1">
+          {{ scored_projects|length if scored_projects else 0 }} Funded Sprints Available
+        </span>
+      </div>
     </div>
+
+    <!-- CAPACITY WARNING BANNER (IF 2 SPRINTS CURRENTLY ACTIVE) -->
+    {% if at_capacity %}
+    <div class="p-4 rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-200 font-mono text-xs flex items-center justify-between shadow-lg">
+      <div class="flex items-center gap-2.5">
+        <span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+        <span>
+          <strong>Workload Capacity Reached (2/2):</strong> You currently have 2 active sprints in progress. To guarantee high quality, complete and deliver active projects before bidding on new sprints.
+        </span>
+      </div>
+      <a href="{{ url_for('professional.professional_dashboard') }}" class="underline hover:text-white shrink-0 ml-4">
+        Go to Workspaces →
+      </a>
+    </div>
+    {% endif %}
 
     <!-- Opportunities Grid -->
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -143,12 +185,17 @@
               data-currency="{{ proj.currency }}"
               data-requirements="{{ proj.requirements }}"
               data-skills="{{ proj.required_skills or 'General Scope' }}"
+              data-at-capacity="{{ 'true' if at_capacity else 'false' }}"
             >
               View Details
             </button>
 
             {% if proj.id in my_applied_ids %}
               <span class="badge badge-neutral text-xs">Applied ✓</span>
+            {% elif at_capacity %}
+              <span class="badge badge-amber text-xs" title="Complete active projects to unlock capacity">
+                Capacity Reached (2/2)
+              </span>
             {% else %}
               <button
                 type="button"
@@ -200,15 +247,21 @@
         </div>
 
         <div>
-          <span class="text-zinc-500 text-[10px] uppercase block mb-1">Full Scope Narrative & Deliverables:</span>
+          <span class="text-zinc-500 text-[10px] uppercase block mb-1">Full Scope Narrative &amp; Deliverables:</span>
           <p id="detailsModalReqs" class="text-zinc-300 font-sans text-xs whitespace-pre-wrap leading-relaxed">Requirements</p>
         </div>
       </div>
 
       <div class="flex gap-2 pt-2">
-        <button type="button" id="applyFromDetailsBtn" class="flex-1 btn btn-primary text-xs h-9 font-semibold cursor-pointer">
-          Apply for this Sprint →
-        </button>
+        {% if at_capacity %}
+          <button type="button" disabled class="flex-1 btn btn-secondary text-xs h-9 font-semibold text-amber-400 cursor-not-allowed opacity-60">
+            Sprint Capacity Reached (2/2 Active)
+          </button>
+        {% else %}
+          <button type="button" id="applyFromDetailsBtn" class="flex-1 btn btn-primary text-xs h-9 font-semibold cursor-pointer">
+            Apply for this Sprint →
+          </button>
+        {% endif %}
         <button type="button" id="dismissDetailsModalBtn" class="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded text-xs cursor-pointer">
           Close
         </button>
@@ -248,7 +301,7 @@
               type="number"
               step="0.01"
               name="proposed_rate"
-              placeholder="Leave blank for 45% default"
+              placeholder="Leave blank for {{ meritocracy_tier.share_pct|default(45) }}% default"
               class="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded text-white text-xs"
             >
           </div>
@@ -278,7 +331,7 @@
   </div>
 
   <footer class="border-t border-zinc-800 bg-zinc-950 py-6 px-6 text-center text-xs font-mono text-zinc-500 mt-12">
-    {{ agency_settings.agency_name }} Specialist Node &bull; Escrow Protection &bull; SAC 998311
+    {{ agency_settings.agency_name if agency_settings else 'AgencyOS' }} Specialist Node &bull; Escrow Protection &bull; SAC 998311
   </footer>
 
   <script>

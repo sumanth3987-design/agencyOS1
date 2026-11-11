@@ -1,6 +1,6 @@
 import pytest
 from app.extensions import db
-from app.models import ProfessionalProfile, ProfessionalProjectApplication, Project
+from app.models import ProfessionalProfile, ProfessionalProjectApplication, Project, User
 
 
 class TestAdminVerification:
@@ -48,13 +48,17 @@ class TestApply:
     ):
         """Applying to a project that is not in 'Pending Assignment' status is blocked."""
         customer_id = factories.user('customer', 'apply-nonpending@example.com')
-        # Create project in 'Assigned' status
         project_id = factories.project(customer_id, status='Assigned')
-        # Ensure it is paid (passing the payment security gate)
         factories.payment(project_id, customer_id, status='Paid') 
         
         prof_id = factories.user('professional', 'apply-nonpending-prof@example.com')
-        factories.profile(prof_id, verification_status='Verified')
+        factories.profile(prof_id, verification_status='Verified', expertise='general')
+        with app.app_context():
+            u = db.session.get(User, prof_id)
+            if u:
+                u.is_verified = True
+                db.session.commit()
+
         login('apply-nonpending-prof@example.com', 'professional')
 
         response = csrf_post(
@@ -62,13 +66,9 @@ class TestApply:
             data={},
             follow_redirects=False,
         )
-        # Verify it was blocked (redirected)
         assert response.status_code == 302
 
         with app.app_context():
-            # Verify that NO application was created in the database
-            # We filter by project_id and professional_id. 
-            # If the count is 0, the test passes.
             count = ProfessionalProjectApplication.query.filter_by(
                 project_id=project_id, professional_id=prof_id
             ).count()
@@ -82,8 +82,20 @@ class TestApply:
         project_id = factories.project(customer_id, status='Pending Assignment')
         factories.payment(project_id, customer_id, status='Paid')
 
+        with app.app_context():
+            p = db.session.get(Project, project_id)
+            if p:
+                p.status = 'Pending Assignment'
+                db.session.commit()
+
         prof_id = factories.user('professional', 'apply-dup-prof@example.com')
-        factories.profile(prof_id, verification_status='Verified')
+        factories.profile(prof_id, verification_status='Verified', expertise='general')
+        with app.app_context():
+            u = db.session.get(User, prof_id)
+            if u:
+                u.is_verified = True
+                db.session.commit()
+
         login('apply-dup-prof@example.com', 'professional')
 
         response1 = csrf_post(
@@ -114,10 +126,22 @@ class TestApply:
         project_id = factories.project(customer_id, status='Pending Assignment')
         factories.payment(project_id, customer_id, status='Paid')
 
+        with app.app_context():
+            p = db.session.get(Project, project_id)
+            if p:
+                p.status = 'Pending Assignment'
+                db.session.commit()
+
         prof_id = factories.user('professional', 'apply-mismatch-prof@example.com')
         factories.profile(
-            prof_id, verification_status='Verified', expertise='Web Development'
+            prof_id, verification_status='Verified', expertise='Blockchain Smart Contracts'
         )
+        with app.app_context():
+            u = db.session.get(User, prof_id)
+            if u:
+                u.is_verified = True
+                db.session.commit()
+
         login('apply-mismatch-prof@example.com', 'professional')
 
         response = csrf_post(
@@ -141,8 +165,14 @@ class TestApply:
         project_id = factories.project(customer_id, status='Pending Assignment')
         factories.payment(project_id, customer_id, status='Paid')
 
+        with app.app_context():
+            p = db.session.get(Project, project_id)
+            if p:
+                p.status = 'Pending Assignment'
+                db.session.commit()
+
         prof_id = factories.user('professional', 'apply-unverified-prof@example.com')
-        factories.profile(prof_id, verification_status='Pending')
+        factories.profile(prof_id, verification_status='Pending', expertise='general')
         login('apply-unverified-prof@example.com', 'professional')
 
         response = csrf_post(
@@ -166,9 +196,20 @@ class TestApply:
         project_id = factories.project(customer_id, status='Pending Assignment')
         factories.payment(project_id, customer_id, status='Paid')
 
+        with app.app_context():
+            p = db.session.get(Project, project_id)
+            if p:
+                p.status = 'Pending Assignment'
+                db.session.commit()
+
         prof_id = factories.user('professional', 'apply-ok-prof@example.com')
-        # Default profile expertise matches the default project service.
-        factories.profile(prof_id, verification_status='Verified')
+        factories.profile(prof_id, verification_status='Verified', expertise='general')
+        with app.app_context():
+            u = db.session.get(User, prof_id)
+            if u:
+                u.is_verified = True
+                db.session.commit()
+
         login('apply-ok-prof@example.com', 'professional')
 
         response = csrf_post(
@@ -238,7 +279,6 @@ class TestAssignAndStart:
         with app.app_context():
             application = db.session.get(ProfessionalProjectApplication, app_id)
             assert application.status == 'Applied'
-            # Project remains 'Assigned' (was never 'Pending Assignment')
             assert db.session.get(Project, project_id).status == 'Assigned'
 
     def test_assign_transitions_all_applications(
@@ -670,7 +710,6 @@ class TestStartProjectPaymentGate:
         with app.app_context():
             application = db.session.get(ProfessionalProjectApplication, app_id)
             assert application.status == 'Applied'
-            # Project remains 'Payment Pending'
             assert db.session.get(Project, project_id).status == 'Payment Pending'
 
     def test_professional_cannot_apply_to_payment_pending_project(
@@ -707,6 +746,7 @@ class TestStartProjectPaymentGate:
         with app.app_context():
             project = db.session.get(Project, project_id)
             assert project.status == 'Payment Pending'
+
 
 class TestSubmit:
     """Test project submission flows."""

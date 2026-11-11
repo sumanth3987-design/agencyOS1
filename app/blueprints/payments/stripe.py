@@ -1,7 +1,7 @@
 """AgencyOS Stripe Multi-Currency Gateway Blueprint.
 
-Supports one-time checkout, webhook event verification, and automated
-recurring subscription lifecycle event handlers (invoice.payment_succeeded and invoice.payment_failed).
+Supports one-time checkout, webhook event verification, international retainer renewal tracking,
+5-hour monthly hours bank resets, and automated recurring subscription lifecycle event handlers.
 """
 
 from decimal import Decimal
@@ -24,13 +24,17 @@ from app.models import (
     Notification,
     PACKAGE_PRICES,
     Payment,
+    ProfessionalProfile,
     Project,
+    RazorpaySubscription,
     StripeWebhookEvent,
     User,
+    WalletTransaction,
     get_ist_now,
 )
 from app.utils.currency import (
     calculate_tax_rate,
+    compute_financial_split,
     format_currency,
     get_package_price,
     sanitize_currency,
@@ -43,7 +47,7 @@ from app.utils.stripe_config import (
     build_checkout_session_params,
     get_stripe_price_id,
 )
-from app.services.whatsapp import notify_payment_received
+from app.services.whatsapp import notify_payment_received, notify_retainer_renewed
 
 logger = logging.getLogger(__name__)
 
@@ -83,9 +87,10 @@ def create_stripe_checkout(project_id: int) -> Any:
     # Already paid guard
     existing_paid = Payment.query.filter_by(
         project_id=project.id, status="Paid"
-    ).first()
-    if existing_paid is not None:
-        return jsonify({"success": False, "message": "Project has already been paid."}), 400
+    ).all()
+    # In multi-milestone 3-gate system, fully paid requires 3 payments
+    if len(existing_paid) >= 3:
+        return jsonify({"success": False, "message": "All milestone payments for this project have already been completed."}), 400
 
     # Reuse existing open Stripe payment
     existing_stripe = Payment.query.filter_by(
@@ -121,7 +126,7 @@ def create_stripe_checkout(project_id: int) -> Any:
             "message": "This project package has no configured price in its billing currency.",
         }), 400
 
-    milestone_num = data.get("milestone", 1)
+    milestone_num = data.get("milestone", len(existing_paid) + 1)
     if milestone_num in (2, 3):
         amount = (total_pkg * Decimal("0.25")).quantize(Decimal("0.01"))
     elif milestone_num == 1:
@@ -225,24 +230,6 @@ def stripe_webhook() -> Any:
     if event_type == "checkout.session.completed":
         session_obj = event["data"]["object"]
         metadata = session_obj.get("metadata", {})
-        project_id = metadata.get("project_id") if metadata else None
-        
-        if project_id:
-            project = db.session.get(Project, int(project_id))
-            if project:
-                project.status = "Pending Assignment"
-                
-                # --- ADD WHATSAPP NOTIFICATION ---
-                customer = User.query.get(project.customer_id)
-                if customer:
-                    notify_payment_received(
-                        project_id=project.id,
-                        service_name=project.service,
-                        amount=session_obj.get("amount_total", 0) / 100,
-                        client_phone=customer.phone or os.getenv("DEFAULT_ADMIN_PHONE"),
-                        client_name=customer.name
-                    )
-                # -----------------------------------
         project_id_str = metadata.get("project_id")
         amount_total = session_obj.get("amount_total", 0)
         currency = session_obj.get("currency", "").upper()
@@ -270,24 +257,23 @@ def stripe_webhook() -> Any:
 
                     payment.status = "Paid"
                     payment.gateway_payment_id = session_obj.get("payment_intent")
+                    payment.paid_at = get_ist_now()
+
+                    talent_share, agency_share, tax_val = compute_financial_split(payment.amount, currency)
 
                     invoice = Invoice.query.filter_by(project_id=project.id).first()
                     if invoice is None:
-                        tax_rate = calculate_tax_rate(
-                            client_country=(getattr(project, "billing_country", "") or ""),
-                            currency=currency,
-                        )
-                        tax_amount = (
-                            (payment.amount * tax_rate).quantize(Decimal("0.01"))
-                            if tax_rate > 0 else Decimal("0.00")
-                        )
                         invoice = Invoice()
+                        invoice.invoice_number = f"INV-2026-{project.id:04d}-{secrets.token_hex(2).upper()}"
                         invoice.project_id = project.id
                         invoice.customer_id = project.customer_id
                         invoice.gross_amount = payment.amount
-                        invoice.tax_amount = tax_amount
+                        invoice.talent_payout = talent_share
+                        invoice.agency_profit = agency_share
+                        invoice.tax_amount = tax_val
                         invoice.currency = currency
                         invoice.status = "Paid"
+                        invoice.payout_status = "Pending Approval"
                         db.session.add(invoice)
                     else:
                         invoice.status = "Paid"
@@ -295,10 +281,22 @@ def stripe_webhook() -> Any:
                     # 50% Initial deposit paid -> Transition status to 'Pending Assignment' for professionals
                     project.status = "Pending Assignment"
 
+                    # WhatsApp Notification
+                    customer = User.query.get(project.customer_id)
+                    if customer:
+                        cust_phone = customer.phone or (getattr(customer.customer_profile, "phone", None) if customer.customer_profile else None)
+                        notify_payment_received(
+                            project_id=project.id,
+                            service_name=project.service,
+                            amount=payment.amount,
+                            client_phone=cust_phone,
+                            client_name=customer.name,
+                        )
+
                     ActivityLog.log_event(
                         project.id,
                         "STRIPE_PAYMENT_RECEIVED",
-                        f"Stripe initial 50% deposit of {format_currency(payment.amount, currency)} received via Checkout session {session_obj.get('id')}.",
+                        f"Stripe deposit of {format_currency(payment.amount, currency)} received via Checkout session {session_obj.get('id')}.",
                         project.customer_id,
                         "success",
                     )
@@ -313,12 +311,6 @@ def stripe_webhook() -> Any:
                     )
 
                     db.session.commit()
-
-                    logger.info(
-                        "Stripe webhook: project #%s marked Paid via session %s",
-                        project.id,
-                        session_obj.get("id"),
-                    )
                     return jsonify({"status": "success"}), 200
                 else:
                     StripeWebhookEvent.mark_processed(
@@ -345,7 +337,7 @@ def stripe_webhook() -> Any:
             )
             db.session.commit()
 
-    # 2. AUTOMATED RECURRING SUBSCRIPTION PAYMENT SUCCEEDED
+    # 2. AUTOMATED RECURRING SUBSCRIPTION PAYMENT SUCCEEDED (STRIPE INTERNATIONAL RETAINER SYNC)
     elif event_type == "invoice.payment_succeeded":
         invoice_obj = event["data"]["object"]
         subscription_id = invoice_obj.get("subscription")
@@ -357,22 +349,72 @@ def stripe_webhook() -> Any:
         user_id = user.id if user else 1
 
         gross_dec = Decimal(str(amount_paid)) / 100
+        talent_share, agency_share, tax_amount = compute_financial_split(gross_dec, currency)
+
+        # Link to active subscription if subscription_id exists
+        sub = RazorpaySubscription.query.filter_by(razorpay_subscription_id=subscription_id).first()
+        project_id = sub.project_id if sub else 1
 
         inv_record = Invoice()
-        inv_record.invoice_number = f"STRIPE-RET-{secrets.token_hex(4).upper()}"
+        inv_record.invoice_number = f"STRIPE-RET-{project_id:04d}-{secrets.token_hex(3).upper()}"
         inv_record.customer_id = user_id
-        inv_record.project_id = 1
+        inv_record.project_id = project_id
         inv_record.gross_amount = gross_dec
+        inv_record.talent_payout = talent_share
+        inv_record.agency_profit = agency_share
+        inv_record.tax_amount = tax_amount
         inv_record.currency = currency
         inv_record.status = "Paid"
         inv_record.payout_status = "Pending Approval"
         db.session.add(inv_record)
 
+        # Refresh Hours Bank Quota (5 Hours Credited)
+        if sub:
+            sub.hours_allocated = 5
+            sub.hours_remaining = Decimal("5.00")
+            sub.status = "active"
+            sub.updated_at = get_ist_now()
+
+            proj = Project.query.get(sub.project_id)
+            if proj:
+                proj.hours_allocated = 5
+                proj.hours_remaining = Decimal("5.00")
+
+                # Unlock Specialist Retainer Share into Available Wallet
+                specialist_id = proj.assigned_professional_id
+                if specialist_id:
+                    spec_profile = ProfessionalProfile.query.filter_by(user_id=specialist_id).first()
+                    if spec_profile:
+                        spec_profile.available_balance = (
+                            Decimal(str(spec_profile.available_balance or 0)) + talent_share
+                        ).quantize(Decimal("0.01"))
+
+                        tx = WalletTransaction()
+                        tx.user_id = specialist_id
+                        tx.amount = talent_share
+                        tx.currency = currency
+                        tx.transaction_type = "RETAINER_PAYOUT"
+                        tx.reference_type = "SUBSCRIPTION"
+                        tx.reference_id = sub.id
+                        tx.description = f"Stripe monthly retainer payout for Project #{proj.id}: {format_currency(talent_share, currency)}"
+                        tx.created_at = get_ist_now()
+                        db.session.add(tx)
+
+                if user:
+                    cust_phone = user.phone or (getattr(user.customer_profile, "phone", None) if user.customer_profile else None)
+                    notify_retainer_renewed(
+                        proj.id,
+                        proj.service,
+                        gross_dec,
+                        cust_phone,
+                        user.name,
+                    )
+
         if user:
             notif = Notification()
             notif.user_id = user.id
-            notif.title = "Recurring Subscription Renewed ⚡"
-            notif.message = f"Your automated monthly retainer of {format_currency(gross_dec, currency)} has been charged successfully."
+            notif.title = "International Retainer Renewed ⚡"
+            notif.message = f"Your automated monthly retainer of {format_currency(gross_dec, currency)} has been charged successfully via Stripe. 5 hours credited."
             notif.link = "/invoices"
             db.session.add(notif)
 
@@ -383,7 +425,7 @@ def stripe_webhook() -> Any:
             payload=json.dumps(payload)[:5000] if payload else None,
         )
         db.session.commit()
-        return jsonify({"status": "recurring_payment_recorded"}), 200
+        return jsonify({"status": "stripe_recurring_payment_recorded"}), 200
 
     # 3. RECURRING SUBSCRIPTION PAYMENT FAILED
     elif event_type == "invoice.payment_failed":
@@ -395,7 +437,7 @@ def stripe_webhook() -> Any:
             notif = Notification()
             notif.user_id = user.id
             notif.title = "⚠️ Recurring Retainer Payment Failed"
-            notif.message = "Your automated retainer charge could not be processed. Please update your payment coordinates in the client portal."
+            notif.message = "Your automated Stripe retainer charge could not be processed. Please update your payment coordinates in the client portal."
             notif.link = "/customer/dashboard"
             db.session.add(notif)
 
@@ -418,7 +460,7 @@ def stripe_webhook() -> Any:
         )
         db.session.commit()
 
-    return jsonify({"status": "success"}), 200
+    return jsonify({"status": "unhandled_event_type"}), 200
 
 
 # ---------------------------------------------------------------------------

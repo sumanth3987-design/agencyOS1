@@ -1,15 +1,16 @@
 """AgencyOS Customer & Client Portal Blueprint.
 
 Manages client workspace, project progression, digital SOW contracts,
-sequential 3-gate deliverable reviews (50/25/25), chat dispatch, automated escrow release, and GST-compliant invoicing.
+sequential 3-gate deliverable reviews (50/25/25), chat dispatch, automated escrow release,
+monthly retainer hours bank, micro-task drop queue, and GST-compliant invoicing.
 """
 
 from datetime import datetime
 from decimal import Decimal
-import hashlib
 import json
 import logging
 import os
+import secrets
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -31,7 +32,6 @@ from app.models import (
     ActivityLog,
     Business,
     ChatMessage,
-    ContractSignature,
     CustomerProfile,
     Dispute,
     Invoice,
@@ -42,8 +42,10 @@ from app.models import (
     ProfessionalProfile,
     ProfessionalProjectApplication,
     Project,
+    ProjectAddOn,
     ProjectDelivery,
     RazorpaySubscription,
+    RetainerTask,
     Review,
     SubscriptionCharge,
     User,
@@ -52,13 +54,12 @@ from app.models import (
     get_ist_now,
     get_latest_project_delivery,
 )
-from app.services.pdf_generator import extract_sow_signature, generate_sow_pdf
-from app.services.whatsapp import (
-    notify_deliverable_ready,
-    notify_payment_received,
-    notify_project_completed,
-    notify_revision_requested,
+from app.services.pdf_generator import (
+    extract_sow_signature,
+    generate_acceptance_certificate_pdf,
+    generate_sow_pdf,
 )
+from app.services.whatsapp import notify_project_completed, notify_revision_requested
 from app.utils.currency import (
     SUPPORTED_CURRENCIES,
     compute_financial_split,
@@ -73,6 +74,33 @@ logger = logging.getLogger(__name__)
 
 ALLOWED_UPLOAD_EXTENSIONS = {"pdf", "doc", "docx", "png", "jpg", "jpeg", "zip"}
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
+
+ADDON_CATALOG_PRICES = {
+    "Payment Gateway Integration": {
+        "INR": Decimal("12000.00"),
+        "USD": Decimal("150.00"),
+        "EUR": Decimal("140.00"),
+        "GBP": Decimal("120.00"),
+    },
+    "Extra 3 Static Pages": {
+        "INR": Decimal("6000.00"),
+        "USD": Decimal("80.00"),
+        "EUR": Decimal("75.00"),
+        "GBP": Decimal("65.00"),
+    },
+    "Speed & Core Web Vitals Optimization": {
+        "INR": Decimal("8000.00"),
+        "USD": Decimal("100.00"),
+        "EUR": Decimal("95.00"),
+        "GBP": Decimal("80.00"),
+    },
+    "3-Hour Retainer Boost Pack": {
+        "INR": Decimal("5999.00"),
+        "USD": Decimal("75.00"),
+        "EUR": Decimal("70.00"),
+        "GBP": Decimal("60.00"),
+    },
+}
 
 
 # =========================================================
@@ -166,7 +194,7 @@ def dashboard_quick_message() -> Any:
 
 
 # =========================================================
-# PROJECT DETAILS & WORKSPACE
+# PROJECT DETAILS & WORKSPACE (WITH RETAINER TASKS)
 # =========================================================
 
 @customer_bp.route("/project/<project_id>")
@@ -246,6 +274,13 @@ def project_details(project_id: int | str) -> Any:
                 .all()
             )
 
+    # Load micro-tasks for the retainer hours bank
+    retainer_tasks = (
+        RetainerTask.query.filter_by(project_id=project.id)
+        .order_by(RetainerTask.created_at.desc())
+        .all()
+    )
+
     return render_template(
         "customer_project_details.html",
         project=project,
@@ -260,7 +295,174 @@ def project_details(project_id: int | str) -> Any:
         sow_signed=extract_sow_signature(project.requirements) is not None,
         retainer_subscription_status=retainer_subscription_status,
         retainer_charges=retainer_charges,
+        retainer_tasks=retainer_tasks,
     )
+
+
+# =========================================================
+# CLIENT DROP RETAINER TASK (HOURS BANK EXECUTION)
+# =========================================================
+
+@customer_bp.route("/project/<project_id>/drop-task", methods=["POST"])
+@customer_bp.route("/project/<int:project_id>/drop-task", methods=["POST"])
+@login_required
+def drop_retainer_task(project_id: int | str) -> Any:
+    clean_id = str(project_id).strip().rstrip("-/")
+    try:
+        pid = int(clean_id)
+    except ValueError:
+        flash("Invalid project reference.", "danger")
+        return redirect(url_for("customer.dashboard"))
+
+    project = db.session.get(Project, pid)
+    if not project or (project.customer_id != current_user.id and getattr(current_user, "role", "").lower() != "admin"):
+        flash("Unauthorized action.", "danger")
+        return redirect(url_for("customer.dashboard"))
+
+    if (Decimal(str(project.hours_remaining or 0))) <= Decimal("0.00"):
+        flash(
+            "Monthly Hours Exhausted: You have utilized all 5 hours for this cycle. "
+            "Please purchase a 3-Hour Retainer Boost Pack or await cycle renewal.",
+            "warning",
+        )
+        return redirect(url_for("customer.project_details", project_id=project.id))
+
+    title = request.form.get("title", "").strip()
+    description = request.form.get("description", "").strip()
+
+    if not title or not description:
+        flash("Please provide both a title and detailed instructions for the task.", "warning")
+        return redirect(url_for("customer.project_details", project_id=project.id))
+
+    asset_url = None
+    upload_file = request.files.get("asset_file")
+    if upload_file and upload_file.filename:
+        try:
+            asset_url = save_project_upload(upload_file, ALLOWED_UPLOAD_EXTENSIONS)
+        except ValueError as exc:
+            flash(f"File upload blocked: {str(exc)}", "danger")
+            return redirect(url_for("customer.project_details", project_id=project.id))
+        except Exception as exc:
+            logger.error("Asset file upload failed: %s", str(exc), exc_info=True)
+            flash("Could not upload the attachment. The file might be corrupted.", "danger")
+            return redirect(url_for("customer.project_details", project_id=project.id))
+
+    try:
+        task = RetainerTask(
+            project_id=project.id,
+            customer_id=current_user.id,
+            title=title,
+            description=description,
+            specialist_id=project.assigned_professional_id,
+            status="Queued",
+            asset_url=asset_url,
+        )
+        db.session.add(task)
+
+        # Notify assigned specialist
+        if project.assigned_professional_id:
+            notif = Notification()
+            notif.user_id = project.assigned_professional_id
+            notif.title = f"New Retainer Task: {title}"
+            notif.message = f"Client requested maintenance tweak for Project #{project.id}. Open workspace to claim and log time."
+            notif.link = f"/professional/project/{project.id}/workspace"
+            notif.created_at = get_ist_now()
+            db.session.add(notif)
+
+        ActivityLog.log_event(
+            project_id=project.id,
+            action="TASK_SUBMITTED",
+            description=f"Client dropped maintenance task: {title}" + (" (with attachment)" if asset_url else ""),
+            user_id=current_user.id,
+            category="info",
+        )
+
+        db.session.commit()
+        flash(f"Maintenance task '{title}' queued! Your specialist has been notified.", "success")
+
+    except Exception as e:
+        db.session.rollback()
+        logger.error("Error creating retainer task for project %s: %s", project.id, str(e), exc_info=True)
+        flash("Could not queue maintenance task. Please try again.", "danger")
+
+    return redirect(url_for("customer.project_details", project_id=project.id))
+
+
+# =========================================================
+# SELF-SERVICE SCOPE EXPANSION / ADD-ON REQUEST ROUTE
+# =========================================================
+
+@customer_bp.route("/project/<project_id>/request-addon", methods=["POST"])
+@customer_bp.route("/project/<int:project_id>/request-addon", methods=["POST"])
+@login_required
+def request_scope_addon(project_id: int | str) -> Any:
+    clean_id = str(project_id).strip().rstrip("-/")
+    try:
+        pid = int(clean_id)
+    except ValueError:
+        flash("Invalid project reference.", "danger")
+        return redirect(url_for("customer.dashboard"))
+
+    project = db.session.get(Project, pid)
+    if not project or (project.customer_id != current_user.id and getattr(current_user, "role", "").lower() != "admin"):
+        flash("Unauthorized action.", "danger")
+        return redirect(url_for("customer.dashboard"))
+
+    addon_package = request.form.get("addon_package", "").strip()
+    currency = sanitize_currency(project.currency)
+
+    if addon_package in ADDON_CATALOG_PRICES:
+        price_map = ADDON_CATALOG_PRICES[addon_package]
+        gross_amount = price_map.get(currency, price_map["INR"])
+        title = addon_package
+    else:
+        flash("Selected add-on package is invalid.", "warning")
+        return redirect(url_for("customer.project_details", project_id=project.id))
+
+    try:
+        _, agency_profit, tax_amount = compute_financial_split(gross_amount, currency)
+
+        invoice = Invoice()
+        invoice.invoice_number = f"ADDON-{project.id}-{secrets.token_hex(3).upper()}"
+        invoice.project_id = project.id
+        invoice.customer_id = project.customer_id
+        invoice.gross_amount = gross_amount
+        invoice.talent_payout = Decimal("0.00")
+        invoice.agency_profit = agency_profit
+        invoice.tax_amount = tax_amount
+        invoice.currency = currency
+        invoice.status = "Pending"
+        invoice.payout_status = "Pending Approval"
+
+        db.session.add(invoice)
+        db.session.flush()
+
+        addon = ProjectAddOn()
+        addon.project_id = project.id
+        addon.invoice_id = invoice.id
+        addon.title = title
+        addon.amount = gross_amount
+        addon.status = "Pending Payment"
+
+        db.session.add(addon)
+
+        ActivityLog.log_event(
+            project_id=project.id,
+            action="ADDON_ORDERED",
+            description=f"Client ordered scope expansion: {title} ({format_currency(gross_amount, currency)}).",
+            user_id=current_user.id,
+            category="info",
+        )
+
+        db.session.commit()
+        flash(f"Scope expansion '{title}' created. Please complete payment authorization to attach to sprint.", "info")
+        return redirect(url_for("payments.payment_page", project_id=project.id, addon_id=addon.id))
+
+    except Exception as e:
+        db.session.rollback()
+        logger.error("Error creating client scope add-on for project %s: %s", project.id, str(e), exc_info=True)
+        flash("Could not initialize scope add-on. Please try again.", "danger")
+        return redirect(url_for("customer.project_details", project_id=project.id))
 
 
 # =========================================================
@@ -413,6 +615,10 @@ def view_invoice(project_id: int | str) -> Any:
     )
 
 
+# =========================================================
+# DIGITAL SOW PDF DOWNLOAD
+# =========================================================
+
 @customer_bp.route("/project/<project_id>/sow-pdf")
 @customer_bp.route("/project/<int:project_id>/sow-pdf")
 @login_required
@@ -457,6 +663,53 @@ def download_sow_pdf(project_id: int | str) -> Any:
 
 
 # =========================================================
+# ANTI-CHARGEBACK HANDOVER & ACCEPTANCE CERTIFICATE PDF
+# =========================================================
+
+@customer_bp.route("/project/<project_id>/certificate-pdf")
+@customer_bp.route("/project/<int:project_id>/certificate-pdf")
+@login_required
+def download_acceptance_certificate(project_id: int | str) -> Any:
+    clean_id = str(project_id).strip().rstrip("-/")
+    try:
+        pid = int(clean_id)
+    except ValueError:
+        flash("Invalid project reference.", "danger")
+        return redirect(url_for("customer.dashboard"))
+
+    project = db.session.get(Project, pid)
+    if not project:
+        flash("Project not found.", "danger")
+        return redirect(url_for("customer.dashboard"))
+
+    user_role = getattr(current_user, "role", "").lower()
+    if user_role != "admin" and project.customer_id != current_user.id:
+        flash("Unauthorized access to certificate.", "danger")
+        return redirect(url_for("customer.dashboard"))
+
+    if project.status != "Completed":
+        flash("The Handover & Acceptance Certificate unlocks upon 100% final milestone sign-off.", "warning")
+        return redirect(url_for("customer.project_details", project_id=project.id))
+
+    try:
+        latest_delivery = get_latest_project_delivery(project.id)
+        customer_user = getattr(project, "customer", None) or db.session.get(User, project.customer_id)
+        pdf_buffer = generate_acceptance_certificate_pdf(
+            project, customer_user, project.business, latest_delivery
+        )
+        return send_file(
+            pdf_buffer,
+            as_attachment=True,
+            download_name=f"AgencyOS_Acceptance_Certificate_Project_{project.id}.pdf",
+            mimetype="application/pdf",
+        )
+    except Exception as exc:
+        logger.error("Failed to generate Acceptance Certificate PDF: %s", str(exc), exc_info=True)
+        flash("Error generating Acceptance Certificate. Please try again.", "danger")
+        return redirect(url_for("customer.project_details", project_id=project.id))
+
+
+# =========================================================
 # CLIENT INVOICES / BILLING LEDGER
 # =========================================================
 
@@ -478,10 +731,9 @@ def invoices_list() -> Any:
 
 
 # =========================================================
-# DIGITAL SOW CONTRACT & E-SIGNATURE EXECUTION
+# DIGITAL SOW CONTRACT & E-SIGNATURE
 # =========================================================
 
-@customer_bp.route("/project/<project_id>/sign-contract", methods=["GET", "POST"])
 @customer_bp.route("/project/<project_id>/contract", methods=["GET", "POST"])
 @customer_bp.route("/project/<int:project_id>/contract", methods=["GET", "POST"])
 @login_required
@@ -499,6 +751,7 @@ def project_contract(project_id: int | str) -> Any:
         return redirect(url_for("customer.dashboard"))
 
     user_role = getattr(current_user, "role", "").lower()
+
     if user_role != "admin" and project.customer_id != current_user.id:
         flash("Unauthorized access to contract.", "danger")
         return redirect(url_for("customer.dashboard"))
@@ -517,34 +770,12 @@ def project_contract(project_id: int | str) -> Any:
 
         signer_name = request.form.get("signer_name", "").strip()
         signer_title = request.form.get("signer_title", "").strip()
-        signature_data = request.form.get("signature_data", "").strip() or None
-
         if not signer_name or not signer_title:
             flash("Enter the signer's full name and title before signing.", "warning")
             return redirect(url_for("customer.project_contract", project_id=project.id))
 
         try:
-            timestamp_str = get_ist_now().strftime("%d %b %Y %H:%M IST")
-            ip_addr = request.remote_addr or "127.0.0.1"
-
-            # Cryptographic SHA-256 agreement verification hash
-            raw_audit_text = f"{project.id}:{signer_name}:{signer_title}:{ip_addr}:{timestamp_str}"
-            sig_hash = hashlib.sha256(raw_audit_text.encode("utf-8")).hexdigest()
-
-            # Persist digital ContractSignature model
-            contract_sig = ContractSignature(
-                project_id=project.id,
-                signer_name=signer_name,
-                signer_title=signer_title,
-                signature_hash=sig_hash,
-                signature_data=signature_data,
-                ip_address=ip_addr,
-                signed_at=get_ist_now(),
-            )
-            db.session.add(contract_sig)
-
-            # Append text audit coordinate for 100% backward compatibility
-            signature_entry = f" [Signed by: {signer_name} ({signer_title}) from IP: {ip_addr} on {timestamp_str}]"
+            signature_entry = f" [Signed by: {signer_name} ({signer_title}) from IP: {request.remote_addr} on {get_ist_now().strftime('%d %b %Y %H:%M IST')}]"
             if not getattr(project, "requirements", ""):
                 project.requirements = signature_entry
             else:
@@ -555,7 +786,7 @@ def project_contract(project_id: int | str) -> Any:
             ActivityLog.log_event(
                 project_id=project.id,
                 action="SOW_SIGNED",
-                description=f"Statement of Work digitally executed by {signer_name} ({signer_title}). Hash: {sig_hash[:16]}...",
+                description=f"Statement of Work digitally signed by {signer_name} ({signer_title}).",
                 user_id=current_user.id,
                 category="success",
             )
@@ -570,7 +801,7 @@ def project_contract(project_id: int | str) -> Any:
             return redirect(url_for("customer.project_contract", project_id=project.id))
 
     return render_template(
-        "sign_contract.html",
+        "contract.html",
         project=project,
         customer=customer,
         business=business,
@@ -578,7 +809,7 @@ def project_contract(project_id: int | str) -> Any:
 
 
 # =========================================================
-# SEQUENTIAL 3-GATE DELIVERABLE APPROVAL & NOTIFICATIONS
+# SEQUENTIAL 3-GATE DELIVERABLE APPROVAL (TOTAL ESCROW LOCKOUT)
 # =========================================================
 
 @customer_bp.route("/project/<project_id>/approve", methods=["POST"])
@@ -618,7 +849,6 @@ def customer_approve_project(project_id: int | str) -> Any:
 
         specialist_id = project.assigned_professional_id or (assigned_app.professional_id if assigned_app else None)
         specialist_profile = ProfessionalProfile.query.filter_by(user_id=specialist_id).first() if specialist_id else None
-        specialist_user = db.session.get(User, specialist_id) if specialist_id else None
 
         currency = sanitize_currency(project.currency)
         gross = get_package_price(project.package, currency, PACKAGE_PRICES)
@@ -630,73 +860,77 @@ def customer_approve_project(project_id: int | str) -> Any:
         if paid_payments_count <= 1:
             project.status = "In Progress"
             milestone_ratio = Decimal("0.50")
-            earned_amount = (total_talent_payout * milestone_ratio).quantize(Decimal("0.01"))
+            milestone_value = (total_talent_payout * milestone_ratio).quantize(Decimal("0.01"))
 
-            if specialist_profile:
-                curr_pend = Decimal(str(specialist_profile.pending_balance or 0))
-                curr_avail = Decimal(str(specialist_profile.available_balance or 0))
-                specialist_profile.pending_balance = max(Decimal("0.00"), curr_pend - earned_amount)
-                specialist_profile.available_balance = curr_avail + earned_amount
+            if milestones and len(milestones) >= 1:
+                milestones[0].status = "completed"
+                milestones[0].released_at = get_ist_now()
 
+            if specialist_id:
                 tx = WalletTransaction()
                 tx.user_id = specialist_id
-                tx.amount = earned_amount
+                tx.amount = milestone_value
                 tx.currency = currency
-                tx.transaction_type = "ESCROW_RELEASED"
+                tx.transaction_type = "ESCROW_LOCKED"
                 tx.reference_type = "PROJECT"
                 tx.reference_id = project.id
-                tx.description = f"Project #{project.id} Step 1 (UI/UX) approved. {format_currency(earned_amount, currency)} released to available balance."
+                tx.description = f"Project #{project.id} Step 1 (UI/UX) approved. {format_currency(milestone_value, currency)} secured in escrow (withheld until full project handover)."
                 tx.created_at = get_ist_now()
                 db.session.add(tx)
 
                 notif = Notification()
                 notif.user_id = specialist_id
-                notif.title = f"Step 1 (UI/UX) Approved! {format_currency(earned_amount, currency)} Unlocked 💰"
-                notif.message = f"Client approved UI/UX prototype for Project #{project.id}."
+                notif.title = f"Step 1 (UI/UX) Approved! {format_currency(milestone_value, currency)} Escrow Held 🛡️"
+                notif.message = f"Client approved UI/UX prototype for Project #{project.id}. Escrow funds will unlock upon final live cutover & handover."
                 notif.link = "/professional/dashboard"
                 notif.created_at = get_ist_now()
                 db.session.add(notif)
 
-            if milestones and len(milestones) >= 1:
-                milestones[0].status = "released"
-                milestones[0].released_at = get_ist_now()
-
+            ActivityLog.log_event(
+                project_id=project.id,
+                action="MILESTONE_APPROVED",
+                description="Client approved Step 1 (UI/UX) deliverable. Escrow locked safely until 100% handover.",
+                user_id=current_user.id,
+                category="success",
+            )
             flash_msg = "Step 1 (UI/UX Prototype) approved! Gate 2 (25% Staging Escrow) is now unlocked for payment."
 
         elif paid_payments_count == 2:
             project.status = "In Progress"
             milestone_ratio = Decimal("0.25")
-            earned_amount = (total_talent_payout * milestone_ratio).quantize(Decimal("0.01"))
+            milestone_value = (total_talent_payout * milestone_ratio).quantize(Decimal("0.01"))
 
-            if specialist_profile:
-                curr_pend = Decimal(str(specialist_profile.pending_balance or 0))
-                curr_avail = Decimal(str(specialist_profile.available_balance or 0))
-                specialist_profile.pending_balance = max(Decimal("0.00"), curr_pend - earned_amount)
-                specialist_profile.available_balance = curr_avail + earned_amount
+            if milestones and len(milestones) >= 2:
+                milestones[1].status = "completed"
+                milestones[1].released_at = get_ist_now()
 
+            if specialist_id:
                 tx = WalletTransaction()
                 tx.user_id = specialist_id
-                tx.amount = earned_amount
+                tx.amount = milestone_value
                 tx.currency = currency
-                tx.transaction_type = "ESCROW_RELEASED"
+                tx.transaction_type = "ESCROW_LOCKED"
                 tx.reference_type = "PROJECT"
                 tx.reference_id = project.id
-                tx.description = f"Project #{project.id} Step 2 (Staging) approved. {format_currency(earned_amount, currency)} released to available balance."
+                tx.description = f"Project #{project.id} Step 2 (Staging) approved. {format_currency(milestone_value, currency)} secured in escrow (withheld until full project handover)."
                 tx.created_at = get_ist_now()
                 db.session.add(tx)
 
                 notif = Notification()
                 notif.user_id = specialist_id
-                notif.title = f"Step 2 (Staging) Approved! {format_currency(earned_amount, currency)} Unlocked 💰"
-                notif.message = f"Client approved the staging build for Project #{project.id}."
+                notif.title = f"Step 2 (Staging) Approved! {format_currency(milestone_value, currency)} Escrow Held 🛡️"
+                notif.message = f"Client approved the staging build for Project #{project.id}. Escrow funds will unlock upon final live cutover & handover."
                 notif.link = "/professional/dashboard"
                 notif.created_at = get_ist_now()
                 db.session.add(notif)
 
-            if milestones and len(milestones) >= 2:
-                milestones[1].status = "released"
-                milestones[1].released_at = get_ist_now()
-
+            ActivityLog.log_event(
+                project_id=project.id,
+                action="MILESTONE_APPROVED",
+                description="Client approved Step 2 (Staging) deliverable. Escrow locked safely until 100% handover.",
+                user_id=current_user.id,
+                category="success",
+            )
             flash_msg = "Step 2 (Staging Build) approved! Gate 3 (25% Final Production & Handover) is now unlocked for payment."
 
         else:
@@ -705,56 +939,57 @@ def customer_approve_project(project_id: int | str) -> Any:
             if specialist_profile:
                 curr_pend = Decimal(str(specialist_profile.pending_balance or 0))
                 curr_avail = Decimal(str(specialist_profile.available_balance or 0))
-                remaining_to_release = curr_pend if curr_pend > Decimal("0.00") else (total_talent_payout * Decimal("0.25")).quantize(Decimal("0.01"))
                 
-                specialist_profile.available_balance = curr_avail + remaining_to_release
-                specialist_profile.pending_balance = Decimal("0.00")
+                release_amount = total_talent_payout
+                specialist_profile.pending_balance = max(Decimal("0.00"), curr_pend - release_amount)
+                specialist_profile.available_balance = curr_avail + release_amount
 
                 tx = WalletTransaction()
                 tx.user_id = specialist_id
-                tx.amount = remaining_to_release
+                tx.amount = release_amount
                 tx.currency = currency
                 tx.transaction_type = "ESCROW_RELEASED"
                 tx.reference_type = "PROJECT"
                 tx.reference_id = project.id
-                tx.description = f"Project #{project.id} final handover approved."
+                tx.description = f"Project #{project.id} completed & signed off. {format_currency(release_amount, currency)} released to available wallet."
                 tx.created_at = get_ist_now()
                 db.session.add(tx)
 
                 notif = Notification()
                 notif.user_id = specialist_id
-                notif.title = f"🎉 Project Completed! {format_currency(remaining_to_release, currency)} Final Release"
-                notif.message = f"Client approved final handover for Project #{project.id}."
+                notif.title = f"🎉 Sprint Completed! {format_currency(release_amount, currency)} Payout Unlocked"
+                notif.message = f"Client signed off on final handover for Project #{project.id}. Your full talent share is now redeemable in your wallet."
                 notif.link = "/professional/dashboard"
                 notif.created_at = get_ist_now()
                 db.session.add(notif)
 
             for m in milestones:
-                if m.status != "released":
-                    m.status = "released"
-                    m.released_at = get_ist_now()
+                m.status = "completed"
+                m.released_at = get_ist_now()
 
-            customer_profile = CustomerProfile.query.filter_by(user_id=current_user.id).first()
-            client_phone = customer_profile.phone if customer_profile else None
-            try:
+            invoices = Invoice.query.filter_by(project_id=project.id).all()
+            for inv in invoices:
+                if inv.payout_status not in ("Settled", "Processing"):
+                    inv.payout_status = "Pending Approval"
+
+            ActivityLog.log_event(
+                project_id=project.id,
+                action="PROJECT_COMPLETED",
+                description="Client approved final milestone handover. Full specialist escrow payout released to wallet.",
+                user_id=current_user.id,
+                category="success",
+            )
+
+            customer_user = getattr(project, "customer", None) or db.session.get(User, project.customer_id)
+            if customer_user:
                 notify_project_completed(
-                    project_id=project.id,
-                    service_name=project.service,
-                    client_phone=client_phone,
-                    client_name=current_user.name,
+                    project.id,
+                    project.service,
+                    getattr(customer_user.customer_profile, "phone", None) if getattr(customer_user, "customer_profile", None) else None,
+                    customer_user.name,
                 )
-            except Exception as w_err:
-                logger.warning("WhatsApp trigger notice failed: %s", w_err)
 
-            flash_msg = "Final milestone approved! Project marked Completed and all remaining escrow funds released."
-
-        ActivityLog.log_event(
-            project_id=project.id,
-            action="MILESTONE_APPROVED",
-            description=f"Client approved milestone deliverable. Project status: {project.status}.",
-            user_id=current_user.id,
-            category="success",
-        )
+            flash_msg = "Final milestone approved! Project marked Completed and all remaining escrow funds unlocked for wallet redemption."
 
         db.session.commit()
         flash(flash_msg, "success")
@@ -768,7 +1003,7 @@ def customer_approve_project(project_id: int | str) -> Any:
 
 
 # =========================================================
-# REVISION REQUEST GATE & NOTIFICATION DISPATCH
+# REVISION REQUEST GATE (STRUCTURED CATEGORIES)
 # =========================================================
 
 @customer_bp.route("/project/<project_id>/revision", methods=["POST"])
@@ -799,46 +1034,60 @@ def customer_request_revision(project_id: int | str) -> Any:
         flash("Maximum 2 complimentary revisions reached. Order a Paid Scope Add-on for extra modifications.", "warning")
         return redirect(url_for("customer.project_details", project_id=pid))
 
+    category = request.form.get("revision_category", "Design & Styling").strip()
     comment = request.form.get("revision_comment", "").strip()
     if not comment:
         flash("Please provide details for the revision request.", "warning")
         return redirect(url_for("customer.project_details", project_id=pid))
 
+    full_feedback = f"[{category}] {comment}"
+
     try:
         latest_delivery = get_latest_project_delivery(project.id)
         if latest_delivery:
             latest_delivery.status = "Revision"
-            latest_delivery.review_comment = comment
+            latest_delivery.review_comment = full_feedback
             latest_delivery.reviewed_at = get_ist_now()
 
         project.status = "Revision"
-        project.revision_comment = comment
+        project.revision_comment = full_feedback
 
         ActivityLog.log_event(
             project_id=project.id,
             action="REVISION_REQUESTED",
-            description=f"Client requested a revision ({revision_count + 1}/2): {comment}",
+            description=f"Client requested revision ({category}): {comment}",
             user_id=current_user.id,
             category="warning",
         )
 
-        specialist_user = db.session.get(User, project.assigned_professional_id) if project.assigned_professional_id else None
-        specialist_profile = specialist_user.professional_profile if specialist_user else None
-        if specialist_user and specialist_profile:
-            try:
+        assigned_app = ProfessionalProjectApplication.query.filter_by(
+            project_id=project.id, status="Assigned"
+        ).first()
+        specialist_id = project.assigned_professional_id or (assigned_app.professional_id if assigned_app else None)
+        
+        if specialist_id:
+            notif = Notification()
+            notif.user_id = specialist_id
+            notif.title = f"Revision Feedback: Project #{project.id} ({category})"
+            notif.message = f"Client requested modifications: \"{comment[:80]}...\". Check workspace."
+            notif.link = f"/professional/project/{project.id}/workspace"
+            notif.created_at = get_ist_now()
+            db.session.add(notif)
+
+            spec_user = db.session.get(User, specialist_id)
+            spec_profile = getattr(spec_user, "professional_profile", None) if spec_user else None
+            if spec_profile and spec_profile.phone:
                 notify_revision_requested(
-                    project_id=project.id,
-                    service_name=project.service,
-                    specialist_phone=specialist_profile.phone,
-                    specialist_name=specialist_user.name,
-                    comment=comment,
-                    round_num=revision_count + 1,
+                    project.id,
+                    project.service,
+                    spec_profile.phone,
+                    spec_user.name,
+                    full_feedback,
+                    revision_count + 1,
                 )
-            except Exception as w_err:
-                logger.warning("WhatsApp revision notice failed: %s", w_err)
 
         db.session.commit()
-        flash(f"Revision feedback logged (Cycle {revision_count + 1} of 2 included in scope). Your specialist has been notified.", "success")
+        flash("Revision feedback logged. Your specialist has been notified.", "success")
     except Exception as e:
         db.session.rollback()
         logger.error("Error requesting revision: %s", str(e), exc_info=True)
@@ -1040,7 +1289,7 @@ def customer_profile() -> Any:
         return redirect(url_for("professional.professional_dashboard"))
 
     profile = CustomerProfile.query.filter_by(user_id=current_user.id).first()
-
+    
     if not profile:
         try:
             profile = CustomerProfile(user_id=current_user.id)
@@ -1089,7 +1338,7 @@ def customer_profile() -> Any:
 
 
 # =========================================================
-# START PROJECT (DYNAMIC SCOPE INTAKE & DIRECT SOW GENERATION)
+# START PROJECT
 # =========================================================
 
 @customer_bp.route("/start-project/<service_slug>", methods=["GET", "POST"])
@@ -1182,7 +1431,7 @@ def start_project(service_slug: str = "website-development") -> Any:
                 target_business_id = int(business_id_value)
             except ValueError:
                 target_business_id = None
-
+                
         if target_business_id is not None:
             verify_business = Business.query.filter_by(id=target_business_id, customer_id=current_user.id).first()
             if not verify_business:
@@ -1206,7 +1455,7 @@ def start_project(service_slug: str = "website-development") -> Any:
             ("Custom Features", request.form.get("custom_features", "").strip()),
             ("Detailed Project Scope", brief),
         ]
-
+        
         reqs = "\n".join(
             f"{label}: {value.replace('Injected feature', '').strip()}" 
             for label, value in sections 
@@ -1259,6 +1508,10 @@ def start_project(service_slug: str = "website-development") -> Any:
             project.required_skills = raw_skills
             project.status = "Payment Pending"
 
+            if package == "Starter Retainer":
+                project.hours_allocated = 5
+                project.hours_remaining = Decimal("5.00")
+
             db.session.add(project)
             db.session.flush()
 
@@ -1294,7 +1547,7 @@ def start_project(service_slug: str = "website-development") -> Any:
                 user_id=current_user.id,
                 category="info",
             )
-
+            
             if attachment_url:
                 ActivityLog.log_event(
                     project_id=project.id,
@@ -1303,7 +1556,7 @@ def start_project(service_slug: str = "website-development") -> Any:
                     user_id=current_user.id,
                     category="info",
                 )
-
+                
             db.session.commit()
 
             flash("Milestone project created! Please review and sign the SOW Agreement.", "info")
@@ -1346,7 +1599,7 @@ def cancel_project(project_id: int | str) -> Any:
         db.session.execute(db.delete(Payment).where(Payment.project_id == project.id))
         db.session.execute(db.delete(Milestone).where(Milestone.project_id == project.id))
         db.session.delete(project)
-
+        
         db.session.commit()
         flash(f"Draft Project #{pid} cancelled.", "info")
     except Exception as e:
@@ -1388,7 +1641,7 @@ def raise_dispute(project_id: int | str) -> Any:
             project_id=project.id,
             raised_by_user_id=current_user.id,
             reason=reason,
-            status="OPEN",
+            status="OPEN"
         )
         db.session.add(dispute)
 
@@ -1405,7 +1658,7 @@ def raise_dispute(project_id: int | str) -> Any:
                 user_id=admin.id,
                 title=f"⚠️ Escrow Dispute Raised: Project #{project.id}",
                 message=f"{current_user.name} raised a dispute on Project #{project.id}. Admin arbitration required.",
-                link=url_for("admin.admin_disputes"),
+                link=url_for("admin.admin_disputes")
             )
             db.session.add(notif)
 
@@ -1427,13 +1680,13 @@ def api_get_messages(project_id: int) -> Any:
         return jsonify({"error": "Project not found"}), 404
     if project.customer_id != current_user.id and getattr(current_user, "role", "").lower() != "admin":
         return jsonify({"error": "Unauthorized"}), 403
-
+    
     messages = ChatMessage.query.filter_by(project_id=project.id).order_by(ChatMessage.created_at.asc()).all()
     data = [{
         "id": m.id,
         "sender_name": m.sender.name if m.sender else "Agency Team",
         "message": m.message,
         "time": m.created_at.strftime("%d %b %I:%M %p"),
-        "is_me": m.sender_id == current_user.id,
+        "is_me": m.sender_id == current_user.id
     } for m in messages]
     return jsonify({"success": True, "messages": data})

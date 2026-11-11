@@ -1,8 +1,4 @@
-"""AgencyOS Authentication & Authorization Blueprint.
-
-Manages registration, secure login, role-based redirection, 
-password recovery, and email verification.
-"""
+"""AgencyOS Authentication & Authorization Blueprint with Standardized JSON error boundaries."""
 
 import hashlib
 import logging
@@ -42,13 +38,16 @@ logger = logging.getLogger(__name__)
 def validate_session_version():
     """Revokes session if user's session_version has incremented (e.g. password reset)."""
     if current_user.is_authenticated:
-        expected_version = getattr(current_user, "session_version", 0) or 0
-        current_version = session.get("session_version", 0) or 0
-        if current_version != expected_version:
-            logout_user()
-            session.clear()
-            return redirect(url_for("auth.login"))
-
+        try:
+            expected_version = getattr(current_user, "session_version", 0) or 0
+            current_version = session.get("session_version", 0) or 0
+            if current_version != expected_version:
+                logout_user()
+                session.clear()
+                flash("Your session has expired. Please log in again.", "warning")
+                return redirect(url_for("auth.login"))
+        except Exception as e:
+            logger.error(f"Session version validation error: {e}")
 
 def _hash_token(raw_token: str) -> str:
     return hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
@@ -243,7 +242,6 @@ def login() -> Any:
                 flash("Please verify your email address first.", "login_error")
                 return redirect(url_for("auth.login"))
 
-            # Session hardening: Preserves ONLY CSRF token while clearing all pre-login session markers
             active_csrf = session.get("csrf_token")
             session.clear()
             if active_csrf:

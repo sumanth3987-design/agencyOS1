@@ -1,4 +1,8 @@
-"""Transactional SMTP and Console Email Delivery Engine for AgencyOS."""
+"""Transactional SMTP and Console Email Delivery Engine for AgencyOS.
+
+Provides exception-bounded email dispatch with environment-safe fallback guards
+for testing, development, and production environments.
+"""
 
 import logging
 import smtplib
@@ -24,47 +28,49 @@ def _build_message(to: str, subject: str, body: str) -> EmailMessage:
     return message
 
 
-def send_email(to: str, subject: str, body: str) -> None:
-    """Send an email using the configured backend.
+def send_email(to: str, subject: str, body: str) -> bool:
+    """Send an email using the configured backend safely.
 
-    The console backend records messages only during tests and never logs
-    message bodies, tokens, or recovery links.
+    Wrapped in an exception boundary to ensure SMTP timeouts or misconfigurations
+    never crash customer or admin HTTP request flows. Returns True on success, False otherwise.
     """
-    backend = current_app.config.get("MAIL_BACKEND", "console")
-    suppress = current_app.config.get("MAIL_SUPPRESS_SEND", False)
-
-    if suppress:
-        return
-
-    if backend == "console":
-        if current_app.config.get("TESTING"):
-            current_app.config.setdefault("TEST_EMAILS", []).append(
-                {
-                    "to": to,
-                    "subject": subject,
-                    "body": body,
-                }
-            )
-        else:
-            logger.info("Email queued for %s", to)
-        return
-
-    if backend != "smtp":
-        raise EmailDeliveryError(f"Unsupported mail backend: {backend}")
-
-    server = current_app.config.get("MAIL_SERVER", "")
-    port = current_app.config.get("MAIL_PORT", 587)
-    use_tls = current_app.config.get("MAIL_USE_TLS", True)
-    username = current_app.config.get("MAIL_USERNAME", "")
-    password = current_app.config.get("MAIL_PASSWORD", "")
-    sender = current_app.config.get(
-        "MAIL_DEFAULT_SENDER", "no-reply@agencyos.local"
-    )
-
-    if not server or not sender:
-        raise EmailDeliveryError("SMTP mail is not fully configured.")
-
     try:
+        backend = current_app.config.get("MAIL_BACKEND", "console")
+        suppress = current_app.config.get("MAIL_SUPPRESS_SEND", False)
+
+        if suppress:
+            return True
+
+        if backend == "console":
+            if current_app.config.get("TESTING"):
+                current_app.config.setdefault("TEST_EMAILS", []).append(
+                    {
+                        "to": to,
+                        "subject": subject,
+                        "body": body,
+                    }
+                )
+            else:
+                logger.info("Email simulated for recipient (Console Backend)")
+            return True
+
+        if backend != "smtp":
+            logger.error("Unsupported mail backend configured: %s", backend)
+            return False
+
+        server = current_app.config.get("MAIL_SERVER", "")
+        port = current_app.config.get("MAIL_PORT", 587)
+        use_tls = current_app.config.get("MAIL_USE_TLS", True)
+        username = current_app.config.get("MAIL_USERNAME", "")
+        password = current_app.config.get("MAIL_PASSWORD", "")
+        sender = current_app.config.get(
+            "MAIL_DEFAULT_SENDER", "no-reply@agencyos.local"
+        )
+
+        if not server or not sender:
+            logger.warning("SMTP mail configuration is incomplete (server or sender missing).")
+            return False
+
         with smtplib.SMTP(server, port, timeout=10) as smtp:
             if use_tls:
                 smtp.starttls()
@@ -75,7 +81,7 @@ def send_email(to: str, subject: str, body: str) -> None:
                 from_addr=sender,
                 to_addrs=[to],
             )
-    except (OSError, smtplib.SMTPException) as exc:
-        logger.error("Email delivery failed: %s", type(exc).__name__)
-        raise EmailDeliveryError("Email delivery failed.") from exc
-        
+        return True
+    except (OSError, smtplib.SMTPException, Exception) as exc:
+        logger.error("Email delivery failed safely: %s", type(exc).__name__)
+        return False

@@ -1,13 +1,18 @@
 """AgencyOS Secure File Upload Utility with Cloudflare R2 / S3 Support.
 
-Handles secure file validation, size limits (10MB cap), local storage fallback,
-and S3/Cloudflare R2 cloud object storage integration.
+Handles secure file validation, size limits (10MB cap), magic bytes MIME inspection,
+local storage fallback, and S3/Cloudflare R2 cloud object storage integration.
 """
 
 import os
 import secrets
 from werkzeug.utils import secure_filename
 from flask import current_app
+
+try:
+    import filetype  # pyright: ignore [reportMissingImports]
+except ImportError:
+    filetype = None
 
 
 def save_project_upload(file_storage, allowed_extensions: set[str]) -> str | None:
@@ -29,6 +34,38 @@ def save_project_upload(file_storage, allowed_extensions: set[str]) -> str | Non
 
     if size_bytes > 10 * 1024 * 1024:
         raise ValueError("File size exceeds the 10 MB maximum limit.")
+
+    # --- SECURITY HARDENING: MAGIC BYTES MIME VALIDATION ---
+    verified_mime = file_storage.content_type or "application/octet-stream"
+    if filetype is not None:
+        header_bytes = file_storage.read(2048)
+        file_storage.seek(0)
+        kind = filetype.guess(header_bytes)
+
+        if kind is None:
+            # Fallback for plain text files which lack binary headers
+            if ext not in {"txt", "csv"}:
+                raise ValueError("File signature could not be verified. File may be corrupted or disguised.")
+        else:
+            verified_mime = kind.mime
+            
+            # Strict allowlist mapped to standard agency assets
+            ALLOWED_MIMES = {
+                "application/pdf",
+                "image/png",
+                "image/jpeg",
+                "image/gif",
+                "image/webp",
+                "application/zip",
+                "application/x-zip-compressed",
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                "application/msword",
+                "application/x-cfb"  # Often used for old .doc OLE containers
+            }
+
+            if verified_mime not in ALLOWED_MIMES:
+                raise ValueError(f"Security Alert: File signature '{verified_mime}' is not permitted.")
+    # --------------------------------------------------------
 
     unique_prefix = secrets.token_hex(16)
     unique_filename = f"{unique_prefix}_{filename}"
@@ -53,7 +90,7 @@ def save_project_upload(file_storage, allowed_extensions: set[str]) -> str | Non
                 file_storage,
                 r2_bucket,
                 unique_filename,
-                ExtraArgs={"ContentType": file_storage.content_type or "application/octet-stream"},
+                ExtraArgs={"ContentType": verified_mime},
             )
             public_domain = os.getenv("R2_PUBLIC_DOMAIN", r2_endpoint.rstrip("/"))
             return f"{public_domain}/{r2_bucket}/{unique_filename}"

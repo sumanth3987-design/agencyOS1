@@ -1,9 +1,11 @@
 """Flask Application Factory & Blueprint Registry for AgencyOS."""
 
 import logging
+import json
 import os
 import re
 import sqlite3
+from datetime import datetime
 from logging.handlers import RotatingFileHandler
 from types import SimpleNamespace
 from typing import Any
@@ -37,6 +39,21 @@ from app.models import User
 from app.utils.currency import format_currency
 
 
+class JSONFormatter(logging.Formatter):
+    """Custom JSON log formatter for structured observability."""
+    def format(self, record):
+        log_record = {
+            "timestamp": datetime.utcnow().isoformat(),
+            "level": record.levelname,
+            "message": record.getMessage(),
+            "module": record.module,
+            "lineno": record.lineno,
+        }
+        if record.exc_info:
+            log_record["exception"] = self.formatException(record.exc_info)
+        return json.dumps(log_record)
+
+
 def _build_bare_endpoint_map(view_functions) -> dict[str, str]:
     bare_map = {}
     ambiguous = set()
@@ -61,14 +78,14 @@ def configure_logging(app: Flask) -> None:
 
     if not os.path.exists("logs"):
         os.mkdir("logs")
+    
     file_handler = RotatingFileHandler("logs/agencyos.log", maxBytes=1024000, backupCount=10)
-    file_handler.setFormatter(
-        logging.Formatter("%(asctime)s %(levelname)s: %(message)s [in %(pathname)s:%(lineno)d]")
-    )
+    file_handler.setFormatter(JSONFormatter())
     file_handler.setLevel(logging.INFO)
+    
     app.logger.addHandler(file_handler)
     app.logger.setLevel(logging.INFO)
-    app.logger.info("AgencyOS startup")
+    app.logger.info("AgencyOS startup - Structured logging enabled")
 
 
 def _auto_sync_sqlite_columns(app: Flask) -> None:
@@ -125,6 +142,10 @@ def _auto_sync_sqlite_columns(app: Flask) -> None:
                 cur.execute("ALTER TABLE project ADD COLUMN required_skills TEXT;")
             if "assigned_professional_id" not in p_cols:
                 cur.execute("ALTER TABLE project ADD COLUMN assigned_professional_id INTEGER;")
+            if "hours_allocated" not in p_cols:
+                cur.execute("ALTER TABLE project ADD COLUMN hours_allocated INTEGER DEFAULT 0;")
+            if "hours_remaining" not in p_cols:
+                cur.execute("ALTER TABLE project ADD COLUMN hours_remaining NUMERIC(5, 2) DEFAULT 0.00;")
 
         pp_cols = cols("professional_profile")
         if pp_cols:
@@ -210,17 +231,20 @@ def create_app(config_name: str = "default", config_overrides: dict[str, Any] | 
 
     @app.before_request
     def enforce_session_version():
-        from flask_login import current_user, logout_user
-        if current_user.is_authenticated:
-            expected_version = getattr(current_user, "session_version", 0)
-            session_ver = session.get("session_version")
-            if session_ver is None:
-                session["session_version"] = expected_version
-            elif session_ver != expected_version:
-                logout_user()
-                session.clear()
-                flash("Your session has expired. Please log in again.", "warning")
-                return redirect(url_for("auth.login"))
+        try:
+            from flask_login import current_user, logout_user
+            if current_user.is_authenticated:
+                expected_version = getattr(current_user, "session_version", 0)
+                session_ver = session.get("session_version")
+                if session_ver is None:
+                    session["session_version"] = expected_version
+                elif session_ver != expected_version:
+                    logout_user()
+                    session.clear()
+                    flash("Your session has expired. Please log in again.", "warning")
+                    return redirect(url_for("auth.login"))
+        except Exception:
+            pass
 
     @app.errorhandler(429)
     def handle_rate_limit_exceeded(error):
@@ -251,14 +275,20 @@ def create_app(config_name: str = "default", config_overrides: dict[str, Any] | 
 
     @app.errorhandler(500)
     def internal_error(error):
-        db.session.rollback()
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
         if request.path.startswith(("/api/", "/payment")) or request.is_json:
             return jsonify({"success": False, "message": "Internal server error."}), 500
         return "Internal server error.", 500
             
     @app.errorhandler(HTTPException)
     def handle_http_exception(error):
-        db.session.rollback()
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
         return error
 
     @login_manager.user_loader
@@ -269,12 +299,15 @@ def create_app(config_name: str = "default", config_overrides: dict[str, Any] | 
     def send_reminders_command():
         from click import ClickException
         from app.services.reminders import run_due_reminders
-        summary = run_due_reminders()
-        print(f"Reminder run complete: {summary['payment_sent']} payment, {summary['review_sent']} review, {summary['failed']} failed.")
-        if summary["failed"]:
-            raise ClickException("Some reminders could not be sent; inspect application logs.")
+        try:
+            summary = run_due_reminders()
+            print(f"Reminder run complete: {summary.get('payment_sent', 0)} payment, {summary.get('review_sent', 0)} review, {summary.get('failed', 0)} failed.")
+            if summary.get("failed", 0):
+                raise ClickException("Some reminders could not be sent; inspect application logs.")
+        except Exception as exc:
+            raise ClickException(f"Reminder execution error: {str(exc)}")
 
-    # Register Blueprints
+    # Register Blueprints safely with exception guards
     try:
         from app.blueprints.admin import admin_bp
         from app.blueprints.api import api_bp
@@ -300,19 +333,22 @@ def create_app(config_name: str = "default", config_overrides: dict[str, Any] | 
     except ImportError as e:
         app.logger.error(f"Failed to load blueprints: {e}")
 
-    bare_map = _build_bare_endpoint_map(app.view_functions)
+    try:
+        bare_map = _build_bare_endpoint_map(app.view_functions)
 
-    def resolve_bare_endpoint(
-        error: Exception, endpoint: str, values: dict[str, Any]
-    ) -> str:
-        if "." in endpoint:
-            raise error
-        qualified = bare_map.get(endpoint)
-        if not qualified:
-            raise error
-        return url_for(qualified, **values)
+        def resolve_bare_endpoint(
+            error: Exception, endpoint: str, values: dict[str, Any]
+        ) -> str:
+            if "." in endpoint:
+                raise error
+            qualified = bare_map.get(endpoint)
+            if not qualified:
+                raise error
+            return url_for(qualified, **values)
 
-    app.url_build_error_handlers.append(resolve_bare_endpoint)
+        app.url_build_error_handlers.append(resolve_bare_endpoint)
+    except Exception as exc:
+        app.logger.warning(f"Bare endpoint mapping note: {exc}")
 
     @app.context_processor
     def inject_agency_settings():
@@ -374,11 +410,13 @@ def create_app(config_name: str = "default", config_overrides: dict[str, Any] | 
         defaults["primary_contrast"] = "#09090b" if luminance > 0.179 else "#ffffff"
         return {"agency_settings": SimpleNamespace(**defaults)}
 
+    # Register CLI Management & Background Daemon Commands
     try:
-        from app.cli import create_admin_command
+        from app.cli import auto_approve_sprints_command, create_admin_command
         app.cli.add_command(create_admin_command)
-    except ImportError:
-        pass
+        app.cli.add_command(auto_approve_sprints_command)
+    except ImportError as exc:
+        app.logger.warning(f"Could not register CLI commands: {exc}")
 
     dist_dir = os.path.abspath(os.path.join(app.root_path, "..", "static", "dist"))
     assets_dir = os.path.join(dist_dir, "assets")
