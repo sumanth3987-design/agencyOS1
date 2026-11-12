@@ -1,5 +1,6 @@
 from io import BytesIO
 import os
+import zipfile
 
 from app.models import Project, ProjectDelivery
 
@@ -10,12 +11,13 @@ def test_customer_can_attach_srs_to_project(
     customer_id = factories.user("customer", "upload-client@example.com")
     login("upload-client@example.com", "customer")
     monkeypatch.setattr(app, "static_folder", str(tmp_path))
+    pdf_contents = b"%PDF-1.4\nproject requirements\n%%EOF"
 
     response = csrf_post(
         "/start-project",
         data={
             "brief": "Build a customer portal",
-            "srs_document": (BytesIO(b"project requirements"), "../requirements.pdf"),
+            "srs_document": (BytesIO(pdf_contents), "../requirements.pdf"),
         },
         follow_redirects=False,
     )
@@ -25,7 +27,7 @@ def test_customer_can_attach_srs_to_project(
     assert "Attached Client Document: /static/uploads/" in project.requirements
     stored_name = project.requirements.rsplit("/", 1)[-1]
     with open(os.path.join(tmp_path, "uploads", stored_name), "rb") as saved_file:
-        assert saved_file.read() == b"project requirements"
+        assert saved_file.read() == pdf_contents
 
 
 def test_assigned_specialist_can_attach_deliverable(
@@ -37,13 +39,17 @@ def test_assigned_specialist_can_attach_deliverable(
     factories.application(project_id, professional_id, status="Assigned")
     login("delivery-specialist@example.com", "professional")
     monkeypatch.setattr(app, "static_folder", str(tmp_path))
+    archive_stream = BytesIO()
+    with zipfile.ZipFile(archive_stream, "w") as archive:
+        archive.writestr("deliverable.txt", "deliverable archive")
+    deliverable_archive = archive_stream.getvalue()
 
     response = csrf_post(
         f"/professional/project/{project_id}/submit",
         data={
             "preview_url": "https://preview.example.com",
             "completion_notes": "Delivery notes",
-            "deliverable_file": (BytesIO(b"deliverable archive"), "assets.zip"),
+            "deliverable_file": (BytesIO(deliverable_archive), "assets.zip"),
         },
         follow_redirects=False,
     )
@@ -53,7 +59,7 @@ def test_assigned_specialist_can_attach_deliverable(
     assert "Attached Deliverable File: /static/uploads/" in delivery.completion_notes
     stored_name = delivery.completion_notes.rsplit("/", 1)[-1]
     with open(os.path.join(tmp_path, "uploads", stored_name), "rb") as saved_file:
-        assert saved_file.read() == b"deliverable archive"
+        assert saved_file.read() == deliverable_archive
 
 
 def test_upload_rejects_disallowed_file_types(

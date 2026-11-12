@@ -1,27 +1,18 @@
-"""ReportLab Statement of Work & Anti-Chargeback Acceptance Certificate Engine for AgencyOS."""
+"""ReportLab Statement of Work & Anti-Chargeback Acceptance Certificate Engine."""
 
 import datetime
+from io import BytesIO
 import hashlib
 import re
-from io import BytesIO
-from typing import Any, NamedTuple
+from typing import Any, NamedTuple, Union
 from xml.sax.saxutils import escape
-
 from reportlab.lib import colors
-from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+from reportlab.lib.enums import TA_CENTER, TA_LEFT
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.platypus import (
-    HRFlowable,
-    KeepTogether,
-    PageBreak,
-    Paragraph,
-    SimpleDocTemplate,
-    Spacer,
-    Table,
-    TableStyle,
+    HRFlowable, KeepTogether, PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle,
 )
-
 
 class SowSignature(NamedTuple):
     signer_name: str
@@ -29,37 +20,32 @@ class SowSignature(NamedTuple):
     ip_address: str
     signed_at: str
 
-
-_SIGNATURE_PATTERN = re.compile(
-    r" \[Signed by: (?P<name>.*?) \((?P<title>.*?)\) "
-    r"from IP: (?P<ip>.*?) on (?P<signed_at>.*?)\]$"
-)
-
+_SIGNATURE_PATTERN = re.compile(r" \[Signed by: (?P<name>.*?) \((?P<title>.*?)\) from IP: (?P<ip>.*?) on (?P<signed_at>.*?)\]$")
 
 def extract_sow_signature(requirements: str | None) -> SowSignature | None:
-    """Return the recorded SOW signature, if requirements contain one."""
     match = _SIGNATURE_PATTERN.search((requirements or "").rstrip())
-    if not match or not match.group("name").strip() or not match.group("title").strip():
-        return None
+    if not match: return None
+    return SowSignature(match.group("name").strip(), match.group("title").strip(), match.group("ip").strip(), match.group("signed_at").strip())
 
-    return SowSignature(
-        signer_name=match.group("name").strip(),
-        signer_title=match.group("title").strip(),
-        ip_address=match.group("ip").strip(),
-        signed_at=match.group("signed_at").strip(),
-    )
-
+def _safe_clean_text(text: Any) -> str:
+    if text is None: return ""
+    return re.sub(r"[^\x00-\x7F\u00A0-\u00FF]", "", str(text))
 
 def _plain_paragraph(value: Any, style: ParagraphStyle) -> Paragraph:
-    text = escape(str(value or "")).replace("\r\n", "\n").replace("\n", "<br/>")
-    return Paragraph(text, style)
+    return Paragraph(escape(_safe_clean_text(value)).replace("\n", "<br/>"), style)
 
 
 # =========================================================================
 # STATEMENT OF WORK (SOW) PDF GENERATOR
 # =========================================================================
 
-def generate_sow_pdf(project: Any, customer: Any, business: Any, signature: SowSignature) -> BytesIO:
+def generate_sow_pdf(
+    project: Any,
+    customer: Any,
+    business: Any,
+    signature: Union[SowSignature, dict[str, Any]],
+) -> BytesIO:
+    """Generates a formal, digitally executed Statement of Work (SOW) PDF document."""
     buffer = BytesIO()
     doc = SimpleDocTemplate(
         buffer,
@@ -131,11 +117,23 @@ def generate_sow_pdf(project: Any, customer: Any, business: Any, signature: SowS
                 "Standard milestone website sprint and technical performance optimization."
             )
 
-    customer_name = customer.name if customer else "Client"
-    business_name = business.name if business else "Direct Account"
+    customer_name = getattr(customer, "name", "Client")
+    business_name = getattr(business, "name", "Direct Account") if business else "Direct Account"
     agreement_date = (
-        project.created_at.strftime("%d %B %Y") if project.created_at else "Unavailable"
+        project.created_at.strftime("%d %B %Y") if getattr(project, "created_at", None) else "Unavailable"
     )
+
+    # Duck-typing signature accessor
+    if isinstance(signature, dict):
+        sig_name = signature.get("signer_name", "Authorized Signatory")
+        sig_title = signature.get("signer_title", "Representative")
+        sig_ip = signature.get("ip_address", "127.0.0.1")
+        sig_time = signature.get("signed_at", datetime.datetime.now().strftime("%d %b %Y %H:%M IST"))
+    else:
+        sig_name = getattr(signature, "signer_name", "Authorized Signatory")
+        sig_title = getattr(signature, "signer_title", "Representative")
+        sig_ip = getattr(signature, "ip_address", "127.0.0.1")
+        sig_time = getattr(signature, "signed_at", datetime.datetime.now().strftime("%d %b %Y %H:%M IST"))
 
     story = [
         Paragraph("AGENCYOS DIGITAL SOLUTIONS", title_style),
@@ -265,22 +263,22 @@ def generate_sow_pdf(project: Any, customer: Any, business: Any, signature: SowS
         ],
         [
             _plain_paragraph("AgencyOS Digital Solutions", body_style),
-            _plain_paragraph(signature.signer_name, body_style),
+            _plain_paragraph(sig_name, body_style),
         ],
         [
             _plain_paragraph("Authorized representative", muted_style),
-            _plain_paragraph(signature.signer_title, muted_style),
+            _plain_paragraph(sig_title, muted_style),
         ],
         [
             _plain_paragraph("AgencyOS project record", muted_style),
             _plain_paragraph(
-                f"Digitally acknowledged on {signature.signed_at}", muted_style
+                f"Digitally acknowledged on {sig_time}", muted_style
             ),
         ],
         [
             _plain_paragraph("", muted_style),
             _plain_paragraph(
-                f"Recorded from IP address: {signature.ip_address}", muted_style
+                f"Recorded from IP address: {sig_ip}", muted_style
             ),
         ],
     ]
@@ -301,13 +299,18 @@ def generate_sow_pdf(project: Any, customer: Any, business: Any, signature: SowS
     return buffer
 
 
-# =========================================================================
+# =========================================================
 # ANTI-CHARGEBACK HANDOVER & ACCEPTANCE CERTIFICATE GENERATOR
-# =========================================================================
+# =========================================================
 
-def generate_acceptance_certificate_pdf(project: Any, customer: Any, business: Any, delivery: Any = None) -> BytesIO:
+def generate_acceptance_certificate_pdf(
+    project: Any,
+    customer: Any,
+    business: Any,
+    delivery: Any = None,
+) -> BytesIO:
     """Generate a cryptographic Certificate of IP Handover & Delivery Acceptance.
-    
+
     Serves as statutory proof of delivery for merchant dispute resolution on Stripe / Razorpay rails.
     """
     buffer = BytesIO()
@@ -375,16 +378,16 @@ def generate_acceptance_certificate_pdf(project: Any, customer: Any, business: A
         alignment=TA_LEFT,
     )
 
-    customer_name = customer.name if customer else "Client Enterprise"
-    business_name = business.name if business else "Direct Account"
+    customer_name = getattr(customer, "name", "Client Enterprise")
+    business_name = getattr(business, "name", "Direct Account") if business else "Direct Account"
     handover_date = datetime.datetime.now().strftime("%d %B %Y %H:%M IST")
 
     # Generate SHA-256 cryptographic audit fingerprint
     raw_hash_seed = f"PROJECT-{project.id}-{customer.id if customer else 0}-{handover_date}-{project.service}"
     audit_hash = hashlib.sha256(raw_hash_seed.encode("utf-8")).hexdigest()
 
-    live_url = (delivery.live_url if delivery and delivery.live_url else "Delivered to Client Host").strip()
-    source_url = (delivery.source_url if delivery and delivery.source_url else "Direct Source Handover").strip()
+    live_url = (delivery.live_url if delivery and getattr(delivery, "live_url", None) else "Delivered to Client Host").strip()
+    source_url = (delivery.source_url if delivery and getattr(delivery, "source_url", None) else "Direct Source Handover").strip()
 
     story = [
         Paragraph("AGENCYOS DIGITAL SOLUTIONS", title_style),
@@ -449,17 +452,17 @@ def generate_acceptance_certificate_pdf(project: Any, customer: Any, business: A
 
     story.append(Paragraph("2. Binding Acceptance & Anti-Chargeback Statutory Waiver", section_style))
     waiver_text = (
-        "<b>2.1 Inspection & Full Sign-Off:</b> The Client formally acknowledges full and satisfactory inspection "
-        "of all architectural, design, staging, and source code deliverables produced under Project #{project.id}. "
-        "All milestone criteria outlined in the signed Statement of Work have been fulfilled.<br/><br/>"
-        "<b>2.2 Intellectual Property Release:</b> AgencyOS Digital Solutions certifies that all proprietary software, "
-        "custom codebases, and intellectual assets have been irrevocably released to the Client upon settlement of Milestone 3.<br/><br/>"
-        "<b>2.3 Irrevocable Waiver of Dispute & Clawback:</b> In accordance with Section 10A of the Information Technology Act, 2000 (India) "
-        "and international electronic signature jurisprudence, the Client explicitly acknowledges that services have been completely "
-        "rendered. The Client unconditionally waives any right to initiate fraudulent chargebacks, merchant refund claims, or bank clawbacks "
-        "for payment transactions processed through Razorpay, Stripe, or offline wire facilities under this engagement.<br/><br/>"
-        "<b>2.4 Cryptographic Validity:</b> This certificate bears digital validity with SHA-256 validation code: <b>{audit_hash}</b>."
-    ).format(project=project, audit_hash=audit_hash)
+        f"<b>2.1 Inspection & Full Sign-Off:</b> The Client formally acknowledges full and satisfactory inspection "
+        f"of all architectural, design, staging, and source code deliverables produced under Project #{project.id}. "
+        f"All milestone criteria outlined in the signed Statement of Work have been fulfilled.<br/><br/>"
+        f"<b>2.2 Intellectual Property Release:</b> AgencyOS Digital Solutions certifies that all proprietary software, "
+        f"custom codebases, and intellectual assets have been irrevocably released to the Client upon settlement of Milestone 3.<br/><br/>"
+        f"<b>2.3 Irrevocable Waiver of Dispute & Clawback:</b> In accordance with Section 10A of the Information Technology Act, 2000 (India) "
+        f"and international electronic signature jurisprudence, the Client explicitly acknowledges that services have been completely "
+        f"rendered. The Client unconditionally waives any right to initiate fraudulent chargebacks, merchant refund claims, or bank clawbacks "
+        f"for payment transactions processed through Razorpay, Stripe, or offline wire facilities under this engagement.<br/><br/>"
+        f"<b>2.4 Cryptographic Validity:</b> This certificate bears digital validity with SHA-256 validation code: <b>{audit_hash}</b>."
+    )
     story.append(Paragraph(waiver_text, legal_style))
     story.append(Spacer(1, 15))
 
@@ -474,7 +477,7 @@ def generate_acceptance_certificate_pdf(project: Any, customer: Any, business: A
         ],
         [
             _plain_paragraph("Digitally Sealed & Verified", ParagraphStyle("SubText", parent=body_style, textColor=muted_text)),
-            _plain_paragraph(f"Authenticated from verified account {customer.email if customer else ''}", ParagraphStyle("SubText2", parent=body_style, textColor=muted_text)),
+            _plain_paragraph(f"Authenticated from verified account {getattr(customer, 'email', '')}", ParagraphStyle("SubText2", parent=body_style, textColor=muted_text)),
         ],
     ]
     sig_table = Table(signature_meta, colWidths=[255, 260])

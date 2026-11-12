@@ -1,14 +1,12 @@
-"""AgencyOS RazorpayX Payouts, Meritocracy & Billable Time Aggregation Engine."""
-
 import base64
+from decimal import Decimal
 import hashlib
 import json
 import logging
 import os
 import secrets
-from decimal import Decimal
-import urllib.request
 from typing import Any
+import urllib.request
 
 from app.models import ProfessionalProfile, ProjectTimeLog, User
 
@@ -45,7 +43,7 @@ def get_project_billable_hours_summary(project_id: int) -> dict[str, Any]:
 
 def calculate_meritocracy_rate(specialist_user: User) -> Decimal:
     """Computes dynamic performance-based payout rate.
-    
+
     Standard talent share: 45% (0.45)
     High Performer (Rating >= 4.8 & Zero Revisions): 48% (0.48)
     Elite Specialist (Verified + Rating >= 4.9 + 5+ Completed Sprints): 50% (0.50)
@@ -70,9 +68,32 @@ def calculate_meritocracy_rate(specialist_user: User) -> Decimal:
     return Decimal("0.45")
 
 
+def get_meritocracy_tier_info(specialist_user: User) -> dict[str, Any]:
+    """Returns human-readable explanation and milestone progress for the specialist dashboard."""
+    rate = calculate_meritocracy_rate(specialist_user)
+    tier_name = "Standard Partner (45%)"
+    if rate == Decimal("0.50"):
+        tier_name = "Elite Specialist (50%)"
+    elif rate == Decimal("0.48"):
+        tier_name = "High Performer (48%)"
+
+    profile: ProfessionalProfile | None = getattr(specialist_user, "professional_profile", None)
+    metrics = profile.get_performance_metrics() if profile else {}
+
+    return {
+        "rate": rate,
+        "rate_percentage": int(rate * 100),
+        "tier_name": tier_name,
+        "average_rating": metrics.get("average_rating"),
+        "completed_sprints": metrics.get("completed_sprints", 0),
+        "revision_count": metrics.get("revision_count", 0),
+        "is_verified": profile.verification_status == "Verified" if profile else False,
+    }
+
+
 def disburse_payout(withdrawal_req: Any) -> tuple[bool, str, str]:
     """Disburse funds via RazorpayX Payouts API enforcing statutory Section 194-O TDS deductions.
-    
+
     Returns: (success: bool, utr_or_reference: str, message: str)
     """
     key_id = os.getenv("RAZORPAY_KEY_ID", "")
@@ -82,6 +103,8 @@ def disburse_payout(withdrawal_req: Any) -> tuple[bool, str, str]:
     is_sandbox = not key_id or "placeholder" in key_id.lower() or "test" in key_id.lower()
 
     specialist = withdrawal_req.specialist
+    if not specialist:
+        return False, "", "Specialist account record not found for withdrawal request."
 
     # Enforce Statutory TDS: Disburse NET amount (Gross - TDS) to prevent agency tax loss
     disbursable_amount = getattr(withdrawal_req, "net_amount", None)
@@ -91,6 +114,9 @@ def disburse_payout(withdrawal_req: Any) -> tuple[bool, str, str]:
             disbursable_amount = Decimal(str(withdrawal_req.amount)) - Decimal(str(tds_amt))
         else:
             disbursable_amount = Decimal(str(withdrawal_req.amount))
+
+    if disbursable_amount <= Decimal("0.00"):
+        return False, "", "Disbursable payout amount must be greater than zero."
 
     amount_paise = int(round(float(disbursable_amount) * 100))
     ref_id = f"wth_{withdrawal_req.id}_{secrets.token_hex(4)}"
@@ -103,12 +129,12 @@ def disburse_payout(withdrawal_req: Any) -> tuple[bool, str, str]:
     if is_sandbox:
         simulated_utr = f"UTR_SIM_{audit_hash}"
         logger.info(
-            "Sandbox Mode: Simulated payout of Net ₹%s (Gross: ₹%s) disbursed successfully. UTR: %s",
+            "Sandbox Mode: Simulated payout of Net INR %s (Gross: INR %s) disbursed successfully. UTR: %s",
             disbursable_amount,
             withdrawal_req.amount,
             simulated_utr,
         )
-        return True, simulated_utr, f"Sandbox payout of Net ₹{disbursable_amount} simulated successfully with verified audit hash."
+        return True, simulated_utr, f"Sandbox payout of Net INR {disbursable_amount} simulated successfully with verified audit hash."
 
     # Live RazorpayX API Payload
     fund_account_payload = {
@@ -121,6 +147,8 @@ def disburse_payout(withdrawal_req: Any) -> tuple[bool, str, str]:
     }
 
     if withdrawal_req.payout_mode == "UPI":
+        if not getattr(withdrawal_req, "upi_id", None):
+            return False, "", "Missing UPI ID for UPI withdrawal disbursement."
         fund_account_payload["mode"] = "UPI"
         fund_account_payload["fund_account"] = {
             "account_type": "vpa",
@@ -132,6 +160,8 @@ def disburse_payout(withdrawal_req: Any) -> tuple[bool, str, str]:
             },
         }
     else:
+        if not getattr(withdrawal_req, "bank_account_number", None) or not getattr(withdrawal_req, "bank_ifsc", None):
+            return False, "", "Missing bank account number or IFSC code for bank transfer disbursement."
         fund_account_payload["mode"] = "NEFT"
         fund_account_payload["fund_account"] = {
             "account_type": "bank_account",
@@ -168,7 +198,7 @@ def disburse_payout(withdrawal_req: Any) -> tuple[bool, str, str]:
             res_data = json.loads(response.read().decode("utf-8"))
             payout_id = res_data.get("id", "POUT_UNKNOWN")
             utr = res_data.get("utr") or res_data.get("reference_id") or payout_id
-            return True, str(utr), f"Disbursed Net ₹{disbursable_amount} via RazorpayX (ID: {payout_id}, Audit: {audit_hash})"
+            return True, str(utr), f"Disbursed Net INR {disbursable_amount} via RazorpayX (ID: {payout_id}, Audit: {audit_hash})"
     except Exception as exc:
         logger.exception("RazorpayX Payout API error: %s", exc)
         return False, "", str(exc)

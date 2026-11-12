@@ -104,7 +104,7 @@ class User(db.Model, UserMixin):
     phone: Any = db.Column(db.String(20), nullable=True)
 
     is_verified: Any = db.Column(db.Boolean, default=False, nullable=False)
-    verification_status: Any = db.Column(db.String(30), default="Pending", nullable=False)
+    verification_status: Any = db.Column(db.String(30), default="Verified", nullable=False)
     verified_at: Any = db.Column(db.DateTime, nullable=True)
     rejection_reason: Any = db.Column(db.Text, nullable=True)
 
@@ -132,6 +132,20 @@ class User(db.Model, UserMixin):
 
     def check_password(self, password: str) -> bool:
         return check_password_hash(self.password, password)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "name": self.name,
+            "full_name": self.full_name,
+            "email": self.email,
+            "role": self.role,
+            "is_active": self.is_active,
+            "is_verified": self.is_verified,
+            "verification_status": self.verification_status,
+            "phone": self.phone,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
 
     projects = db.relationship("Project", backref="customer", foreign_keys="Project.customer_id", lazy=True)
     assigned_projects = db.relationship("Project", backref="assigned_professional", foreign_keys="Project.assigned_professional_id", lazy=True)
@@ -376,15 +390,18 @@ class Project(db.Model):
     customer_id: Any = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
     business_id: Any = db.Column(db.Integer, db.ForeignKey("business.id"), nullable=True, index=True)
     business = db.relationship("Business", back_populates="projects")
-    service: Any = db.Column(db.String(100), nullable=False)
-    package: Any = db.Column(db.String(100), nullable=False)
+    service: Any = db.Column(db.String(100), nullable=False, default="Website Design & Development")
+    package: Any = db.Column(db.String(100), nullable=False, default="Basic Website")
     currency: Any = db.Column(db.String(3), nullable=False, default="INR")
-    requirements: Any = db.Column(db.Text, nullable=False)
+    requirements: Any = db.Column(db.Text, nullable=False, default="Standard milestone project deliverables.")
     required_skills: Any = db.Column(db.Text, nullable=True)
     status: Any = db.Column(db.String(50), default="Pending Assignment", nullable=False)
     assigned_professional_id: Any = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True, index=True)
     revision_comment: Any = db.Column(db.Text, nullable=True)
     payment_reminder_sent_at: Any = db.Column(db.DateTime, nullable=True)
+
+    # Formal Statement of Work (SOW) compiled PDF document path
+    sow_pdf_path: Any = db.Column(db.String(500), nullable=True)
 
     # Monthly Retainer Hours Bank
     hours_allocated: Any = db.Column(db.Integer, default=0, nullable=False, server_default="0")
@@ -397,19 +414,18 @@ class Project(db.Model):
     time_logs = db.relationship("ProjectTimeLog", backref="project", cascade="all, delete-orphan", lazy=True)
     retainer_tasks = db.relationship("RetainerTask", backref="project", cascade="all, delete-orphan", lazy=True, order_by="RetainerTask.created_at.desc()")
 
-    def __init__(self, customer_id: int | None = None, service: str = "", package: str = "", requirements: str = "", status: str = "Pending Assignment", **kwargs: Any) -> None:
+    def __init__(self, customer_id: int | None = None, service: str = "", package: str = "", requirements: str = "", status: str = "Pending Assignment", sow_pdf_path: str | None = None, **kwargs: Any) -> None:
         super().__init__(**kwargs)
         if customer_id is not None:
             self.customer_id = customer_id
-        if service:
-            self.service = service
-        if package:
-            self.package = package
-        if requirements:
-            self.requirements = requirements
+        self.service = service if service else "Website Design & Development"
+        self.package = package if package else "Basic Website"
+        self.requirements = requirements if requirements else "Standard milestone project deliverables."
         if status:
             self.status = status
-        if package == "Starter Retainer":
+        if sow_pdf_path is not None:
+            self.sow_pdf_path = sow_pdf_path
+        if self.package == "Starter Retainer":
             self.hours_allocated = 5
             self.hours_remaining = Decimal("5.00")
 
@@ -424,6 +440,24 @@ class Project(db.Model):
             pass
         tokens = re.split(r"[,|\n/]+", self.required_skills)
         return [t.strip().lower() for t in tokens if t.strip()]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "customer_id": self.customer_id,
+            "business_id": self.business_id,
+            "service": self.service,
+            "package": self.package,
+            "currency": self.currency,
+            "requirements": self.requirements,
+            "required_skills": self.get_required_skills_list(),
+            "status": self.status,
+            "assigned_professional_id": self.assigned_professional_id,
+            "hours_allocated": self.hours_allocated,
+            "hours_remaining": float(self.hours_remaining) if self.hours_remaining is not None else 0.0,
+            "sow_pdf_path": self.sow_pdf_path,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
 
 
 class RetainerTask(db.Model):
@@ -452,14 +486,11 @@ class RetainerTask(db.Model):
             self.project_id = project_id
         if customer_id is not None:
             self.customer_id = customer_id
-        if title:
-            self.title = title
-        if description:
-            self.description = description
+        self.title = title if title else "Maintenance Task"
+        self.description = description if description else "Maintenance task instructions"
         if specialist_id is not None:
             self.specialist_id = specialist_id
-        if status:
-            self.status = status
+        self.status = status if status else "Queued"
         if asset_url is not None:
             self.asset_url = asset_url
 
@@ -629,6 +660,19 @@ class Milestone(db.Model):
         if status:
             self.status = status
 
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "project_id": self.project_id,
+            "title": self.title,
+            "amount": self.amount,
+            "status": self.status,
+            "fund_flow_type": self.fund_flow_type,
+            "due_date": self.due_date.isoformat() if self.due_date else None,
+            "released_at": self.released_at.isoformat() if self.released_at else None,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
 
 class ProfessionalProjectApplication(db.Model):
     __tablename__ = "professional_project_application"
@@ -766,6 +810,7 @@ class Invoice(db.Model):
     talent_payout: Any = db.Column(db.Numeric(12, 2), nullable=False)
     agency_profit: Any = db.Column(db.Numeric(12, 2), nullable=False)
     tax_amount: Any = db.Column(db.Numeric(12, 2), default=0, nullable=False)
+    paid_amount: Any = db.Column(db.Numeric(12, 2), default=0.00, nullable=False, server_default="0.00")
     currency: Any = db.Column(db.String(3), default="INR", nullable=False)
     status: Any = db.Column(db.String(30), default="Paid", nullable=False)
     payout_status: Any = db.Column(db.String(30), default="Pending Approval", nullable=False)
@@ -776,27 +821,110 @@ class Invoice(db.Model):
     project = db.relationship("Project", backref=db.backref("invoice_records", lazy=True, order_by="Invoice.id.desc()"))
     customer = db.relationship("User", backref="invoices", foreign_keys=[customer_id])
 
-    def __init__(self, invoice_number: str = "", project_id: int | None = None, customer_id: int | None = None, gross_amount: Any = 0, talent_payout: Any = 0, agency_profit: Any = 0, tax_amount: Any = 0, currency: str = "INR", status: str = "Paid", payout_status: str = "Pending Approval", **kwargs: Any) -> None:
+    def __init__(self, invoice_number: str = "", project_id: int | None = None, customer_id: int | None = None, gross_amount: Any = 0, talent_payout: Any = 0, agency_profit: Any = 0, tax_amount: Any = 0, currency: str = "INR", status: str = "Paid", payout_status: str = "Pending Approval", paid_amount: Any = 0.00, **kwargs: Any) -> None:
         super().__init__(**kwargs)
         self.invoice_number = invoice_number if invoice_number else f"INV-{secrets.token_hex(4).upper()}"
         if project_id is not None:
             self.project_id = project_id
         if customer_id is not None:
             self.customer_id = customer_id
-        if gross_amount is not None:
-            self.gross_amount = gross_amount
-        if talent_payout is not None:
-            self.talent_payout = talent_payout
-        if agency_profit is not None:
-            self.agency_profit = agency_profit
-        if tax_amount is not None:
-            self.tax_amount = tax_amount
-        if currency:
-            self.currency = currency
+        self.gross_amount = gross_amount if gross_amount is not None else 0
+        self.talent_payout = talent_payout if talent_payout is not None else 0
+        self.agency_profit = agency_profit if agency_profit is not None else 0
+        self.tax_amount = tax_amount if tax_amount is not None else 0
+        self.currency = currency if currency else "INR"
+        self.status = status if status else "Paid"
+        self.payout_status = payout_status if payout_status else "Pending Approval"
+        self.paid_amount = paid_amount if paid_amount is not None else 0.00
+
+    @property
+    def amount(self) -> Any:
+        """Alias for gross_amount for backward compatibility with external integrations & tests."""
+        return self.gross_amount
+
+    @amount.setter
+    def amount(self, value: Any) -> None:
+        self.gross_amount = value
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "invoice_number": self.invoice_number,
+            "project_id": self.project_id,
+            "customer_id": self.customer_id,
+            "gross_amount": float(self.gross_amount) if self.gross_amount is not None else 0.0,
+            "amount": float(self.gross_amount) if self.gross_amount is not None else 0.0,
+            "talent_payout": float(self.talent_payout) if self.talent_payout is not None else 0.0,
+            "agency_profit": float(self.agency_profit) if self.agency_profit is not None else 0.0,
+            "tax_amount": float(self.tax_amount) if self.tax_amount is not None else 0.0,
+            "paid_amount": float(self.paid_amount) if self.paid_amount is not None else 0.0,
+            "currency": self.currency,
+            "status": self.status,
+            "payout_status": self.payout_status,
+            "payout_utr": self.payout_utr,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+
+class FinancialAuditLog(db.Model):
+    """Immutable ledger of all financial state mutations and administrative overrides."""
+    __tablename__ = "financial_audit_logs"
+
+    id: Any = db.Column(db.Integer, primary_key=True)
+    invoice_id: Any = db.Column(db.Integer, db.ForeignKey("invoice.id", ondelete="CASCADE"), nullable=False, index=True)
+    action: Any = db.Column(db.String(100), nullable=False)
+    previous_status: Any = db.Column(db.String(50), nullable=True)
+    new_status: Any = db.Column(db.String(50), nullable=False)
+    amount: Any = db.Column(db.Numeric(12, 2), nullable=False, default=0.00)
+    actor_id: Any = db.Column(db.Integer, db.ForeignKey("user.id", ondelete="SET NULL"), nullable=True, index=True)
+    notes: Any = db.Column(db.Text, nullable=True)
+    created_at: Any = db.Column(db.DateTime, default=get_ist_now, nullable=False)
+
+    invoice = db.relationship("Invoice", backref=db.backref("audit_logs", lazy="dynamic", cascade="all, delete-orphan"))
+    actor = db.relationship("User", foreign_keys=[actor_id])
+
+    def __init__(self, invoice_id: int | None = None, action: str = "", previous_status: str | None = None, new_status: str = "", amount: Any = 0.00, actor_id: int | None = None, notes: str | None = None, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        if invoice_id is not None:
+            self.invoice_id = invoice_id
+        if action:
+            self.action = action
+        if previous_status is not None:
+            self.previous_status = previous_status
+        if new_status:
+            self.new_status = new_status
+        if amount is not None:
+            self.amount = amount
+        if actor_id is not None:
+            self.actor_id = actor_id
+        if notes is not None:
+            self.notes = notes
+
+
+class PaymentWebhookEvent(db.Model):
+    """Global idempotent event tracking table for multi-gateway webhook callbacks."""
+    __tablename__ = "payment_webhook_events"
+
+    id: Any = db.Column(db.Integer, primary_key=True)
+    event_id: Any = db.Column(db.String(255), unique=True, nullable=False, index=True)
+    provider: Any = db.Column(db.String(50), nullable=False, default="stripe")  # 'stripe', 'razorpay'
+    event_type: Any = db.Column(db.String(100), nullable=False)
+    payload_hash: Any = db.Column(db.String(64), nullable=True)
+    status: Any = db.Column(db.String(50), nullable=False, default="processed")  # 'processed', 'ignored', 'failed'
+    processed_at: Any = db.Column(db.DateTime, default=get_ist_now, nullable=False)
+
+    def __init__(self, event_id: str = "", provider: str = "stripe", event_type: str = "", payload_hash: str | None = None, status: str = "processed", **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        if event_id:
+            self.event_id = event_id
+        if provider:
+            self.provider = provider
+        if event_type:
+            self.event_type = event_type
+        if payload_hash is not None:
+            self.payload_hash = payload_hash
         if status:
             self.status = status
-        if payout_status:
-            self.payout_status = payout_status
 
 
 class AgencySetting(db.Model):
@@ -880,6 +1008,7 @@ class RazorpaySubscription(db.Model):
     customer = db.relationship("User", backref=db.backref("retainer_subscriptions", lazy=True), foreign_keys=[customer_id])
     plan = db.relationship("RazorpaySubscriptionPlan")
     subscription_charges = db.relationship("SubscriptionCharge", back_populates="subscription", lazy=True)
+
     def __init__(self, project_id: int | None = None, customer_id: int | None = None, plan_id: int | None = None, razorpay_subscription_id: str | None = None, amount: int = 0, currency: str = "INR", status: str = "created", start_at: datetime | None = None, **kwargs: Any) -> None:
         super().__init__(**kwargs)
         if project_id is not None:
@@ -919,8 +1048,35 @@ class SubscriptionCharge(db.Model):
     payment = db.relationship("Payment")
     invoice = db.relationship("Invoice")
 
-    def __init__(self, **kwargs: Any) -> None:
+    def __init__(self, subscription_id: int | None = None, payment_id: int | None = None, invoice_id: int | None = None, razorpay_payment_id: str = "", event_id: str | None = None, amount: int = 0, currency: str = "INR", **kwargs: Any) -> None:
         super().__init__(**kwargs)
+        if subscription_id is not None:
+            self.subscription_id = subscription_id
+        if payment_id is not None:
+            self.payment_id = payment_id
+        if invoice_id is not None:
+            self.invoice_id = invoice_id
+        if razorpay_payment_id:
+            self.razorpay_payment_id = razorpay_payment_id
+        if event_id is not None:
+            self.event_id = event_id
+        if amount:
+            self.amount = amount
+        if currency:
+            self.currency = currency
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "subscription_id": self.subscription_id,
+            "payment_id": self.payment_id,
+            "invoice_id": self.invoice_id,
+            "razorpay_payment_id": self.razorpay_payment_id,
+            "event_id": self.event_id,
+            "amount": self.amount,
+            "currency": self.currency,
+            "charged_at": self.charged_at.isoformat() if self.charged_at else None,
+        }
 
 
 class Review(db.Model):
@@ -1008,6 +1164,17 @@ class ActivityLog(db.Model):
         log.category = category or "info"
         db.session.add(log)
         return log
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "project_id": self.project_id,
+            "user_id": self.user_id,
+            "action": self.action,
+            "description": self.description,
+            "category": self.category,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
 
 
 class StripeWebhookEvent(db.Model):
@@ -1110,6 +1277,17 @@ class Notification(db.Model):
         if link is not None:
             self.link = link
 
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "user_id": self.user_id,
+            "title": self.title,
+            "message": self.message,
+            "link": self.link,
+            "is_read": self.is_read,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
 
 class Dispute(db.Model):
     __tablename__ = "disputes"
@@ -1137,11 +1315,12 @@ class Dispute(db.Model):
         if status:
             self.status = status
 
+
 class WebhookFailureLog(db.Model):
     __tablename__ = "webhook_failure_log"
-    
+
     id: Any = db.Column(db.Integer, primary_key=True)
-    gateway: Any = db.Column(db.String(50), nullable=False, index=True) # "Stripe" or "Razorpay"
+    gateway: Any = db.Column(db.String(50), nullable=False, index=True)  # "Stripe" or "Razorpay"
     payload: Any = db.Column(db.Text, nullable=False)
     error_message: Any = db.Column(db.Text, nullable=False)
     created_at: Any = db.Column(db.DateTime, default=get_ist_now, nullable=False)

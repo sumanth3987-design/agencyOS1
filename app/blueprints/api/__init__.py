@@ -508,6 +508,26 @@ def approve_milestone(milestone_id: int) -> Any:
                 all_milestones[0].status = "completed"
                 all_milestones[0].released_at = get_ist_now()
 
+            # Gate 1 (Step 1) escrow release: 50% specialist share
+            if specialist_profile:
+                milestone_value = (total_talent_payout * Decimal("0.50")).quantize(Decimal("0.01"))
+                specialist_profile.pending_balance = milestone_value
+                specialist_profile.available_balance = milestone_value
+
+                tx = WalletTransaction()
+                tx.user_id = specialist_id
+                tx.amount = milestone_value
+                tx.currency = currency
+                tx.transaction_type = "ESCROW_RELEASED"
+                tx.reference_type = "PROJECT"
+                tx.reference_id = project.id
+                tx.description = (
+                    f"Project #{project.id} Gate 1 milestone approved. "
+                    f"{format_currency(milestone_value, currency)} released to the specialist wallet."
+                )
+                tx.created_at = get_ist_now()
+                db.session.add(tx)
+
             ActivityLog.log_event(
                 project_id=project.id,
                 action="AUTO_APPROVED_INACTIVITY",

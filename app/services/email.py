@@ -4,9 +4,10 @@ Provides exception-bounded email dispatch with environment-safe fallback guards
 for testing, development, and production environments.
 """
 
+from email.message import EmailMessage
 import logging
 import smtplib
-from email.message import EmailMessage
+from typing import Any
 
 from flask import current_app
 
@@ -17,7 +18,8 @@ class EmailDeliveryError(Exception):
     """Raised when email delivery cannot be completed safely."""
 
 
-def _build_message(to: str, subject: str, body: str) -> EmailMessage:
+def _build_message(to: str, subject: str, body: str, html_body: str | None = None) -> EmailMessage:
+    """Constructs a MIME multi-part or plain-text email message."""
     message = EmailMessage()
     message["To"] = to
     message["From"] = current_app.config.get(
@@ -25,10 +27,14 @@ def _build_message(to: str, subject: str, body: str) -> EmailMessage:
     )
     message["Subject"] = subject
     message.set_content(body)
+
+    if html_body:
+        message.add_alternative(html_body, subtype="html")
+
     return message
 
 
-def send_email(to: str, subject: str, body: str) -> bool:
+def send_email(to: str, subject: str, body: str, html_body: str | None = None) -> bool:
     """Send an email using the configured backend safely.
 
     Wrapped in an exception boundary to ensure SMTP timeouts or misconfigurations
@@ -48,10 +54,11 @@ def send_email(to: str, subject: str, body: str) -> bool:
                         "to": to,
                         "subject": subject,
                         "body": body,
+                        "html_body": html_body,
                     }
                 )
             else:
-                logger.info("Email simulated for recipient (Console Backend)")
+                logger.info("Email simulated for recipient (Console Backend): %s", to)
             return True
 
         if backend != "smtp":
@@ -77,11 +84,11 @@ def send_email(to: str, subject: str, body: str) -> bool:
             if username:
                 smtp.login(username, password)
             smtp.send_message(
-                _build_message(to, subject, body),
+                _build_message(to, subject, body, html_body),
                 from_addr=sender,
                 to_addrs=[to],
             )
         return True
     except (OSError, smtplib.SMTPException, Exception) as exc:
-        logger.error("Email delivery failed safely: %s", type(exc).__name__)
+        logger.error("Email delivery failed safely: %s (%s)", type(exc).__name__, str(exc))
         return False

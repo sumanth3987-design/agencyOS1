@@ -12,6 +12,7 @@ from flask import current_app
 
 from app.extensions import db
 from app.models import (
+    ActivityLog,
     CustomerProfile,
     IST,
     Project,
@@ -29,13 +30,17 @@ REVIEW_REMINDER_AFTER = timedelta(hours=48)
 REVIEW_URGENCY_NUDGE_AFTER = timedelta(hours=24)
 
 
-def _naive_ist(value: datetime) -> datetime:
+def _naive_ist(value: datetime | None) -> datetime:
+    if value is None:
+        return datetime.now(IST).replace(tzinfo=None)
     if value.tzinfo is not None:
         return value.astimezone(IST).replace(tzinfo=None)
     return value
 
 
-def _naive_utc(value: datetime) -> datetime:
+def _naive_utc(value: datetime | None) -> datetime:
+    if value is None:
+        return datetime.now(timezone.utc).replace(tzinfo=None)
     if value.tzinfo is not None:
         return value.astimezone(timezone.utc).replace(tzinfo=None)
     return value
@@ -102,20 +107,26 @@ def send_payment_reminder(project_id: int, *, force: bool = False, now: datetime
             logger.warning("Cannot send payment reminder for project #%s: no client email.", project.id)
             return False
 
+        email_sent = False
         payment_link = _workspace_url("payments.payment_page", project_id=project.id)
-        if payment_link and _email_delivery_available():
+        if _email_delivery_available():
             subject = f"Action required: deposit pending for project #{project.id}"
             body = (
                 f"Hi {customer.name or 'Client'},\n\n"
                 f"Project #{project.id} ({project.service}) is waiting for its advance "
                 "deposit. Work begins once payment is authorized.\n\n"
-                f"Sign in to securely continue checkout:\n{payment_link}\n\n"
+                f"Sign in to securely continue checkout:\n{payment_link or ''}\n\n"
                 "Best regards,\nAgencyOS Team"
             )
             try:
-                send_email(customer.email, subject, body)
+                email_sent = send_email(customer.email, subject, body)
             except Exception:
                 logger.exception("Payment reminder email failed for project #%s.", project.id)
+                email_sent = False
+
+            # If email delivery was active and failed, abort and do not mark as sent
+            if not email_sent:
+                return False
 
         # Autonomous WhatsApp Channel Trigger
         profile = CustomerProfile.query.filter_by(user_id=customer.id).first()
@@ -171,20 +182,26 @@ def send_review_reminder(project_id: int, *, force: bool = False, now: datetime 
             logger.warning("Cannot send review reminder for project #%s: no client email.", project.id)
             return False
 
+        email_sent = False
         workspace_link = _workspace_url("customer.project_details", project_id=project.id)
-        if workspace_link and _email_delivery_available():
+        if _email_delivery_available():
             subject = f"Review requested: project #{project.id} deliverable"
             body = (
                 f"Hi {customer.name or 'Client'},\n\n"
                 f"A specialist submitted a deliverable for project #{project.id} "
                 f"({project.service}). Please review it and approve or request "
-                f"revisions in your workspace:\n{workspace_link}\n\n"
+                f"revisions in your workspace:\n{workspace_link or ''}\n\n"
                 "Best regards,\nAgencyOS Team"
             )
             try:
-                send_email(customer.email, subject, body)
+                email_sent = send_email(customer.email, subject, body)
             except Exception:
                 logger.exception("Review reminder email failed for project #%s.", project.id)
+                email_sent = False
+
+            # If email delivery was active and failed, abort and do not mark as sent
+            if not email_sent:
+                return False
 
         # Autonomous WhatsApp Channel Trigger
         profile = CustomerProfile.query.filter_by(user_id=customer.id).first()
@@ -211,7 +228,10 @@ def send_review_reminder(project_id: int, *, force: bool = False, now: datetime 
 
 
 def send_review_urgency_nudge(project_id: int, *, now: datetime | None = None) -> bool:
-    """Dispatches a 48h urgency WhatsApp nudge before the 72h auto-approval executes safely."""
+    """Dispatches a 48h urgency WhatsApp nudge before the 72h auto-approval executes safely.
+
+    Protected against repetitive spamming by checking ActivityLog.
+    """
     try:
         project = db.session.get(Project, project_id)
         if project is None or project.status != "Submitted":
@@ -225,9 +245,21 @@ def send_review_urgency_nudge(project_id: int, *, now: datetime | None = None) -
         if delivery is None or delivery.status != "Submitted":
             return False
 
-        sent_at = now or get_ist_now()
-        sub_time = _naive_ist(delivery.submitted_at)
-        elapsed = sent_at - sub_time
+        # Spam guard: check if this submission has already been nudged
+        already_nudged = (
+            ActivityLog.query.filter_by(
+                project_id=project.id,
+                action=f"REVIEW_URGENCY_NUDGE_DELIVERY_{delivery.id}",
+            ).first()
+            is not None
+        )
+        if already_nudged:
+            return False
+
+        # Normalize both datetimes to naive IST to prevent subtraction TypeError
+        sent_at_naive = _naive_ist(now or get_ist_now())
+        sub_time_naive = _naive_ist(delivery.submitted_at)
+        elapsed = sent_at_naive - sub_time_naive
 
         if not (timedelta(hours=48) <= elapsed <= timedelta(hours=72)):
             return False
@@ -239,20 +271,30 @@ def send_review_urgency_nudge(project_id: int, *, now: datetime | None = None) -
         profile = CustomerProfile.query.filter_by(user_id=customer.id).first()
         if profile and profile.phone:
             try:
+                hours_left = max(1, 72 - int(elapsed.total_seconds() / 3600))
                 notify_review_nudge(
                     project.id,
                     project.service,
                     profile.phone,
-                    customer.name,
-                    hours_left=max(1, 72 - int(elapsed.total_seconds() / 3600)),
+                    getattr(customer, "name", "Client") or "Client",
+                    hours_left=hours_left,
                 )
+                ActivityLog.log_event(
+                    project_id=project.id,
+                    action=f"REVIEW_URGENCY_NUDGE_DELIVERY_{delivery.id}",
+                    description=f"48-hour deliverable review urgency nudge dispatched ({hours_left}h remaining).",
+                    category="warning",
+                )
+                db.session.commit()
                 logger.info("Review urgency nudge dispatched for project #%s.", project.id)
                 return True
             except Exception as exc:
+                db.session.rollback()
                 logger.warning("Review urgency nudge failed: %s", exc)
 
         return False
     except Exception as exc:
+        db.session.rollback()
         logger.error("Exception in send_review_urgency_nudge for project #%s: %s", project_id, exc)
         return False
 

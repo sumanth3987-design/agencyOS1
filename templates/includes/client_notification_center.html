@@ -1,4 +1,3 @@
-<!-- Save this directly into: templates/includes/client_notification_center.html -->
 <style>
   .notification-panel {
     width: min(24rem, calc(100vw - 2rem));
@@ -177,15 +176,14 @@
             actionBtn.className = "px-2 py-0.5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-[10px] font-mono font-semibold transition cursor-pointer";
             actionBtn.textContent = "Take Action →";
 
-            actionBtn.addEventListener("click", async function (e) {
-              if (busy) return;
-              busy = true;
+            actionBtn.addEventListener("click", function (e) {
               try {
-                var endpoint = root.dataset.markReadUrl.replace(/0\/read$/, encodeURIComponent(n.id) + "/read");
-                await fetch(endpoint, {
+                var endpoint = root.dataset.markReadUrl.replace(/\/0(\/read)?(\/)?$/, '/' + encodeURIComponent(n.id) + '$1$2');
+                fetch(endpoint, {
                   method: "POST",
                   credentials: "same-origin",
-                  headers: { "X-CSRFToken": root.dataset.csrfToken, "Accept": "application/json" }
+                  headers: { "X-CSRFToken": root.dataset.csrfToken, "Accept": "application/json" },
+                  keepalive: true
                 });
               } catch (_) {}
             });

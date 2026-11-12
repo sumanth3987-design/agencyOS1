@@ -9,6 +9,8 @@ import os
 from typing import Any
 import requests
 
+from flask import current_app
+
 logger = logging.getLogger(__name__)
 
 WHATSAPP_API_URL = "https://graph.facebook.com/v19.0"
@@ -22,6 +24,18 @@ DUMMY_TOKEN_MARKERS = (
     "xxx",
     "example",
 )
+
+
+def _get_base_url() -> str:
+    """Retrieves configured application base URL safely."""
+    try:
+        if current_app:
+            url = current_app.config.get("APP_BASE_URL")
+            if url:
+                return url.rstrip("/")
+    except Exception:
+        pass
+    return os.getenv("APP_BASE_URL", "https://agencyos.local").rstrip("/")
 
 
 def _format_phone(phone: str | None) -> str | None:
@@ -48,7 +62,7 @@ def send_whatsapp_alert(to_phone: str | None, message_text: str) -> bool:
 
     # Graceful Dev / Simulation Guard: If token is missing or a placeholder, simulate mock dispatch
     if not token or not phone_id or any(marker in token.lower() for marker in DUMMY_TOKEN_MARKERS):
-        logger.info(f"[WHATSAPP MOCK DISPATCH] To: +{formatted_number} | Message:\n{message_text}")
+        logger.info("[WHATSAPP MOCK DISPATCH] To: +%s | Message:\n%s", formatted_number, message_text)
         return True
 
     url = f"{WHATSAPP_API_URL}/{phone_id}/messages"
@@ -91,7 +105,13 @@ def send_whatsapp_alert(to_phone: str | None, message_text: str) -> bool:
 # REAL-WORLD OMNICHANNEL BUSINESS ALERT TEMPLATES
 # =========================================================================
 
-def notify_sow_awaiting_signature(project_id: int, service_name: str, client_phone: str | None, client_name: str, contract_url: str) -> bool:
+def notify_sow_awaiting_signature(
+    project_id: int,
+    service_name: str,
+    client_phone: str | None,
+    client_name: str,
+    contract_url: str,
+) -> bool:
     """Alert client that SOW agreement is drafted and ready for e-signature."""
     msg = (
         f"📄 *Statement of Work Ready for Signature — AgencyOS*\n\n"
@@ -104,99 +124,156 @@ def notify_sow_awaiting_signature(project_id: int, service_name: str, client_pho
     return send_whatsapp_alert(client_phone, msg)
 
 
-def notify_payment_received(project_id: int, service_name: str, amount: Any, client_phone: str | None, client_name: str) -> bool:
+def notify_payment_received(
+    project_id: int,
+    service_name: str,
+    amount: Any,
+    client_phone: str | None,
+    client_name: str,
+) -> bool:
     """Send payment deposit confirmation to client."""
+    base_url = _get_base_url()
     msg = (
         f"✅ *Payment Received — AgencyOS*\n\n"
         f"Hi {client_name},\n"
         f"We have received your advance deposit of *₹{amount:,.2f}* for Project #{project_id} (*{service_name}*).\n\n"
         f"Funds are securely held in agency escrow. Our team has begun architecture discovery & wireframing.\n\n"
-        f"Track progress in your workbench: https://yourdomain.com/project/{project_id}"
+        f"Track progress in your workbench: {base_url}/project/{project_id}"
     )
     return send_whatsapp_alert(client_phone, msg)
 
 
-def notify_client_sprint_kickoff(project_id: int, service_name: str, specialist_name: str, client_phone: str | None, client_name: str) -> bool:
+def notify_client_sprint_kickoff(
+    project_id: int,
+    service_name: str,
+    specialist_name: str,
+    client_phone: str | None,
+    client_name: str,
+) -> bool:
     """Notify client that their lead specialist has commenced active sprint work."""
+    base_url = _get_base_url()
     msg = (
         f"⚡ *Sprint Kickoff: Meet Your Specialist — AgencyOS*\n\n"
         f"Hi {client_name},\n"
         f"Great news! *{specialist_name}* has been assigned as your lead specialist for Project #{project_id} (*{service_name}*).\n\n"
         f"Active development has commenced. You can communicate directly with {specialist_name} in your project discussion stream:\n"
-        f"👉 https://yourdomain.com/project/{project_id}"
+        f"👉 {base_url}/project/{project_id}"
     )
     return send_whatsapp_alert(client_phone, msg)
 
 
-def notify_deliverable_ready(project_id: int, service_name: str, preview_url: str, client_phone: str | None, client_name: str) -> bool:
+def notify_deliverable_ready(
+    project_id: int,
+    service_name: str,
+    preview_url: str,
+    client_phone: str | None,
+    client_name: str,
+) -> bool:
     """Notify client that a new milestone staging link is ready with 72h review policy."""
+    base_url = _get_base_url()
     msg = (
         f"🚀 *Deliverable Ready for Review — Project #{project_id}*\n\n"
         f"Hi {client_name},\n"
         f"A milestone deliverable for *{service_name}* is ready for your inspection:\n\n"
         f"🔗 *Preview Link:* {preview_url}\n\n"
         f"Please test the build and approve or request adjustments inside your workbench within 72 hours:\n"
-        f"👉 https://yourdomain.com/project/{project_id}"
+        f"👉 {base_url}/project/{project_id}"
     )
     return send_whatsapp_alert(client_phone, msg)
 
 
-def notify_review_nudge(project_id: int, service_name: str, client_phone: str | None, client_name: str, hours_left: int = 24) -> bool:
+def notify_review_nudge(
+    project_id: int,
+    service_name: str,
+    client_phone: str | None,
+    client_name: str,
+    hours_left: int = 24,
+) -> bool:
     """Send 48h / 24h urgency reminder before auto-approval policy executes."""
+    base_url = _get_base_url()
     msg = (
         f"⏰ *Review Reminder ({hours_left}h Remaining) — Project #{project_id}*\n\n"
         f"Hi {client_name},\n"
         f"Your milestone staging build for *{service_name}* is awaiting your review.\n\n"
         f"To ensure on-schedule delivery, sprints automatically advance after 72 hours.\n"
-        f"Review now: https://yourdomain.com/project/{project_id}"
+        f"Review now: {base_url}/project/{project_id}"
     )
     return send_whatsapp_alert(client_phone, msg)
 
 
-def notify_revision_requested(project_id: int, service_name: str, specialist_phone: str | None, specialist_name: str, comment: str, round_num: int) -> bool:
+def notify_revision_requested(
+    project_id: int,
+    service_name: str,
+    specialist_phone: str | None,
+    specialist_name: str,
+    comment: str,
+    round_num: int,
+) -> bool:
     """Alert specialist that client submitted revision feedback."""
+    base_url = _get_base_url()
     msg = (
         f"⚠️ *Revision Feedback (Round {round_num}/2) — Sprint #{project_id}*\n\n"
         f"Hi {specialist_name},\n"
         f"The client has reviewed deliverable for *{service_name}* and requested adjustments:\n\n"
         f"💬 *Notes:* \"{comment}\"\n\n"
         f"Open delivery workspace to submit adjustments:\n"
-        f"👉 https://yourdomain.com/professional/project/{project_id}/workspace"
+        f"👉 {base_url}/professional/project/{project_id}/workspace"
     )
     return send_whatsapp_alert(specialist_phone, msg)
 
 
-def notify_retainer_renewed(project_id: int, service_name: str, amount: Any, client_phone: str | None, client_name: str) -> bool:
+def notify_retainer_renewed(
+    project_id: int,
+    service_name: str,
+    amount: Any,
+    client_phone: str | None,
+    client_name: str,
+) -> bool:
     """Notify client when monthly care plan / retainer AutoPay debits and credits 5 hours."""
+    base_url = _get_base_url()
     msg = (
         f"🔄 *Monthly Care Plan Renewed — AgencyOS*\n\n"
         f"Hi {client_name},\n"
         f"Your monthly retainer for Project #{project_id} (*{service_name}*) has been renewed (₹{amount:,.2f}).\n\n"
         f"⏱️ *5 Maintenance Hours* have been credited to your hours bank for this cycle.\n"
-        f"Drop maintenance tasks or download your GST invoice: https://yourdomain.com/project/{project_id}"
+        f"Drop maintenance tasks or download your GST invoice: {base_url}/project/{project_id}"
     )
     return send_whatsapp_alert(client_phone, msg)
 
 
-def notify_project_completed(project_id: int, service_name: str, client_phone: str | None, client_name: str) -> bool:
+def notify_project_completed(
+    project_id: int,
+    service_name: str,
+    client_phone: str | None,
+    client_name: str,
+) -> bool:
     """Congratulate client on live deployment, IP handover, and tax invoice."""
+    base_url = _get_base_url()
     msg = (
         f"🎉 *Project Successfully Handed Over — AgencyOS*\n\n"
         f"Hi {client_name},\n"
         f"All milestone deliverables for *{service_name}* (Project #{project_id}) have been approved and deployed!\n\n"
-        f"Download your tax invoice & IP Handover Certificate: https://yourdomain.com/project/{project_id}/invoice\n\n"
+        f"Download your tax invoice & IP Handover Certificate: {base_url}/project/{project_id}/invoice\n\n"
         f"Thank you for building with AgencyOS!"
     )
     return send_whatsapp_alert(client_phone, msg)
 
 
-def notify_payout_disbursed(amount: Any, mode: str, destination: str, utr_reference: str, specialist_phone: str | None, specialist_name: str) -> bool:
+def notify_payout_disbursed(
+    amount: Any,
+    mode: str,
+    destination: str,
+    utr_reference: str,
+    specialist_phone: str | None,
+    specialist_name: str,
+) -> bool:
     """Notify specialist when their UPI / Bank withdrawal clears with bank UTR."""
+    base_url = _get_base_url()
     msg = (
         f"💸 *Payout Disbursed via RazorpayX — AgencyOS*\n\n"
         f"Hi {specialist_name},\n"
         f"Your redemption of *₹{amount:,.2f}* via {mode} ({destination}) has cleared successfully!\n\n"
         f"🏦 *Bank UTR Reference:* {utr_reference}\n"
-        f"Check your wallet history: https://yourdomain.com/professional/dashboard"
+        f"Check your wallet history: {base_url}/professional/dashboard"
     )
     return send_whatsapp_alert(specialist_phone, msg)

@@ -1,12 +1,16 @@
 """Tests for the Care Plan Retainer & Task Attachments Engine."""
 
+from io import BytesIO
+
 import pytest
 from app.models import Project, RetainerTask, User
 from app.extensions import db
 
 class TestRetainerWorkflow:
     
-    def test_client_drops_retainer_task_with_attachment(self, client, login, factories):
+    def test_client_drops_retainer_task_with_attachment(
+        self, app, client, login, factories, csrf_post, tmp_path, monkeypatch
+    ):
         """Test that a customer can drop a maintenance task and it queues correctly."""
         customer_id = factories.user("customer", "client@example.com")
         pro_id = factories.user("professional", "pro@example.com")
@@ -21,20 +25,21 @@ class TestRetainerWorkflow:
         )
         db.session.add(project)
         db.session.commit()
+        monkeypatch.setattr(app, "static_folder", str(tmp_path))
 
         login("client@example.com", "customer")
 
         # Payload
+        asset_contents = b"%PDF-1.4\nbanner asset\n%%EOF"
         data = {
             "title": "Update Home Banner",
-            "description": "Please replace the hero image with the new design."
+            "description": "Please replace the hero image with the new design.",
+            "asset_file": (BytesIO(asset_contents), "banner.pdf"),
         }
         
-        # Post the task
-        response = client.post(
-            f"/project/{project.id}/drop-task",
-            data=data,
-            follow_redirects=True
+        # Post the task (with CSRF token)
+        response = csrf_post(
+            f"/project/{project.id}/drop-task", data=data, follow_redirects=True
         )
         
         assert response.status_code == 200
@@ -44,6 +49,10 @@ class TestRetainerWorkflow:
         assert task is not None
         assert task.title == "Update Home Banner"
         assert task.status == "Queued"
+        assert task.asset_url.startswith("/static/uploads/")
+        stored_name = task.asset_url.rsplit("/", 1)[-1]
+        with open(tmp_path / "uploads" / stored_name, "rb") as saved_file:
+            assert saved_file.read() == asset_contents
 
     def test_specialist_workspace_renders_retainer_tasks(self, client, login, factories):
         """Verify specialist sees queued tasks in their workspace."""
@@ -71,7 +80,7 @@ class TestRetainerWorkflow:
         assert b"Test Task" in response.data
         assert b"Claim Task" in response.data
 
-    def test_task_claiming_process(self, client, login, factories):
+    def test_task_claiming_process(self, client, login, factories, csrf_post):
         """Verify the state transition of a task when claimed."""
         customer_id = factories.user("customer", "client@example.com")
         pro_id = factories.user("professional", "pro@example.com")
@@ -87,7 +96,7 @@ class TestRetainerWorkflow:
         login("pro@example.com", "professional")
         
         # Claim it
-        response = client.post(
+        response = csrf_post(
             f"/professional/project/{project.id}/task/{task.id}/claim",
             follow_redirects=True
         )

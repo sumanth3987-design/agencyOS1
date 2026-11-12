@@ -256,6 +256,8 @@ def admin_invoices() -> ResponseReturnValue:
 @collaboration_bp.route("/api/ai/generate-scope", methods=["POST"])
 @login_required
 def ai_generate_scope() -> ResponseReturnValue:
+    if getattr(current_user, "role", "").lower() != "admin":
+        return jsonify({"success": False, "message": "Admin authorization required."}), 403
     data = request.get_json(silent=True) or {}
     business_name = data.get("business_name", "Local Business")
     service = data.get("service", "Website Design & Development")

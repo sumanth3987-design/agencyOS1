@@ -987,10 +987,13 @@ def razorpay_webhook() -> Any:
         return jsonify({"error": "Missing signature"}), 400
 
     raw_body = request.get_data()
-    expected_sig = hmac.new(webhook_secret.encode("utf-8"), raw_body, hashlib.sha256).hexdigest()
+    try:
+        expected_sig = hmac.new(webhook_secret.encode("utf-8"), raw_body, hashlib.sha256).hexdigest()
+    except Exception:
+        return jsonify({"error": "Invalid signature encoding"}), 400
 
     if not hmac.compare_digest(expected_sig, received_sig):
-        return jsonify({"error": "Signature mismatch"}), 403
+        return jsonify({"error": "Signature mismatch"}), 403  
 
     event_payload = request.get_json(silent=True)
     if not isinstance(event_payload, dict):
@@ -1046,7 +1049,7 @@ def razorpay_webhook() -> Any:
 
             existing_charge = SubscriptionCharge.query.filter_by(razorpay_payment_id=payment_id).first()
             if existing_charge:
-                return jsonify({"status": "duplicate"}), 200
+                return jsonify({"status": "duplicate", "invoice_id": existing_charge.invoice_id}), 200
 
             gross_amount = Decimal(str(subscription.amount))
             talent_share, agency_share, tax_amount = compute_financial_split(gross_amount, subscription.currency)
@@ -1065,7 +1068,7 @@ def razorpay_webhook() -> Any:
             db.session.flush()
 
             invoice = Invoice()
-            invoice.invoice_number = f"RET-2026-{subscription.project_id:04d}-{secrets.token_hex(3).upper()}"
+            invoice.invoice_number = f"RET-{subscription.project_id:04d}-{secrets.token_hex(3).upper()}"
             invoice.project_id = subscription.project_id
             invoice.customer_id = subscription.customer_id
             invoice.gross_amount = gross_amount
@@ -1094,7 +1097,7 @@ def razorpay_webhook() -> Any:
             subscription.status = "active"
             subscription.updated_at = get_ist_now()
 
-            project = Project.query.get(subscription.project_id)
+            project = db.session.get(Project, subscription.project_id)
             if project:
                 project.hours_allocated = 5
                 project.hours_remaining = Decimal("5.00")
@@ -1118,7 +1121,7 @@ def razorpay_webhook() -> Any:
                 ActivityLog.log_event(project.id, "RETAINER_CHARGED", "Monthly retainer renewal captured.", category="success")
 
             db.session.commit()
-            return jsonify({"status": "charge_recorded"}), 200
+            return jsonify({"status": "charge_recorded", "invoice_id": invoice.id}), 200
 
         elif event_type in SUBSCRIPTION_STATUS_EVENTS:
             target_status = SUBSCRIPTION_STATUS_EVENTS[event_type]
@@ -1132,10 +1135,14 @@ def razorpay_webhook() -> Any:
                     db.session.commit()
                     return jsonify({"status": "subscription_updated"}), 200
 
+    except (ValueError, KeyError, TypeError, InvalidOperation) as val_exc:
+        db.session.rollback()
+        logger.warning("Webhook validation error (400): %s", str(val_exc))
+        return jsonify({"error": str(val_exc)}), 400
+
     except Exception as exc:
         db.session.rollback()
         logger.error("Critical webhook failure: %s", str(exc), exc_info=True)
-        # Log failure to DLQ
         failure_log = WebhookFailureLog(
             gateway="Razorpay",
             payload=json.dumps(event_payload),

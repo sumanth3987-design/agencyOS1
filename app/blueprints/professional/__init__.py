@@ -101,6 +101,13 @@ def professional_dashboard() -> Any:
 
     my_applications = ProfessionalProjectApplication.query.filter_by(professional_id=current_user.id).all()
     assigned_projects = [app.project for app in my_applications if app.status == "Assigned" and app.project]
+    
+    # Also include projects assigned directly via assigned_professional_id
+    direct_assigned = Project.query.filter_by(assigned_professional_id=current_user.id).all()
+    for p in direct_assigned:
+        if p not in assigned_projects:
+            assigned_projects.append(p)
+
     my_applied_ids = [app.project_id for app in my_applications]
 
     completed_project_ids = [project.id for project in assigned_projects if project.status == "Completed"]
@@ -221,6 +228,11 @@ def professional_my_projects() -> Any:
     ).all()
     projects = [app.project for app in my_applications if app.project]
 
+    direct_assigned = Project.query.filter_by(assigned_professional_id=current_user.id).all()
+    for p in direct_assigned:
+        if p not in projects:
+            projects.append(p)
+
     return render_template("professional_my_projects.html", projects=projects)
 
 
@@ -240,7 +252,7 @@ def professional_projects() -> Any:
     has_assignment = bool(
         ProfessionalProjectApplication.query.filter_by(
             professional_id=current_user.id, status="Assigned"
-        ).first()
+        ).first() or Project.query.filter_by(assigned_professional_id=current_user.id).first()
     )
     
     if user_role != "admin" and not has_assignment:
@@ -438,7 +450,8 @@ def start_project_work(project_id: int) -> Any:
         return redirect(url_for("professional.professional_dashboard"))
 
     is_assigned = bool(
-        ProfessionalProjectApplication.query.filter_by(
+        project.assigned_professional_id == current_user.id
+        or ProfessionalProjectApplication.query.filter_by(
             project_id=project.id,
             professional_id=current_user.id,
             status="Assigned",
@@ -488,7 +501,8 @@ def professional_project_workspace(project_id: int) -> Any:
         return redirect(url_for("professional.professional_dashboard"))
 
     is_assigned = bool(
-        ProfessionalProjectApplication.query.filter_by(
+        project.assigned_professional_id == current_user.id
+        or ProfessionalProjectApplication.query.filter_by(
             project_id=project.id, professional_id=current_user.id, status="Assigned"
         ).first()
     )
@@ -544,7 +558,14 @@ def claim_retainer_task(project_id: int, task_id: int) -> Any:
         flash("Project not found.", "warning")
         return redirect(url_for("professional.professional_dashboard"))
 
-    if project.assigned_professional_id != current_user.id and getattr(current_user, "role", "").lower() != "admin":
+    is_assigned = bool(
+        project.assigned_professional_id == current_user.id
+        or ProfessionalProjectApplication.query.filter_by(
+            project_id=project.id, professional_id=current_user.id, status="Assigned"
+        ).first()
+    )
+
+    if not is_assigned and getattr(current_user, "role", "").lower() != "admin":
         flash("Unauthorized action.", "danger")
         return redirect(url_for("professional.professional_dashboard"))
 
@@ -596,7 +617,14 @@ def complete_retainer_task(project_id: int, task_id: int) -> Any:
         flash("Project not found.", "warning")
         return redirect(url_for("professional.professional_dashboard"))
 
-    if project.assigned_professional_id != current_user.id and getattr(current_user, "role", "").lower() != "admin":
+    is_assigned = bool(
+        project.assigned_professional_id == current_user.id
+        or ProfessionalProjectApplication.query.filter_by(
+            project_id=project.id, professional_id=current_user.id, status="Assigned"
+        ).first()
+    )
+
+    if not is_assigned and getattr(current_user, "role", "").lower() != "admin":
         db.session.rollback()
         flash("Unauthorized action.", "danger")
         return redirect(url_for("professional.professional_dashboard"))
@@ -699,11 +727,16 @@ def submit_deliverable(project_id: int) -> Any:
         flash("Project not found.", "danger")
         return redirect(url_for("professional.professional_dashboard"))
 
-    if user_role != "admin" and not ProfessionalProjectApplication.query.filter_by(
-        project_id=project.id,
-        professional_id=current_user.id,
-        status="Assigned",
-    ).first():
+    is_assigned = bool(
+        project.assigned_professional_id == current_user.id
+        or ProfessionalProjectApplication.query.filter_by(
+            project_id=project.id,
+            professional_id=current_user.id,
+            status="Assigned",
+        ).first()
+    )
+
+    if not is_assigned and user_role != "admin":
         db.session.rollback()
         flash("You are not assigned to this project.", "danger")
         return redirect(url_for("professional.professional_dashboard"))
@@ -988,7 +1021,13 @@ def request_payout(invoice_id: int) -> Any:
     assigned_app = ProfessionalProjectApplication.query.filter_by(
         project_id=project.id, status="Assigned"
     ).first()
-    if not assigned_app or assigned_app.professional_id != current_user.id:
+    
+    is_assigned = bool(
+        (assigned_app and assigned_app.professional_id == current_user.id)
+        or project.assigned_professional_id == current_user.id
+    )
+
+    if not is_assigned:
         flash("Only the assigned specialist can request payout.", "danger")
         return redirect(url_for("professional.professional_dashboard"))
 
@@ -1134,9 +1173,12 @@ def api_get_professional_messages(project_id: int) -> Any:
     if not project:
         return jsonify({"error": "Project not found"}), 404
         
-    is_assigned = ProfessionalProjectApplication.query.filter_by(
-        project_id=project.id, professional_id=current_user.id, status="Assigned"
-    ).first()
+    is_assigned = bool(
+        project.assigned_professional_id == current_user.id
+        or ProfessionalProjectApplication.query.filter_by(
+            project_id=project.id, professional_id=current_user.id, status="Assigned"
+        ).first()
+    )
     if not is_assigned and getattr(current_user, "role", "").lower() != "admin":
         return jsonify({"error": "Unauthorized"}), 403
 
